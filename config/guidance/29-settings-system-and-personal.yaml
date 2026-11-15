@@ -1,0 +1,65 @@
+scope: AIERP
+area: settings-system-and-personal
+title: "Settings: system and personal"
+applies_to:
+  always: true
+items:
+  - key: AIERP-D-207
+    type: design
+    title: "A judgement call is a default plus a setting, never a constant in the code"
+    statement: "A judgement call is a default plus a setting, never a constant in the code. Where reasonable teams could want different behaviour (a threshold, a default action, an opening view), AIERP ships a stated default and lets it be changed."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-208
+    type: design
+    title: "Two scopes"
+    statement: "A *system* setting is policy: one value for everyone, changed only by an admin. A *personal* setting is one user's own and changes only how the product looks to that user; today that is the Work queue's opening filter."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-209
+    type: design
+    title: "Which scope a new setting gets"
+    statement: "System when it changes a number, a recommendation, a rule or anything sent to an ERP. Personal when it is a display preference."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-210
+    type: design
+    title: "Every change is on record"
+    statement: "A stored value names who set it and when, and an append-only trail keeps every change and every reset with the value before and after."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-211
+    type: design
+    title: "Safe by construction"
+    statement: "Only registered keys exist, each with a type, its allowed values and a default. A stored value out of range, or a settings read that fails, falls back to the default."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-212
+    type: design
+    title: "The first one set the pattern"
+    statement: "The first one set the pattern (operator, 2026-10-09): a planner must choose an action before accepting an excess or stockout decision. That is the default, and a system setting can relax it."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-09
+      ref: "AIERP#1119"

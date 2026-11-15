@@ -1,0 +1,184 @@
+scope: AIERP
+area: demand-driven-replenishment
+title: "Demand-driven replenishment (DDMRP)"
+summary: "Next after the parameter write-back. The method is the published Demand Driven MRP practice: strategic buffers, buffer zones sized from average daily usage and lead time, net-flow pull ordering, and on-hand execution alerts. AIERP implements the method. It makes no claim of certification, and it sits alongside the reorder-point recommendations as a second planning mode for the item-sites a planner chooses to buffer."
+items:
+  - key: AIERP-D-138
+    type: design
+    title: "Positioning: Who chooses"
+    statement: "**Who chooses:** an admin designates the buffered item-sites (decoupling points). Nothing is buffered by default."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-139
+    type: design
+    title: "Positioning: Suggestions"
+    statement: "**Suggestions:** AIERP suggests candidates without applying them: item-sites with steady demand (A or B class) and a lead time long enough for a buffer to matter."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-140
+    type: design
+    title: "Positioning: Scope of v1"
+    statement: "**Scope of v1:** purchased item-sites only. AIERP has no bills of materials, so there is no multi-level decoupling yet."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-141
+    type: design
+    title: "Inputs, all already in AIERP: Average daily usage (ADU)"
+    statement: "**Average daily usage (ADU):** actual demand over a rolling past window, 90 days by default (a system setting)."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-142
+    type: design
+    title: "Inputs, all already in AIERP: Decoupled lead time (DLT)"
+    statement: "**Decoupled lead time (DLT):** the observed supplier lead time, falling back to the master lead time."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-143
+    type: design
+    title: "Inputs, all already in AIERP: Order cycle"
+    statement: "**Order cycle:** the cover days of the recommended order quantity."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-144
+    type: design
+    title: "Buffer profile factors"
+    statement: "Buffer profile factors (system settings; defaults chosen inside the published ranges): **Lead-time factor by lead-time category:** short (DLT under 15 days) 0.8, medium (15 to 45 days) 0.5, long (over 45 days) 0.3. **Variability factor by demand variability:** low (CV under 0.5) 0.25, medium (0.5 to 1.0) 0.5, high (over 1.0, and every intermittent or lumpy item-site) 0.75."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-145
+    type: design
+    title: "Zones: Red"
+    statement: "**Red:** a base of ADU × DLT × lead-time factor, plus a safety part of that base × the variability factor."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-146
+    type: design
+    title: "Zones: Yellow"
+    statement: "**Yellow:** ADU × DLT."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-147
+    type: design
+    title: "Zones: Green"
+    statement: "**Green:** the largest of ADU × order cycle, the red base, and the minimum order quantity (0 until the feed carries one)."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-148
+    type: design
+    title: "Zones: Thresholds"
+    statement: "**Thresholds:** top of red, top of yellow (red + yellow) and top of green (red + yellow + green), each in whole units, each with its arithmetic shown."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-149
+    type: design
+    title: "Planning: Net flow position"
+    statement: "**Net flow position:** on hand plus open purchase supply minus qualified demand."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-150
+    type: design
+    title: "Planning: Qualified demand"
+    statement: "**Qualified demand:** past-due and due-today sales-order demand, plus order spikes within the DLT horizon (a single order above 50% of the red zone). No open sales orders reach AIERP yet, so v1 states \"no open sales-order demand in the feed\" on every row. Feeding open sales orders from both ERPs is its own slice."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-151
+    type: design
+    title: "Planning: Order signal"
+    statement: "**Order signal:** when the net flow position is at or below the top of yellow, the suggested order is the top of green minus the net flow position, rounded up to whole units."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-152
+    type: design
+    title: "Planning: Priority"
+    statement: "**Priority:** the net flow position as a % of the top of green, lowest first."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-153
+    type: design
+    title: "Execution"
+    statement: "On-hand status is on hand as a % of the top of red: \"stocked out\" at 0 or below, \"critical\" under 50%, \"low\" under 100%, otherwise \"ok\". These are the alerts a planner works first."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-154
+    type: design
+    title: "Recalculation and ERP fit"
+    statement: "**Dynamic buffers:** zones recompute on every read from the rolling ADU, so they follow demand after each daily sync. Planned adjustment factors (seasonal or promotional ramps) are a later slice. **ERP fit:** a min/max ERP cannot hold the zones directly. The documented approximation is top of yellow as the reorder point and top of green as the max. That is pushed through the parameter write-back, which is a later slice, and only for designated item-sites."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-155
+    type: design
+    title: "Slices, in order"
+    statement: "buffer designations and settings; buffer zones (read-only API); net flow position and order signals; the execution alerts; the planner view; the open sales orders feed; pushing buffer parameters through the write-back."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"

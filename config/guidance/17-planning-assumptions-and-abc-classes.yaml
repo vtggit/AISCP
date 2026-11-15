@@ -1,0 +1,114 @@
+scope: AIERP
+area: planning-assumptions-and-abc-classes
+title: "Planning assumptions and ABC classes"
+summary: "The assumptions behind every reorder point and order quantity are visible and can be changed by an admin without a redeploy. A stored value wins. With none stored, the instance's environment value (`AIERP_SERVICE_LEVEL`, `AIERP_ORDER_COST`, `AIERP_HOLDING_RATE`) applies, and then the default. This is the order in which the planning code reads them."
+items:
+  - key: AIERP-D-110
+    type: design
+    title: "Numeric system settings"
+    statement: "Numeric system settings (admin only, Settings screen): `replenishment.service_level`: default 0.95, between 0.5 and 0.9999; `replenishment.order_cost`: default $50 an order, between 0.01 and 100,000; `replenishment.holding_rate`: default 25% a year, between 0.01 and 1."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-111
+    type: design
+    title: "ABC classes: Annual value"
+    statement: "**Annual value:** each recommendable item-site's annual consumption value is 365 times its daily demand (on the active demand basis) times its unit cost. Item-sites are ranked from highest to lowest value."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-112
+    type: design
+    title: "ABC classes: Classes"
+    statement: "**Classes:** A while the share of total value before the item-site is below 80%, B while it is below 95%, and C after that. The item-site that crosses a boundary belongs to the higher class."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-113
+    type: design
+    title: "ABC classes: Unclassified"
+    statement: "**Unclassified:** an item-site with no recommendation, no unit cost or no demand has no class."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-114
+    type: design
+    title: "ABC classes: Where it shows"
+    statement: "**Where it shows:** `GET /api/abc` lists the classes."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-115
+    type: design
+    title: "Service level by class"
+    statement: "this is off by default (`replenishment.service_level_by_class`)."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-116
+    type: design
+    title: "Service level by class: When on"
+    statement: "**When on:** A uses 98%, B 95% and C 90%, each its own setting."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-117
+    type: design
+    title: "Service level by class: Unclassified item-sites"
+    statement: "**Unclassified item-sites:** they keep the single service level."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-118
+    type: design
+    title: "Service level by class: What every recommendation says"
+    statement: "**What every recommendation says:** which level it used and why (`service_level_source`: the class, and \"class\" or \"single\")."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-119
+    type: design
+    title: "Service level by class: Why off by default"
+    statement: "**Why off by default:** turning it on raises the safety stock of A items and lowers it on C items, which changes money at stake across the board. That is a policy choice for the business to make, not a default."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"
+
+  - key: AIERP-D-120
+    type: design
+    title: "Where it shows"
+    statement: "the Work queue's Reorder points detail states the service level and class next to the order quantity; the reorder-point CSV export carries the order quantity, max, class and service level as its last columns."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#669"

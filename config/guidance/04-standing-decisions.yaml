@@ -1,0 +1,89 @@
+scope: AIERP
+area: standing-decisions
+title: "Standing decisions"
+applies_to:
+  always: true
+items:
+  - key: AIERP-D-2
+    type: design
+    title: "Read-first; writes only under a grant"
+    statement: "AIERP reads ERP data and recommends. It writes to the ERP only under an explicit grant: a person's approval of that one write, or a standing grant an admin creates for one named process. A standing grant may cover only releases of purchase orders and of transfers, and what it writes reaches the ERP on hold (as a draft where the ERP has no hold), so the ERP's own approval still applies; every other write, such as a parameter push, needs a person's approval of each write. A standing grant names its limits: the most value one document may carry, the most one day of its writes may carry, and the oldest synced data it may act on. No grant exists until an admin creates one, one switch stops every standing grant at once, and every write is audited with the approval or grant it rests on and fails closed. Never a write nobody granted."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1172"
+
+  - key: AIERP-D-3
+    type: design
+    title: "AIDW is the substrate"
+    statement: "Ingest, scheduling, credentials, and the OData feed already exist and are proven against a live ERP. AIERP builds on that rather than re-solving it."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-D-4
+    type: design
+    title: "Explainability is a hard requirement"
+    statement: "Explainability is a hard requirement , not a feature. Every recommendation carries its inputs and its arithmetic."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-D-5
+    type: design
+    title: "Exportable by design"
+    statement: "Planners live in Excel. Recommendations must be consumable there (the AIDW OData feed is the mechanism) rather than trapped behind a UI."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-D-6
+    type: design
+    title: "Moved to the company's private guidance"
+    statement: "Moved to the company's private guidance (CO-N-5) before AIERP was published (CO-N-3)."
+    status: retired
+    retired:
+      date: 2026-11-14
+      reason: "Moved to the company's private guidance (CO-N-5): where the requirements come from is the company's strategy, not design direction, and AIERP's repository is being published (CO-N-3)."
+    authority: executive
+    decided:
+      by: model:claude
+      date: 2026-11-14
+      under: "the operator's decision of 2026-11-13"
+
+  - key: AIERP-D-7
+    type: design
+    title: "No live customer data"
+    statement: "No live customer data until an instance policy exists. Development and demonstration run against the in-house ERP instance and synthetic or vendor demo data."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-D-8
+    type: design
+    title: "Deployable inside the customer's boundary"
+    statement: "Deployable inside the customer's boundary (operator decision, 2026-10-30). AIERP must run wholly inside a customer's own environment: no outbound call except to the ERP it is configured for, and no dependence on a hosted model or service outside that boundary. A feature that needs an outside service is not built until it can be switched off without breaking anything else."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-30
+      ref: "AIERP#824"
+
+  - key: AIERP-D-9
+    type: design
+    title: "Keeps working on last-synced data during an ERP outage"
+    statement: "Keeps working on last-synced data during an ERP outage (operator decision, 2026-10-30). Every screen and recommendation reads AIERP's own synced copy, so planners keep working when the ERP is unreachable. Writes back to the ERP fail closed and are audited, and nothing presents stale data as fresh: the data's as-of date is always shown."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-30
+      ref: "AIERP#824"

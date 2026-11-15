@@ -1,0 +1,694 @@
+/* AIERP planner screen — the Buffers view (#/buffers).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; the zone status styling uses the zone tokens only. */
+
+/* The view owns its full height: the bar and the notes keep their
+   natural size, the table scrolls inside its own region, and the
+   document never does. */
+#view-buffers.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-buffers.is-active #buffers-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-buffers.is-active #buffers-root > .bf {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The toolbar: the filter chips on the left, Refresh on the right.
+   Its own class, never the zone bar's .bf-bar: the zone bar's 14px
+   pill height and overflow hidden would clip the chips and the
+   button. */
+.bf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.bf-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bf-chip {
+  border: 1px solid var(--color-control-border);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bf-chip:hover {
+  background: var(--color-surface-muted);
+}
+
+.bf-chip.is-on {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.bf-refresh {
+  flex-shrink: 0;
+}
+
+/* The qualified-demand note: shown whenever any plan row carries the
+   feed's no-open-demand note. */
+.bf-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  flex-shrink: 0;
+}
+
+/* The table scrolls within its own region: the page never scrolls,
+   and at narrow widths the region — not the document — takes the
+   horizontal overflow. */
+.bf-table-region {
+  flex: 1;
+  min-height: calc(var(--row-min) * 2);
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.bf-table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bf-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.bf-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+/* Item and Site may wrap between words only, never inside a word. */
+.bf-cell-item {
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+.bf-pair {
+  font-weight: 500;
+}
+
+/* The per-row Remove button (admin only), inline in the pair cell. */
+.bf-remove {
+  margin-left: var(--space-2);
+  border: 1px solid var(--color-control-border);
+  background: var(--color-surface);
+  color: var(--color-ink-3);
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-2);
+  height: calc(var(--target-min) / 2 + var(--space-1) * 2);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bf-remove:hover {
+  border-color: var(--color-risk);
+  color: var(--color-risk);
+}
+
+.bf-remove:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The inline remove confirm: the question, Confirm, Cancel and the
+   last failure (404 detail or the generic message). */
+.bf-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-left: var(--space-2);
+}
+
+.bf-confirm-msg {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-risk);
+}
+
+.bf-confirm-actions {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.bf-remove-error {
+  font-size: 12px;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The zone cell: the bar, the net-flow marker and the tops label; the
+   adjustment factor badge (when the row's zone carries a factor other
+   than 1) sits next to the bar. */
+.bf-cell-zones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 230px;
+}
+
+.bf-cell-zones > .bf-barwrap,
+.bf-cell-zones > .bf-perf-barwrap {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.bf-cell-zones > .bf-badge--adjust {
+  flex-shrink: 0;
+}
+
+.bf-barwrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bf-bar {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+/* The three segments flex in the zones' ratio; the colours are the
+   zone tokens of tokens.css. */
+.bf-bar-seg--red {
+  background: var(--color-zone-red);
+}
+
+.bf-bar-seg--yellow {
+  background: var(--color-zone-amber);
+}
+
+.bf-bar-seg--green {
+  background: var(--color-zone-green);
+}
+
+.bf-bar-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-ink);
+}
+
+.bf-tops {
+  font-family: var(--font-figures);
+  font-size: 11px;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+
+/* Units and percentages never break inside the value. */
+.bf-cell-num {
+  white-space: nowrap;
+  font-family: var(--font-figures);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The badges: the zone status (red, amber, green, the neutral "over")
+   and the on-hand status, all from the token set. */
+.bf-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bf-badge--zone-red {
+  background: var(--color-zone-red-soft);
+  color: var(--color-zone-red-ink);
+}
+
+.bf-badge--zone-amber {
+  background: var(--color-zone-amber-soft);
+  color: var(--color-zone-amber-ink);
+}
+
+.bf-badge--zone-green {
+  background: var(--color-zone-green-soft);
+  color: var(--color-zone-green-ink);
+}
+
+.bf-badge--zone-over {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+.bf-badge--zone-other {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+/* The active adjustment factor next to a plan row's zone bar. */
+.bf-badge--adjust {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.bf-badge--oh-stockout {
+  background: var(--color-zone-red-soft);
+  color: var(--color-zone-red-ink);
+}
+
+.bf-badge--oh-critical {
+  background: var(--color-zone-amber-soft);
+  color: var(--color-zone-amber-ink);
+}
+
+.bf-badge--oh-low {
+  background: var(--color-zone-amber-soft);
+  color: var(--color-zone-amber);
+}
+
+.bf-badge--oh-ok {
+  background: var(--color-zone-green-soft);
+  color: var(--color-zone-green-ink);
+}
+
+.bf-badge--oh-other {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+/* The unsized buffers below the table: the zone rows whose status is
+   not "ok". */
+.bf-unsized {
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.bf-unsized-title {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.bf-unsized-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bf-unsized-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.bf-unsized-reason {
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The admin "Add buffer" form. */
+.bf-add {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.bf-add-label {
+  align-self: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.bf-add-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-ink-3);
+}
+
+.bf-add-field input {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-ink);
+  min-width: 140px;
+}
+
+.bf-add-submit {
+  flex-shrink: 0;
+}
+
+.bf-add-error {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The skeletons while a fetch is out. */
+.bf-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.bf-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+/* The load error: the message and its Retry. */
+.bf-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.bf-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The empty note: no designations at all. */
+.bf-empty {
+  margin: 0;
+  padding: var(--space-4) var(--space-3);
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The scroll region: everything below the toolbar scrolls here, so
+   the table, the unsized list, the forms and the three new sections
+   always have the room the view's overflow hidden would otherwise
+   clip. The region keeps its full height (flex 1) and the document
+   still never scrolls. */
+.bf-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  overflow-y: auto;
+}
+
+/* The three independent sections below the table and the unsized
+   list: "Suggested buffers", "Planned adjustments" and "Buffer
+   performance (last 90 days)". Each card fails on its own — the data
+   or the empty note, its own one-line error, never the main table. */
+.bf-section {
+  flex-shrink: 0;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.bf-section-title {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.bf-section-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.bf-section-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The candidates table: item / site, class, annual value, lead time,
+   the reason and (admin only) the Designate button. */
+.bf-cand-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bf-cand-table thead th {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bf-cand-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: middle;
+}
+
+.bf-cell-reason {
+  overflow-wrap: anywhere;
+}
+
+/* The per-row Designate button (admin only). */
+.bf-designate {
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-2);
+  height: calc(var(--target-min) / 2 + var(--space-1) * 2);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bf-designate:hover {
+  background: var(--color-accent-pale);
+}
+
+.bf-designate:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The planned adjustments: one line per stored factor — the scope,
+   the inclusive window, the factor, the note and (admin only) the
+   Delete with its inline confirm. */
+.bf-adjust-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bf-adjust-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.bf-adjust-window {
+  font-family: var(--font-figures);
+  font-size: 12px;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+
+.bf-adjust-factor {
+  font-family: var(--font-figures);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.bf-adjust-note {
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The performance table: the stacked zone bar, red, yellow, green and
+   the neutral "over" — exceeding the top of green is excess stock,
+   not a shortage risk. */
+.bf-perf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bf-perf-table thead th {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bf-perf-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: middle;
+}
+
+.bf-perf-barwrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bf-perf-bar {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+/* The four segments flex in the percentages' ratio; the colours are
+   the zone tokens of tokens.css, the over fill the neutral token. */
+.bf-perf-seg--red {
+  background: var(--color-zone-red);
+}
+
+.bf-perf-seg--yellow {
+  background: var(--color-zone-amber);
+}
+
+.bf-perf-seg--green {
+  background: var(--color-zone-green);
+}
+
+.bf-perf-seg--over {
+  background: var(--color-neutral-soft);
+}
+
+/* Narrow screens: the bar stacks, the table region keeps a usable
+   floor, and the page still never scrolls sideways. */
+@media (max-width: 900px) {
+  #view-buffers.is-active #buffers-root > .bf {
+    padding: var(--space-4);
+  }
+
+  .bf-refresh {
+    flex: 1 1 100%;
+  }
+
+  .bf-table-region {
+    min-height: calc(var(--row-min) * 3);
+  }
+
+  .bf-add {
+    align-items: stretch;
+  }
+
+  .bf-add-label {
+    align-self: flex-start;
+  }
+
+  .bf-add-field input {
+    width: 100%;
+    min-width: 0;
+  }
+}

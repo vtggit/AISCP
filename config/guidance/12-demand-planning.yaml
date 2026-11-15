@@ -1,0 +1,254 @@
+scope: AIERP
+area: demand-planning
+title: "Demand planning"
+summary: "The replenishment wedge reads the past: twelve 30-day buckets, their average and their spread. That assumes next quarter looks like last year. It misses trend and season, it gives no recommendation at all for intermittent and lumpy items, and it has nowhere for a planner to say \"this will change\". Demand planning adds the forward view, in four steps the operator approved: - a statistical forecast per item-site; - forecast accuracy, measured and shown; - planner overrides with reasons; - replenishment that can read the forecast instead of the historical average."
+items:
+  - key: AIERP-D-54
+    type: design
+    title: "Grain and horizon"
+    statement: "One forecast per item-site, in the same 30-day buckets the demand statistics use, for the next 12 buckets. History: up to the last 36 buckets when the item-site has them. Only complete buckets count, as for the demand class: a bucket the item-site existed for only part of would read the days before its first demand as zero demand and pull a young item-site's forecast down (decided 2026-10-12, under the operator's delegation of method choices). An item-site with less than one complete bucket still gets one. Twelve 30-day buckets cover 360 days, so a \"season\" of 12 buckets drifts about five days a year against the calendar. That is accepted and stated on the forecast."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-55
+    type: design
+    title: "Methods"
+    statement: "Each is simple enough to write out as arithmetic: `mean`: the average of the last 12 buckets. This is today's behaviour and the baseline every other method must beat. `ses`: simple exponential smoothing. `damped_trend`: exponential smoothing with a damped trend. `seasonal`: a level multiplied by a seasonal index of 12 buckets. It needs at least 24 buckets of history to compute. Because the backtest makes each of its 6 forecasts from the history before it, an item-site needs 30 buckets before `seasonal` can be chosen. `sba`: the Syntetos-Boylan approximation, for intermittent and lumpy demand."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-56
+    type: design
+    title: "Which method an item-site gets: The demand class limits the candidates"
+    statement: "The demand class limits the candidates: smooth and erratic items choose among `mean`, `ses`, `damped_trend` and `seasonal`; intermittent and lumpy items choose between `mean` and `sba`."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-57
+    type: design
+    title: "Which method an item-site gets: Among the candidates, the method with the lowest mean"
+    statement: "Among the candidates, the method with the lowest mean absolute error wins a backtest: one-bucket-ahead forecasts over the last 6 buckets, each made using only the history before it."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-58
+    type: design
+    title: "Which method an item-site gets: A tie goes to the simpler method, in the order listed"
+    statement: "A tie goes to the simpler method, in the order listed above."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-59
+    type: design
+    title: "Which method an item-site gets: An item-site with fewer than 12 buckets of history gets"
+    statement: "An item-site with fewer than 12 buckets of history gets `mean`. An item-site with no demand gets no forecast."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-60
+    type: design
+    title: "Which method an item-site gets: A forecast is never negative."
+    statement: "A forecast is never negative."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-61
+    type: design
+    title: "Not a black box"
+    statement: "Every forecast states its method, the parameters it chose, how many buckets of history it used, its backtest error against the baseline's, and its arithmetic."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-62
+    type: design
+    title: "Accuracy, two ways: Backtest accuracy comes with every forecast"
+    statement: "*Backtest accuracy* comes with every forecast: the weighted absolute percentage error (total absolute error over total actual demand) and the bias (total forecast minus total actual, over total actual) across the 6 backtest buckets."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-63
+    type: design
+    title: "Accuracy, two ways: Realised accuracy is measured on what actually happened"
+    statement: "*Realised accuracy* is measured on what actually happened. Each sync stores the forecast it would have given for the coming buckets. When a bucket completes, the stored forecast is compared with the actual demand and reported per item-site and overall. This is the number that says whether the forecast deserves trust. A stored forecast is a *snapshot*: one per as-of date, never changed afterwards. A snapshot the sync stores is `live`. A snapshot computed afterwards for an earlier date, using only the history up to that date, is `backfill`. The two are kept apart, so a hindcast is never mistaken for what the system said at the time. Only a completed bucket is compared. Demand after the latest demand date is unknown, not zero. Realised accuracy is shown in two cuts, each labelled (delegated decision, 2026-10-13). *One period ahead* is the forecast for the next 30 days against what happened; it is directly comparable with the backtest. *All horizons* is everything compared, 1 to 12 periods ahead, and weights a period by how many snapshots covered it."
+    decided:
+      by: model:claude
+      date: 2026-10-13
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-64
+    type: design
+    title: "Planner overrides: A planner may replace one bucket's forecast"
+    statement: "A planner may replace one bucket's forecast for an item-site with their own quantity. A reason is required, because an override without a reason cannot be reviewed."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-65
+    type: design
+    title: "Planner overrides: Overrides are append-only history, and the latest one"
+    statement: "Overrides are append-only history, and the latest one for a bucket applies."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-66
+    type: design
+    title: "Planner overrides: An override never changes the statistical forecast underneath it"
+    statement: "An override never changes the statistical forecast underneath it. Accuracy is measured for both, so the product can show whether overrides made the forecast better or worse."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-67
+    type: design
+    title: "Planner overrides: For now a planner is a user"
+    statement: "For now a planner is a user with the `admin` role, as for planner decisions."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-68
+    type: design
+    title: "Planner overrides: An override applies to a fixed calendar period"
+    statement: "An override applies to a fixed calendar period. Forecast buckets are counted from the day the forecast is computed, so recomputing later must never move an override to a different period. An override is stored with its dates, the first and last day of the period, never with the bucket's position. A request names the period by its first day, which must be the first day of a current forecast bucket (delegated decision, 2026-10-13). On a later day the buckets have moved and may only partly cover an override's dates. The effective forecast is then worked out by the day: each day of a bucket takes one thirtieth of the override that covers it, or of the bucket's statistical forecast when none does, and where two overrides cover the same day the one stored last applies. The bucket states how many of its days are overridden, so a partly covered bucket is never shown as fully overridden or as untouched (delegated decision, 2026-10-13). When a period has completed its override can no longer be changed or withdrawn. It stays in the history and is compared with the actual demand."
+    decided:
+      by: model:claude
+      date: 2026-10-13
+      under: delegation
+      ref: "AIERP#315"
+
+  - key: AIERP-D-69
+    type: design
+    title: "Planner overrides: Withdrawing an override"
+    statement: "Withdrawing an override (operator decision, 2026-10-11): a withdrawal is a new row with a reason. The earlier override stays in the history, and the bucket's effective forecast returns to the statistical one."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-11
+      ref: "AIERP#315"
+
+  - key: AIERP-D-70
+    type: design
+    title: "Planner overrides: No forecast, no override"
+    statement: "No forecast, no override (operator decision, 2026-10-11): an override for an item-site with no statistical forecast is rejected. A manual forecast for a new item is a separate, later feature, not a side effect of overrides."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-11
+      ref: "AIERP#315"
+
+  - key: AIERP-D-71
+    type: design
+    title: "Planner overrides: Near-simultaneous overrides"
+    statement: "Near-simultaneous overrides (operator decision, 2026-10-11): both are stored and the one stored last applies. The result never depends on a clock tie."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-11
+      ref: "AIERP#315"
+
+  - key: AIERP-D-72
+    type: design
+    title: "Replenishment: Which demand the reorder point is built"
+    statement: "Which demand the reorder point is built on is a system setting, `replenishment.demand_basis`: `history` (the default) or `forecast`."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-73
+    type: design
+    title: "Replenishment: On forecast, the daily demand is the effective forecast"
+    statement: "On `forecast`, the daily demand is the effective forecast (override, else statistical) over the lead-time window, and the demand variability is the forecast's backtest error rather than the historical spread. The lead-time window is the first whole days of the lead time after the as-of date (the lead time rounded up, at least 1 day and at most 360). Each day takes one day's share of its forecast period's effective quantity, and the daily demand is the window's total divided by its days (delegated decision, 2026-10-13). The backtest error becomes a daily standard deviation as 1.2533 times the mean absolute error, divided by the square root of 30. For errors that are roughly normal the standard deviation is 1.2533 times the mean absolute error, and the error is measured per 30-day period, as the historical spread is. A forecast with no backtest uses the historical spread and says so (delegated decision, 2026-10-13)."
+    decided:
+      by: model:claude
+      date: 2026-10-13
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-74
+    type: design
+    title: "Replenishment: The default stays history"
+    statement: "The default stays `history`: a reorder point that moves because the method changed, without anyone deciding so, would break the trust the wedge depends on. An admin switches the basis after reviewing realised accuracy."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-75
+    type: design
+    title: "Replenishment: Whichever basis is active, each recommendation shows what"
+    statement: "Whichever basis is active, each recommendation shows what the other basis would give."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-76
+    type: design
+    title: "Replenishment: Intermittent and lumpy items are not recommended by this formula"
+    statement: "Intermittent and lumpy items are not recommended by this formula. Their `sba` forecast is shown, and the section \"Intermittent and lumpy demand\" below covers how they get a reorder point."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#683"
+
+  - key: AIERP-D-77
+    type: design
+    title: "Surfaces"
+    statement: "An API for forecasts, accuracy and overrides; a Demand view in the planner screen (a list of item-sites and a detail pane with history, forecast, accuracy and the override); later, an OData collection for Excel."
+    decided:
+      by: model:claude
+      date: 2026-10-11
+      under: delegation
+      ref: "AIERP#307"
+
+  - key: AIERP-D-78
+    type: design
+    title: "Later, not now"
+    statement: "The consensus and scenario layer on top of the forecast. Promotions, events and sales signals moved up: see \"Demand signals\" below."
+    decided:
+      by: model:claude
+      date: 2026-11-03
+      under: delegation
+      ref: "AIERP#961"

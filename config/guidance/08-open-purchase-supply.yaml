@@ -1,0 +1,53 @@
+scope: AIERP
+area: open-purchase-supply
+title: "Open purchase supply"
+items:
+  - key: AIERP-D-31
+    type: design
+    title: "Source"
+    statement: "Purchase-order lines from the ERP feed (`POLine`). Every goods line for a stock item at a site is stored with its open quantity in base units (`BaseOpenQty`), 0 once the line is completed or cancelled, so a line that closes in the ERP stops counting on the next sync. Each sync stamps its rows with the sync's as-of date; readers use only the rows of the latest sync, so a line that vanishes from the source does not count either."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#104"
+
+  - key: AIERP-D-32
+    type: design
+    title: "What counts as supply"
+    statement: "Open lines (not completed, not cancelled, open quantity above 0) for stock items. Service lines, drop-ship orders (they never enter stock) and blanket orders (an agreement, not a delivery) are excluded."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#104"
+
+  - key: AIERP-D-33
+    type: design
+    title: "Timing"
+    statement: "In stockout foresight, a line counts when its promised date falls on or before the end of the replenishment window (as-of + the lead time). A line more than 90 days past its promised date is stale and does not count; a line with no promised date does not count. Both are counted and named on the row so a planner can chase them."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#104"
+
+  - key: AIERP-D-34
+    type: design
+    title: "Effect"
+    statement: "Stock position = on hand + the counted open supply; P(stockout) and expected units short use the position instead of on hand alone. Each row names the counted supply (units and the latest promised date) instead of \"open purchase orders not included\"."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#104"
+
+  - key: AIERP-D-35
+    type: design
+    title: "Evidence"
+    statement: "On the reference ERP's demo data all 20 open purchase lines are service lines or a 2015 blanket order, so the at-risk list is unchanged there (30 at risk, 10 likely). The rules exist for a live ERP, where open replenishment orders are routine and a list that ignored them would flag items already on order."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#104"

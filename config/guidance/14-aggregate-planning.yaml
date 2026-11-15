@@ -1,0 +1,84 @@
+scope: AIERP
+area: aggregate-planning
+title: "Aggregate planning"
+summary: "A recommendation answers one item-site and a scenario asks what an assumption would do to its numbers; before acting, a planner also needs the portfolio view. Aggregate planning is a read-only, aggregate view of the plan. It rolls the item-site numbers up to a grouping dimension and time buckets and shows, per group and bucket, projected demand against projected supply and the projected on-hand that results — so a planner sees where the portfolio is short or long over the horizon before acting on any single item-site. It writes nothing, stores nothing, and makes no decision."
+items:
+  - key: AIERP-D-87
+    type: design
+    title: "The grouping dimension"
+    statement: "Site to begin with (the warehouse/location already on every item-site), and a product family or category when the ERP source provides one — the aggregate is keyed by (group, bucket) and never invents a hierarchy the source does not carry."
+    decided:
+      by: model:claude
+      date: 2026-10-17
+      under: delegation
+      ref: "AIERP#459"
+
+  - key: AIERP-D-88
+    type: design
+    title: "The horizon and buckets"
+    statement: "A fixed number of forward monthly buckets from an as-of date (default six months), each bucket a calendar month."
+    decided:
+      by: model:claude
+      date: 2026-10-17
+      under: delegation
+      ref: "AIERP#459"
+
+  - key: AIERP-D-89
+    type: design
+    title: "What it reports, per group and bucket"
+    statement: "Projected demand: the active demand basis — history or forecast, the same basis the recommendations use — summed over the item-sites in the group for the days in the bucket. Projected supply: open purchase-line quantities whose promised date falls in the bucket, from the open-purchase-supply data already ingested. Projected on-hand at the end of the bucket: the group's starting on-hand rolled forward — prior on-hand plus cumulative supply minus cumulative demand. And a short coverage signal: projected on-hand below zero in a bucket = a projected shortfall; a large positive projected on-hand relative to demand = projected excess. The projected-excess threshold is not fixed in this vision: it is an instance setting to be decided at the Aggregate planning screen slice with the reference dataset in view, while the shortfall signal (projected on-hand below zero) remains normative as written. The dollar view sums each quantity at the item-site `unit_cost`, item-sites without a unit cost contributing zero and counted separately, exactly as scenario planning already does."
+    decided:
+      by: model:claude
+      date: 2026-10-17
+      under: delegation
+      ref: "AIERP#459"
+
+  - key: AIERP-D-90
+    type: design
+    title: "Scope boundaries"
+    statement: "It aggregates only the item-sites the recommendations already consider (the same intermittent/lumpy exclusions), reuses the existing demand-basis, on-hand and open-purchase-supply reads with no new data source, and changes no stored recommendation, decision, or setting; the existing recommendation / drift / excess / stockout / demand / scenario behaviours are unchanged."
+    decided:
+      by: model:claude
+      date: 2026-10-17
+      under: delegation
+      ref: "AIERP#459"
+
+  - key: AIERP-D-91
+    type: design
+    title: "Planned supply"
+    statement: "Planned supply (decided by Claude under delegation, 2026-10-18): next to the as-is figures, the projection carries what the recommended policy would order. It is a periodic-review order-up-to (R, S) policy: at the start of each month, an item-site whose inventory position (on-hand, plus open purchase lines not yet received, plus planned orders not yet arrived) is below S = its reorder point plus that month's demand orders up to S, and the order arrives after its lead time. Planned on-hand is the as-is on-hand plus cumulative planned receipts. The first version triggered on the reorder point alone. That produced false shortfalls every other month wherever the reorder point is below a month's demand, and the live check on the reference data caught it (#490)."
+    decided:
+      by: model:claude
+      date: 2026-10-19
+      under: delegation
+      ref: "AIERP#510"
+
+  - key: AIERP-D-92
+    type: design
+    title: "Scenario levers on the aggregate"
+    statement: "Scenario levers on the aggregate (shipped 2026-10-18): the projection takes the Scenario screen's three levers with the same transform, and the Aggregate screen runs any saved scenario."
+    decided:
+      by: model:claude
+      date: 2026-10-19
+      under: delegation
+      ref: "AIERP#510"
+
+  - key: AIERP-D-93
+    type: design
+    title: "Financial reconciliation, next"
+    statement: "Financial reconciliation, next (recommended by Claude, operator-delegated 2026-10-19): the S&OP loop closes with money. Per month, committed spend (the open purchase lines at cost, by promised month) and planned spend (planned receipts at cost, counted in the month received: the open-to-buy convention) are compared with a purchasing budget per month. The budget is a SYSTEM setting that only an admin edits. The next rung is spend-to-budget comparison only: the comparison shows the remaining budget or the overrun. Recommending which planned orders to defer with the least service impact is a follow-up, not part of this update. It reads only the projection and the stored budget, and it writes nothing else."
+    decided:
+      by: model:claude
+      date: 2026-10-19
+      under: delegation
+      ref: "AIERP#510"
+
+  - key: AIERP-D-94
+    type: design
+    title: "Multi-echelon"
+    statement: "Multi-echelon (deferred, measured 2026-10-19): the reference data carries no supply network, since nothing says which site replenishes which. Inter-site rebalancing found 3 opportunities across the 21 items stocked at more than one site, worth about $45k, almost all of it one item. It returns when a customer's data carries a network."
+    decided:
+      by: model:claude
+      date: 2026-10-19
+      under: delegation
+      ref: "AIERP#510"

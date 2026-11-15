@@ -1,0 +1,54 @@
+scope: AIERP
+area: intermittent-and-lumpy-demand
+title: "Intermittent and lumpy demand"
+summary: "The reorder-point formula assumes demand that is roughly normal from day to day. Intermittent and lumpy item-sites, which have demand in only some months, break that assumption, so they had no recommendation. On the reference data that is 21 of the 94 item-sites with demand, and several of them have no reorder point in the ERP at all. It needs no distribution. A planner can check it in one sentence: \"in 95% of past 10-day spans, demand was at most this\"."
+items:
+  - key: AIERP-D-121
+    type: design
+    title: "Method: empirical lead-time demand"
+    statement: "It takes every overlapping span of L days in the item-site's demand window, where L is the lead time rounded up to whole days. The window is the same 360 days the demand statistics use, or from the item-site's first demand when that is later. The span totals are sorted, and: the reorder point is the total at the service level, for example the 95% quantile; the safety stock is the amount by which that exceeds the mean span total, and never below 0."
+    decided:
+      by: model:claude
+      date: 2026-10-27
+      under: delegation
+      ref: "AIERP#683"
+
+  - key: AIERP-D-122
+    type: design
+    title: "What it does not do yet"
+    statement: "Lead-time variability is not included, because the span length is the mean lead time. With fewer than about 20 demand events in the window, the quantile is coarse. The result states how many spans had any demand, so a thin history is visible."
+    decided:
+      by: model:claude
+      date: 2026-10-27
+      under: delegation
+      ref: "AIERP#683"
+
+  - key: AIERP-D-123
+    type: design
+    title: "Rollout: The empirical reorder point is first shown alongside"
+    statement: "The empirical reorder point is first shown alongside, and the item-site's status stays \"not recommendable\", so nothing downstream moves."
+    decided:
+      by: model:claude
+      date: 2026-10-27
+      under: delegation
+      ref: "AIERP#683"
+
+  - key: AIERP-D-124
+    type: design
+    title: "Rollout: Using it as the recommendation, so that it flows"
+    statement: "Using it as the recommendation, so that it flows into drift, stockout and the plan, is a system setting, off by default, for the same reason as service levels by class (`replenishment.intermittent_recommendations`, #692)."
+    decided:
+      by: model:claude
+      date: 2026-10-27
+      under: delegation
+      ref: "AIERP#683"
+
+  - key: AIERP-D-125
+    type: design
+    title: "Rollout: Per-item adoption"
+    statement: "**Per-item adoption (operator decision, 2026-10-28).** The switch is too blunt on its own: on the reference data one item-site is $861k of a +$1.6M change. So an admin can also adopt the empirical figure one item-site at a time. An adopted item-site is recommended on it whether or not the switch is on. The Settings card shows each item-site's dollar change and whether it is adopted, and the record keeps who adopted it and when (#707, #708, #709)."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-28
+      ref: "AIERP#710"

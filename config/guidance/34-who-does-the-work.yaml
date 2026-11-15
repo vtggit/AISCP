@@ -1,0 +1,37 @@
+# AIERP guidance: who does the work of each planning process.
+#
+# Source: the company directions CO-N-1 and CO-N-2 of 2026-11-13.
+#
+# The model (model:claude) wrote these items and proposed them on 2026-11-13; the operator
+# accepted them as written the same day ("accept all", AIERP PR 1171), so each is in force
+# as their decision.
+scope: AIERP
+area: who-does-the-work
+title: "Who does the work"
+summary: "AIERP is built to show how little of an inventory planner's labor is left when the software researches and makes the decisions and the planner approves the ones that change the ERP. Every process says which steps AIERP does, which it proposes and which stay with the planner, and AIERP shows the planner time it saves and how its decisions turn out."
+applies_to:
+  always: true
+items:
+  - key: AIERP-D-224
+    type: design
+    title: "Who does each step of a planning process"
+    statement: "Every planning process AIERP supports lists its steps and marks each as done by AIERP, proposed by AIERP for a planner's approval, or done by a planner: replenishment settings, excess, stockout risk, the order plan and its release, transfers, the forecast and its overrides, DDMRP buffers, the monthly S&OP review, supplier risk and second sources, order minimums, and the exceptions inbox. A step that writes to the ERP does so only under AIERP-D-2. A step left to a planner names why and the evidence that would let AIERP propose it; a proposed step names the evidence that would let AIERP do it unasked: its measured accuracy against the planner's own changes, whether it can be undone, and the money at stake. A new capability starts with AIERP doing the work and asks a planner only where the list says so. The list is kept in docs/WHO-DOES-EACH-STEP.md."
+    status: active
+    authority: executive
+    derives_from: [CO-N-1, AIERP-N-1, AIERP-D-2]
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1171"
+
+  - key: AIERP-D-225
+    type: design
+    title: "AIERP shows the planner time it saves and how its decisions turn out"
+    statement: "AIERP measures and shows, for each process, how many decisions it made or proposed and how many a planner made or changed, and, where the outcome is known, how its answers did against the planner's changes, the way the forecast already measures its overrides. Each recommendation keeps the research it rests on (the published method it applies, AIERP-D-223, with its inputs and its arithmetic), so a planner checks a decision in minutes instead of rebuilding it. Every demonstration of AIERP shows these measures."
+    status: active
+    authority: executive
+    derives_from: [CO-N-2, AIERP-N-6, AIERP-D-223]
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1171"

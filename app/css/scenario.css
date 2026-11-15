@@ -1,0 +1,388 @@
+/* AIERP planner screen — the Scenario view (#/scenario).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The scenario view owns its full height: the levers form and the
+   summary keep their natural size, the item-site rows scroll inside
+   their own region, and the document never does. */
+#view-scenario.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-scenario.is-active #scenario-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-6);
+}
+
+/* The levers form: one row of labelled fields and the run button; it
+   wraps instead of squeezing at narrow widths. */
+.sc-levers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+  flex-shrink: 0;
+}
+
+.sc-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.sc-field-run {
+  flex: 0 0 auto;
+}
+
+.sc-field-save,
+.sc-field-delete {
+  flex: 0 0 auto;
+}
+
+.sc-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.sc-input {
+  min-height: var(--target-min);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-figures);
+}
+
+/* The saved-scenarios control: the stored lever sets as a select, a
+   name field and Save / Delete for the current levers, over the
+   control's own short status line. It keeps its natural size; the
+   table region below gives up the space. */
+.sc-saved {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+}
+
+.sc-saved-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+}
+
+.sc-select {
+  min-height: var(--target-min);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+/* The control's own short message, separate from the run status; the
+   line takes no space until a message is in it. */
+.sc-saved-msg {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.sc-saved-msg:empty {
+  margin: 0;
+}
+
+.sc-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+}
+
+/* The empty prompt before any run. */
+.sc-empty {
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  color: var(--color-ink-3);
+  line-height: 1.5;
+}
+
+/* The skeleton while a run is out: the summary's shape, pulsing like
+   every other view's loading state. */
+.sc-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sc-skel-block {
+  height: calc(var(--row-min) * 3);
+}
+
+/* The failed run: the same shape as the other views' load errors —
+   the server's message, and a Retry for failures the levers cannot
+   explain (a 422 has no Retry: it is the levers that need the
+   attention). */
+.sc-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.sc-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The summary: the dollar impact and the two signed unit totals, the
+   up/down/unchanged counts below, and the exclusion note when
+   item-sites have no unit cost. */
+.sc-summary {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+}
+
+.sc-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+  margin: 0;
+}
+
+.sc-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.sc-stat-counts {
+  grid-column: span 3;
+}
+
+.sc-stat-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-3);
+}
+
+.sc-stat-value {
+  margin: 0;
+  font-family: var(--font-figures);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.sc-exclusion {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+/* The item-site table: the rows scroll inside their own region, the
+   column header stays put, and a wide code or figure clips with an
+   ellipsis instead of pushing the page sideways. */
+.sc-table-region {
+  flex: 1;
+  min-height: 0;
+  /* A hard cap on top of the flex sizing: whatever the chain above
+     resolves to, the region is a bounded scroll box, so a long answer
+     scrolls inside it (and the document never does). At 1440x900 the
+     flex sizing stays below the cap, so the cap is invisible there;
+     the narrow media query below keeps its tighter 8-row cap. */
+  max-height: calc(var(--row-min) * 12);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.sc-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.sc-table th:nth-child(1) {
+  width: 20%;
+}
+
+.sc-table th:nth-child(2) {
+  width: 14%;
+}
+
+.sc-table th:nth-child(3) {
+  width: 22%;
+}
+
+.sc-table th:nth-child(4) {
+  width: 22%;
+}
+
+.sc-table th:nth-child(5) {
+  width: 22%;
+}
+
+.sc-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-head);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-table tbody td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-soft);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-table th.sc-num,
+.sc-table td.sc-num {
+  text-align: right;
+}
+
+.sc-code,
+.sc-num {
+  font-family: var(--font-figures);
+}
+
+/* The signed change: the word is always in the text; the token colour
+   is a second signal, never the only one. */
+.sc-delta-up {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.sc-delta-down {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+.sc-delta-flat {
+  color: var(--color-ink-3);
+}
+
+/* Narrow: the view scrolls as a whole, like the other narrow views
+   (the document still does not); the levers stack, the summary
+   collapses to one column, the table goes compact and keeps a bounded
+   scroll region of its own — nothing may push the page sideways. */
+@media (max-width: 900px) {
+  #view-scenario.is-active {
+    overflow-y: auto;
+  }
+
+  #view-scenario.is-active #scenario-root {
+    flex: none;
+    padding: var(--space-4);
+  }
+
+  .sc-status {
+    flex: none;
+  }
+
+  .sc-table-region {
+    max-height: calc(var(--row-min) * 8);
+  }
+
+  .sc-levers {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sc-field,
+  .sc-field-run,
+  .sc-field-save,
+  .sc-field-delete {
+    flex: 1 1 auto;
+  }
+
+  .sc-run,
+  .sc-save,
+  .sc-delete {
+    width: 100%;
+  }
+
+  .sc-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sc-stat-counts {
+    grid-column: auto;
+  }
+
+  .sc-stat-value {
+    font-size: 18px;
+  }
+
+  .sc-table thead th {
+    padding: var(--space-2);
+    font-size: 12px;
+  }
+
+  .sc-table tbody td {
+    padding: var(--space-2);
+    font-size: 12px;
+  }
+
+  .sc-table th:nth-child(1) {
+    width: 24%;
+  }
+
+  .sc-table th:nth-child(2) {
+    width: 16%;
+  }
+
+  .sc-table th:nth-child(3) {
+    width: 20%;
+  }
+
+  .sc-table th:nth-child(4) {
+    width: 20%;
+  }
+
+  .sc-table th:nth-child(5) {
+    width: 20%;
+  }
+}

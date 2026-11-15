@@ -1,0 +1,2984 @@
+/* AIERP planner screen — application shell (docs/design/planner-screen.md).
+   Every value comes from the design tokens in tokens.css; never raw values.
+   The page itself never scrolls: the shell is fixed at the viewport height
+   and only designated panes scroll. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+/* The author display rules below must never resurrect a [hidden] element. */
+[hidden] {
+  display: none !important;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sign-in screen                                                      */
+/* ------------------------------------------------------------------ */
+
+#auth {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+}
+
+.auth-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.auth-sub {
+  color: var(--color-ink-3);
+  line-height: 1.5;
+  margin-bottom: var(--space-5);
+}
+
+.signin-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.signin-form label {
+  font-weight: 500;
+}
+
+.signin-form input {
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+
+.btn {
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-surface);
+}
+
+.btn-primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.auth-error {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ */
+/* Application shell                                                   */
+/* ------------------------------------------------------------------ */
+
+#app {
+  display: flex;
+  /* Exactly the viewport height through the html/body 100% chain, never
+     the large-viewport 100vh: the document must not scroll, even at
+     narrow widths where the shell's top bar and header take their share
+     of the height. */
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  padding: var(--space-5) var(--space-4);
+  background: var(--color-sidebar);
+  color: var(--color-sidebar-text);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-5);
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  background: var(--color-accent);
+  color: var(--color-surface);
+  font-weight: 700;
+}
+
+.brand-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-surface);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.nav-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-sidebar-text);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-btn:hover {
+  background: var(--color-sidebar-hover);
+  color: var(--color-surface);
+}
+
+.nav-btn[aria-current="page"] {
+  background: var(--color-sidebar-active);
+  color: var(--color-surface);
+  font-weight: 600;
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-sidebar-hover);
+}
+
+.feed-status {
+  margin-bottom: var(--space-3);
+  font-size: 13px;
+  color: var(--color-sidebar-muted);
+}
+
+/* A feed that stopped arriving (older than 36 hours, or never
+   synced): the warning text and its soft background come from the
+   design tokens, never raw values. */
+.feed-status.is-stale {
+  margin-bottom: calc(var(--space-3) - var(--space-2));
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--color-surface);
+}
+
+.btn-signout {
+  min-height: var(--target-min);
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-sidebar-hover);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-sidebar-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-signout:hover {
+  background: var(--color-sidebar-hover);
+  color: var(--color-surface);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-surface);
+}
+
+.main-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-7) var(--space-4);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.main-header h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.page-subtitle {
+  margin-top: var(--space-1);
+  color: var(--color-ink-3);
+}
+
+.as-of {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+
+.view {
+  display: none;
+}
+
+.view.is-active {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-7);
+}
+
+.view h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: var(--space-3);
+}
+
+.coming-next {
+  color: var(--color-ink-3);
+}
+
+/* ------------------------------------------------------------------ */
+/* Narrow: at 900px and below the sidebar becomes a top bar            */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  #app {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    width: auto;
+    min-width: 0;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .brand {
+    padding: 0;
+  }
+
+  .nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .nav-btn {
+    width: auto;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .sidebar-foot {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+    flex: 1;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Overview (the manager's page)                                       */
+/* ------------------------------------------------------------------ */
+
+.ov {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+/* Value tiles */
+
+.ov-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.ov-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+}
+
+.ov-tile-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-3);
+}
+
+.ov-tile-value {
+  font-family: var(--font-figures);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.ov-tile-value.is-accent {
+  color: var(--color-accent);
+}
+
+.ov-tile-value.is-risk {
+  color: var(--color-risk);
+}
+
+.ov-tile-note {
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+.ov-progress {
+  display: block;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-border-soft);
+  overflow: hidden;
+}
+
+.ov-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+/* List cards */
+
+.ov-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.ov-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.ov-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.ov-card .ov-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ov-card-to-decide {
+  font-size: 13px;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+
+.ov-card-blurb {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-ink-3);
+}
+
+.ov-card-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.ov-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ov-figure-label {
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+.ov-figure-value {
+  font-family: var(--font-figures);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.ov-figure-value.is-accent {
+  color: var(--color-accent);
+}
+
+.ov-figure-value.is-risk {
+  color: var(--color-risk);
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  border-color: var(--color-control-border);
+  color: var(--color-ink);
+}
+
+.btn-secondary:hover {
+  background: var(--color-surface-muted);
+}
+
+.ov-open {
+  align-self: flex-start;
+}
+
+/* Needs a decision, largest money first */
+
+.ov-attention {
+  overflow: hidden;
+}
+
+.ov-attention-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+}
+
+.ov-attention-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ov-attention-note {
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+.attn-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 0 var(--space-5);
+  border: none;
+  border-top: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.attn-row:hover {
+  background: var(--color-surface-muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-drift {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.badge-excess {
+  background: var(--color-snooze-soft);
+  color: var(--color-snooze-ink);
+}
+
+.badge-stockout {
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+}
+
+.attn-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.attn-item {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attn-why {
+  font-size: 13px;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attn-money {
+  flex-shrink: 0;
+  font-family: var(--font-figures);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.attn-chevron {
+  flex-shrink: 0;
+  color: var(--color-ink-3);
+}
+
+.ov-attention-empty {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* Released orders (the fifth Overview region) */
+
+.ov-releases {
+  overflow: hidden;
+}
+
+.ov-releases-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+}
+
+.ov-releases-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ov-releases-open {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.ov-releases-open:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+.ov-releases-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: 0 var(--space-5) var(--space-4);
+}
+
+.ov-releases-note {
+  margin: 0;
+  padding: var(--space-2) var(--space-5) 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+.ov-releases-empty {
+  margin: 0;
+  padding: var(--space-2) var(--space-5) var(--space-4);
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The error keeps a single row — message and Retry side by side — so a
+   failed card grows the Overview no taller than a row of figures. */
+.ov-releases-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+}
+
+.ov-releases-error-msg {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+}
+
+/* Value by class (the sixth Overview region) */
+
+.ov-abc {
+  overflow: hidden;
+}
+
+.ov-abc-title {
+  margin: 0;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ov-abc-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.ov-abc-col-class {
+  width: 15%;
+}
+
+.ov-abc-col-count {
+  width: 25%;
+}
+
+.ov-abc-col-value {
+  width: 42%;
+}
+
+.ov-abc-col-share {
+  width: 18%;
+}
+
+.ov-abc-table th,
+.ov-abc-table td {
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  text-align: left;
+}
+
+.ov-abc-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-abc-table thead th {
+  background: var(--color-surface-head);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink-3);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.ov-abc-table tbody td {
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.ov-abc-count,
+.ov-abc-value,
+.ov-abc-share {
+  font-family: var(--font-figures);
+}
+
+.ov-abc-note {
+  margin: 0;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* Exceptions today (the Overview's exceptions card) */
+
+.ov-exceptions {
+  overflow: hidden;
+}
+
+.ov-exceptions-title {
+  margin: 0;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ov-exceptions-counts {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The "<n> new today" line, directly after the counts line. The
+   accent tokens only. */
+.ov-exceptions-new {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent-ink);
+  overflow-wrap: anywhere;
+}
+
+.ov-exceptions-top {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  list-style: none;
+}
+
+.ov-exceptions-top li {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-soft);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.ov-exceptions-none {
+  margin: 0;
+  padding: var(--space-2) var(--space-5) 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+.ov-exceptions-open {
+  display: inline-block;
+  padding: var(--space-2) var(--space-5) var(--space-4);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.ov-exceptions-open:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+/* The partial-failure note pulls up against the link's bottom padding
+   so the card keeps one consistent bottom edge either way. */
+.ov-exceptions-partial {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  padding: 0 var(--space-5) var(--space-4);
+  font-size: 13px;
+  color: var(--color-snooze-ink);
+  overflow-wrap: anywhere;
+}
+
+/* Supply this week (the Overview's supply-plan card) */
+
+.ov-supply {
+  overflow: hidden;
+}
+
+.ov-supply-title {
+  margin: 0;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ov-supply-orders,
+.ov-supply-transfers {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.ov-supply-inflight {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: 13px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.ov-supply-open {
+  display: inline-block;
+  padding: var(--space-2) var(--space-5) var(--space-4);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.ov-supply-open:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+/* Region skeletons and load errors */
+
+@keyframes ov-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.skel {
+  display: block;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-control);
+  animation: ov-pulse 1.6s ease-in-out infinite;
+}
+
+.skel-line {
+  height: var(--space-3);
+  width: 50%;
+}
+
+.skel-line.skel-wide {
+  width: 80%;
+}
+
+.skel-value {
+  height: var(--space-7);
+  width: 45%;
+}
+
+.skel-figures {
+  height: var(--space-6);
+}
+
+.skel-button {
+  height: var(--target-min);
+  width: 45%;
+}
+
+.skel-attn-row {
+  height: var(--row-min);
+  margin-top: var(--space-1);
+}
+
+.ov-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+}
+
+.ov-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+}
+
+/* ------------------------------------------------------------------ */
+/* Narrow: overview tiles and cards stack to one column                */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  .ov-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ov-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ov-releases-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Work queue (the planner's page)                                     */
+/* ------------------------------------------------------------------ */
+
+/* The queue owns its full height: the tab bar and the split panes fill
+   the view, only the list body and the detail pane scroll, and the
+   document never does. */
+#view-queue.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.q {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Tab bar and filter chips */
+
+.q-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: 0 var(--space-7);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.q-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.q-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  padding: 0 var(--space-4);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-ink-3);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.q-tab:hover {
+  color: var(--color-ink);
+}
+
+.q-tab.is-on {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.q-tab-count {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-border-soft);
+  color: var(--color-ink-2);
+  font-family: var(--font-figures);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.q-chips {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.q-chip {
+  min-height: calc(var(--space-4) * 2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.q-chip:hover {
+  border-color: var(--color-ink-3);
+}
+
+.q-chip.is-on {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-surface);
+}
+
+/* Split panes */
+
+.q-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.q-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 60%;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.q-detail {
+  flex: 0 0 var(--detail-width);
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--color-surface);
+}
+
+.q-list-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Sticky column header and rows (at least 52px tall, each a button) */
+
+.q-row-head,
+.q-row {
+  display: grid;
+  grid-template-columns:
+    var(--target-min)
+    minmax(0, 1.8fr)
+    minmax(0, 1.6fr)
+    minmax(0, 1fr)
+    minmax(120px, max-content);
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 0 var(--space-5);
+}
+
+.q-row-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  border-bottom: 1px solid var(--color-border-soft);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.q-row {
+  border: none;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.q-row:hover {
+  background: var(--color-surface-muted);
+}
+
+.q-row.is-selected {
+  background: var(--color-accent-soft);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.q-rank,
+.q-h-rank {
+  color: var(--color-ink-3);
+  font-family: var(--font-figures);
+}
+
+/* Unranked group divider (Reorder points list): a full-width label before
+   the first unranked row. Not a row — a plain div, so it is not focusable;
+   user-select is off, so it is not selectable either. */
+.q-group {
+  width: 100%;
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-surface-head);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Unranked rows: the label ("No ROP", "No cost") replaces the rank number. */
+.q-rank.is-unranked {
+  font-family: var(--font-ui);
+  font-style: italic;
+}
+
+.q-item-site {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* The item/site cell: the "CODE · SITE" line and, when the API
+   lists an item_description for the row, the free-form description
+   on its own line beneath it (secondary ink colour token). A flex
+   column inside the row's unchanged grid — not a new grid column;
+   a long description wraps and never widens the list. */
+.q-item-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.q-item-desc {
+  min-width: 0;
+  color: var(--color-ink-2);
+  font-size: 12px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.q-figure {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-figures);
+}
+
+.q-money {
+  font-family: var(--font-figures);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.q-row-badge {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Status badges (the design doc's badge table) */
+
+.q-badge-undecided {
+  background: var(--color-ground);
+  color: var(--color-ink-3);
+}
+
+.q-badge-accepted {
+  background: var(--color-accent-pale);
+  color: var(--color-accent-ink);
+}
+
+.q-badge-applied {
+  background: var(--color-accent);
+  color: var(--color-surface);
+}
+
+.q-badge-dismissed {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+.q-badge-snoozed {
+  background: var(--color-snooze-soft);
+  color: var(--color-snooze-ink);
+}
+
+.q-list-empty,
+.q-detail-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-5);
+  color: var(--color-ink-3);
+  font-size: 14px;
+}
+
+/* Detail pane */
+
+.q-detail-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6);
+}
+
+.q-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.q-detail-kind {
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+.q-detail-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.q-detail-desc {
+  margin: 0;
+  color: var(--color-ink-2);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.q-detail-site {
+  font-size: 14px;
+  color: var(--color-ink-2);
+}
+
+.q-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.q-figure-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  min-width: 0;
+}
+
+.q-figure-label {
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+.q-figure-value {
+  font-family: var(--font-figures);
+  font-size: 22px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.q-figure-value.is-accent {
+  color: var(--color-accent);
+}
+
+/* Why block */
+
+.q-why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.q-why h3,
+.q-decision-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.q-why-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+.q-inputs {
+  /* A single-column key/value list: each label on the left, its value
+     on the right; every row spans the full width of the list. One
+     column at every width, so nothing is ever squeezed into a second,
+     narrower column. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 13px;
+}
+
+.q-input {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The label may wrap onto a second line — it is never clipped or
+   abbreviated, and the value keeps its place on the right. */
+.q-input dt {
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.q-input dd {
+  margin: 0;
+  font-family: var(--font-figures);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* The demand-basis lines of the Reorder points tab: where the row's
+   recommended point was built from, and the other basis' whole-unit
+   results. A tight pair, set under the inputs. */
+.q-basis-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.q-basis {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.q-other-basis {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.q-arithmetic {
+  display: block;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  font-family: var(--font-figures);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The service level line (Reorder points tab only): the row's
+   recommended service level as a percent and where it came from,
+   directly under the Why block, above the Order quantity block.
+   Secondary ink like the basis lines — the text wraps, never the
+   page. */
+.q-service-level {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* Order quantity block (Reorder points tab only): the recommended order
+   quantity and its basis, directly under the Why block. The facts are
+   the same single-column key/value list as the inputs; the arithmetic
+   is the same monospace tile. */
+
+.q-orderqty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.q-orderqty h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.q-oq-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 13px;
+}
+
+.q-oq-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The label may wrap onto a second line — it is never clipped or
+   abbreviated, and the value keeps its place on the right. */
+.q-oq-fact dt {
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.q-oq-fact dd {
+  margin: 0;
+  font-family: var(--font-figures);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.q-oq-basis {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.q-oq-arithmetic {
+  display: block;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  font-family: var(--font-figures);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Decision block */
+
+.q-decision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.q-decision-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.q-decision-buttons {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.q-action-pick,
+.q-snooze-options {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.q-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.q-option:hover {
+  border-color: var(--color-ink-3);
+}
+
+.q-option.is-on {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  font-weight: 600;
+}
+
+.q-field-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.q-reason {
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  resize: vertical;
+}
+
+.q-post-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* History, newest first */
+
+.q-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.q-history-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.q-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.q-history-item {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.q-history-date {
+  font-family: var(--font-figures);
+  color: var(--color-ink-3);
+}
+
+.q-history-extra {
+  color: var(--color-ink-3);
+}
+
+/* Queue loading skeletons and load errors */
+
+.skel-q-bar {
+  height: var(--space-4);
+  width: 60%;
+  margin: var(--space-3) 0;
+}
+
+.skel-q-row {
+  height: var(--row-min);
+  margin: var(--space-2) var(--space-5);
+}
+
+.q-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: var(--space-6) var(--space-7);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+}
+
+.q-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+}
+
+/* ------------------------------------------------------------------ */
+/* Narrow: the list and detail panes stack to one column               */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  .q-bar {
+    padding: var(--space-3) var(--space-5);
+  }
+
+  .q-split {
+    flex-direction: column;
+  }
+
+  .q-list {
+    flex: 1 1 55%;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .q-detail {
+    flex: 1 1 45%;
+  }
+
+  .q-row-head,
+  .q-row {
+    grid-template-columns: var(--target-min) minmax(0, 1fr) minmax(110px, max-content);
+  }
+
+  /* The figure and money columns drop off; the decision badge keeps
+     the last slot so triage state stays visible on narrow screens. */
+  .q-figure,
+  .q-h-figure,
+  .q-money,
+  .q-h-money {
+    display: none;
+  }
+
+  .q-figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Decision log (#/log)                                                */
+/* ------------------------------------------------------------------ */
+
+/* The log view never scrolls itself: the single card fills the view
+   and the table body scrolls inside its own region under a sticky
+   header, so the page itself never scrolls and the header stays in
+   place while the body moves. */
+#view-log.is-active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#log-root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.log-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.log-table {
+  width: 100%;
+  /* Wider than any narrow viewport: the table then scrolls sideways
+     inside its card, never the page. */
+  min-width: 768px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+
+.log-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  border-bottom: 1px solid var(--color-border-soft);
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.log-table tbody td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: top;
+}
+
+.log-table tbody tr:hover {
+  background: var(--color-surface-muted);
+}
+
+.log-list {
+  white-space: nowrap;
+}
+
+.log-item {
+  min-width: 0;
+}
+
+.log-item-link {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.log-item-link:hover {
+  text-decoration: underline;
+}
+
+.log-decision {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-ink-2);
+}
+
+.log-money {
+  font-family: var(--font-figures);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.log-status {
+  white-space: nowrap;
+}
+
+.log-decided-by {
+  display: block;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.log-decided-at {
+  display: block;
+  font-family: var(--font-figures);
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+
+/* The empty state: centred in the card on both axes. The container
+   fills the card (the card is a flex column, no padding) and centres
+   its content, so the state's centre is the card's centre. */
+.log-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+}
+
+/* The view's h2 rule (.view h2) wins on margin for this heading, so
+   the zero-margin override needs the view's specificity. */
+.log-empty h2 {
+  margin: 0;
+}
+
+.log-empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.log-empty-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  max-width: 42ch;
+}
+
+.log-empty-link {
+  color: var(--color-accent);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.log-empty-link:hover {
+  text-decoration: underline;
+}
+
+/* A failed load: inline error with a Retry button inside the card. */
+
+.log-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+}
+
+.log-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.log-skel {
+  display: block;
+  width: 40%;
+  height: var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings (#/settings)                                               */
+/* ------------------------------------------------------------------ */
+
+/* The settings flow in a single column and scroll inside the view,
+   like every other view: the document never scrolls. */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 760px;
+}
+
+.settings-card {
+  padding: var(--space-4) var(--space-5);
+}
+
+.settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.settings-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  flex-wrap: wrap;
+}
+
+.settings-desc {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.settings-source {
+  flex-shrink: 0;
+  font-family: var(--font-figures);
+  font-size: 13px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.settings-row-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* The switch: a pill track with a knob; the accent colour while on. */
+.settings-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0 3px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-border);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.settings-switch:hover:not(:disabled) {
+  background: var(--color-control-border);
+}
+
+.settings-switch[aria-checked="true"] {
+  background: var(--color-accent);
+}
+
+.settings-switch[aria-checked="true"]:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.settings-switch:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.settings-switch-knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  transition: transform 120ms ease;
+}
+
+.settings-switch[aria-checked="true"] .settings-switch-knob {
+  transform: translateX(20px);
+}
+
+/* The enum control: one aria-pressed button per allowed value,
+   segmented like the queue's filter chips. */
+.settings-choices {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.settings-choice {
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-right: 1px solid var(--color-control-border);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.settings-choice:last-child {
+  border-right: none;
+}
+
+.settings-choice:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.settings-choice[aria-pressed="true"] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  font-weight: 600;
+}
+
+.settings-choice[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--color-accent-pale);
+}
+
+.settings-choice:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.settings-reset {
+  flex-shrink: 0;
+}
+
+/* The number control: a form with a number input, a Save and the
+   allowed range — it submits through the settings save path. */
+.settings-number {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.settings-number-input {
+  width: 120px;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-figures);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-number-input:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.settings-number-save {
+  flex-shrink: 0;
+}
+
+.settings-number-range {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+.settings-row-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+.settings-row-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* The loading and failed-load states: the same shapes as the other
+   views — skeleton rows while the settings read, an inline error with
+   a Retry button when it fails. */
+.settings-row-skel {
+  display: block;
+  width: 50%;
+  height: var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.settings-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+}
+
+.settings-load-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* Narrow: the description and the source stack, and the controls wrap. */
+@media (max-width: 900px) {
+  .settings-row-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .settings-source {
+    flex-shrink: 1;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Demand view — the overrides' effect on the realised accuracy       */
+/* (issue #388). The words "better" and "worse" are always present in  */
+/* the text; the token colour is a second signal, never the only one.  */
+/* ------------------------------------------------------------------ */
+
+/* The summary line's "Overrides: …" tail, and the detail section's
+   "Overrides’ effect" value. */
+.d-realised-ovr-better,
+.d-ovr-effect-better {
+  color: var(--color-accent);
+}
+
+.d-realised-ovr-worse,
+.d-ovr-effect-worse {
+  color: var(--color-risk);
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings view — the "ERP code mappings" card (issue #475).          */
+/* The admin's add form and the stored rows — a labelled table at      */
+/* wide widths (issue #483); read-only for a viewer.                   */
+/* ------------------------------------------------------------------ */
+
+.erp-mappings-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.erp-mappings-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.erp-mapping-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.erp-mapping-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+.erp-mapping-input,
+.erp-mapping-select {
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The rows and the header row that labels them share one column
+   template, so each column header lines up with its values: the kind,
+   the AIERP code, the Odoo code and the updated date sit in fixed
+   columns (the codes and the date may shrink and wrap when the card
+   narrows), and an admin's Delete sits at the right end of the same
+   line. */
+.erp-mapping-row,
+.erp-mapping-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.erp-mapping-head {
+  margin-top: var(--space-4);
+  padding-bottom: var(--space-3);
+}
+
+.erp-mapping-kind {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  flex: 0 0 calc(var(--space-5) * 6);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.erp-mapping-code {
+  font-family: var(--font-figures);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  flex: 0 1 calc(var(--space-5) * 7);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.erp-mapping-updated {
+  font-family: var(--font-figures);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  flex: 0 1 calc(var(--space-5) * 8);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.erp-mapping-delete {
+  flex: 0 0 auto;
+  /* The free space of the line gathers before the Delete, so it sits
+     at the right end of the same line as the values. */
+  margin-left: auto;
+}
+
+.erp-mappings-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+/* Narrow: the header is hidden (each code keeps its aria-label) and
+   the row stacks its values left-aligned, the Delete under them. */
+@media (max-width: 900px) {
+  .erp-mapping-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .erp-mapping-delete {
+    margin-left: 0;
+  }
+
+  .erp-mapping-head {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings view — the "Suggested matches" section of the ERP code     */
+/* mappings card (issue #1009). One row per suggested item mapping,    */
+/* below the stored mappings; an admin's "Confirm match" stores it.    */
+/* ------------------------------------------------------------------ */
+
+.erp-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.erp-suggestions-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-ink);
+}
+
+.erp-suggestions-warning {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+/* One row per suggestion: the AIERP code, the Odoo code, both
+   descriptions (an em dash when null) and why it matched — the row
+   wraps, so a long code or description never scrolls the page
+   sideways at phone widths. */
+.erp-suggestion-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.erp-suggestion-code {
+  font-family: var(--font-figures);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.erp-suggestion-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.erp-suggestion-reason {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+.erp-suggestion-ambiguous {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-risk);
+}
+
+.erp-suggestion-confirm {
+  flex: 0 0 auto;
+  /* The free space of the line gathers before the button, so it sits
+     at the right end of the row (its own line when the row wraps). */
+  margin-left: auto;
+}
+
+.erp-suggestions-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+.erp-suggestions-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Narrow: the button drops to its own line, left-aligned. */
+@media (max-width: 900px) {
+  .erp-suggestion-confirm {
+    margin-left: 0;
+  }
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Settings view — the "Purchasing budget" card (issue #512).          */
+/* The admin's set form and the stored rows — a labelled table at      */
+/* wide widths (the #483 layout); read-only for a viewer.              */
+/* ------------------------------------------------------------------ */
+
+/* The card renders under #settings-root, after the .settings wrap —
+   a sibling of it, not a child — so it carries the wrap's own column
+   width and the gap the wrap leaves between its cards. */
+.purchase-budgets-card {
+  max-width: 760px;
+  margin-top: var(--space-4);
+}
+
+.purchase-budgets-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.purchase-budgets-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.purchase-budget-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.purchase-budget-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+.purchase-budget-input {
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The rows and the header row that labels them share one column
+   template, so each column header lines up with its values: the
+   month, the budget amount and the updated line sit in fixed
+   columns (the amount and the line may shrink and wrap when the card
+   narrows), and an admin's Delete sits at the right end of the same
+   line. */
+.purchase-budget-row,
+.purchase-budget-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.purchase-budget-head {
+  margin-top: var(--space-4);
+  padding-bottom: var(--space-3);
+}
+
+.purchase-budget-month {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  flex: 0 0 calc(var(--space-5) * 5);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.purchase-budget-amount {
+  font-family: var(--font-figures);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  flex: 0 1 calc(var(--space-5) * 6);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.purchase-budget-updated {
+  font-family: var(--font-figures);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  flex: 0 1 calc(var(--space-5) * 8);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.purchase-budget-delete {
+  flex: 0 0 auto;
+  /* The free space of the line gathers before the Delete, so it sits
+     at the right end of the same line as the values. */
+  margin-left: auto;
+}
+
+.purchase-budgets-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+/* Narrow: the header is hidden and the row stacks its values
+   left-aligned, the Delete under them. */
+@media (max-width: 900px) {
+  .purchase-budget-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .purchase-budget-delete {
+    margin-left: 0;
+  }
+
+  .purchase-budget-head {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Work queue — the draft-PO result's Odoo target line (issue #475).   */
+/* The codes the Odoo client was actually called with, under the       */
+/* outcome text in the result region.                                   */
+/* ------------------------------------------------------------------ */
+
+.q-draftpo-target {
+  display: block;
+  margin-top: var(--space-1);
+  font-family: var(--font-figures);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* Scenario — service level by class (issue #679).                     */
+/* The per-class level fieldset between the levers form and the saved- */
+/* scenarios control, the gate line the status region shows for a      */
+/* partly filled set, and the class-level echo line in the summary.    */
+/* ------------------------------------------------------------------ */
+
+.sc-class-levels {
+  flex-shrink: 0;
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+.sc-class-levels-legend {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.sc-class-levels-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+}
+
+/* The gate line: a partly filled class-level set refuses the run, and
+   the status region says so until the set is filled or cleared. */
+.sc-class-gate {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px dashed var(--color-control-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The echo of the per-class mapping the run sent, under the summary
+   grid, like the exclusion note. */
+.sc-class-note {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+/* Narrow: the class-level fields stack, like the levers. */
+@media (max-width: 900px) {
+  .sc-class-levels-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sc-class-levels .sc-field {
+    flex: 1 1 auto;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings view — the "Intermittent and lumpy items" card (issue      */
+/* #699). The dollar impact of the empirical reorder points: the       */
+/* summary and switch lines, the per-item-site table (the largest      */
+/* absolute change first, a no-cost row last) and the no-unit-cost     */
+/* note. The table scrolls inside its own container, so the page       */
+/* never scrolls sideways.                                             */
+/* ------------------------------------------------------------------ */
+
+/* Like the purchasing budget card: under #settings-root, after the
+   other cards — it carries the wrap's own column width and the gap
+   the wrap leaves between its cards. */
+.intermittent-impact-card {
+  max-width: 760px;
+  margin-top: var(--space-4);
+}
+
+.intermittent-impact-summary {
+  margin: var(--space-1) 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.intermittent-impact-switch {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.intermittent-impact-nocost {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The table's own horizontal scroll container: at a narrow width the
+   table keeps its natural width and scrolls inside the wrap, so the
+   page never scrolls sideways. */
+.intermittent-impact-table-wrap {
+  margin-top: var(--space-4);
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.intermittent-impact-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.intermittent-impact-table th,
+.intermittent-impact-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.intermittent-impact-table thead th {
+  font-weight: 600;
+  color: var(--color-ink-2);
+  background: var(--color-surface-head);
+}
+
+.intermittent-impact-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The figures right-align and never wrap: the ERP and empirical
+   reorder points as plain whole numbers with thousands separators,
+   the change with its sign before the "$". */
+.intermittent-impact-erp,
+.intermittent-impact-empirical,
+.intermittent-impact-change {
+  font-family: var(--font-figures);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The adoption status column and the admin-only action column
+   (issue #709): "Yes"/"No" per item-site, and the Adopt/Withdraw
+   buttons. Both cells keep their content on one line. */
+.intermittent-impact-adopted,
+.intermittent-impact-action {
+  white-space: nowrap;
+}
+
+/* The inline message after a failed adopt or withdraw: the same
+   error shape as the rows' change errors. */
+.intermittent-impact-msg {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings view — the "Service levels and their cost" card (issue     */
+/* #1098). The safety-stock cost curve of the service levels, per ABC  */
+/* class: the mode and rate lines, one block per class — its points'   */
+/* table, or the empty note for a class with no item-sites — and the   */
+/* error note for a failed or malformed read. The tables scroll inside */
+/* their own containers, so the page never scrolls sideways.           */
+/* ------------------------------------------------------------------ */
+
+/* Like the intermittent-impact card: under #settings-root, after it —
+   it carries the wrap's own column width and the gap the wrap leaves
+   between its cards. */
+.service-curve-card {
+  max-width: 760px;
+  margin-top: var(--space-4);
+}
+
+.service-curve-mode {
+  margin: var(--space-1) 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.service-curve-rate {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The line under the rate line, by the answer's service_target —
+   what the levels are: the cycle service level or the fill-rate
+   target. Shown only for the two known values; with the field missing
+   or any other value there is no such line. */
+.service-curve-target {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.service-curve-class {
+  margin-top: var(--space-4);
+}
+
+.service-curve-class-title {
+  margin: 0 0 var(--space-2);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* The note under a class' heading: the class' fill rate is read from
+   fewer item-sites than the class counts. */
+.service-curve-fill-note {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The table's own horizontal scroll container: at a narrow width the
+   table keeps its natural width and scrolls inside the wrap, so the
+   page never scrolls sideways. */
+.service-curve-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.service-curve-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.service-curve-table th,
+.service-curve-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.service-curve-table thead th {
+  font-weight: 600;
+  color: var(--color-ink-2);
+  background: var(--color-surface-head);
+}
+
+.service-curve-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The figures keep to one line: the level as a percent with at most
+   one decimal stays left, the safety stock as whole units, the value
+   and the yearly holding cost as dollars, the extra cost with its
+   sign and the fill rate as a percent with two decimals right-align. */
+.service-curve-level {
+  white-space: nowrap;
+}
+
+.service-curve-units,
+.service-curve-value,
+.service-curve-holding,
+.service-curve-delta,
+.service-curve-fill {
+  font-family: var(--font-figures);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The current point's row: a soft fill behind its cells, the "(now)"
+   after the level's percent. */
+.service-curve-table tr.is-current td {
+  background: var(--color-surface-muted);
+}
+
+/* The note for a class with no item-sites, in place of its table, and
+   the note on a failed or malformed read, in place of the class
+   blocks. Neither carries role="alert" — the issue699 proof asserts
+   #settings-root holds none. */
+.service-curve-empty {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.service-curve-error {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings view — the suggestion block of the service-curve card      */
+/* (issue #1122). Under the class blocks, only while the card shows    */
+/* its classes: the title, the labelled target input, the Suggest      */
+/* levels button and the note, then the answer's lines — the result,   */
+/* the refused-input line or the failed-read line. It wraps at a       */
+/* narrow width, so the page never scrolls sideways.                   */
+/* ------------------------------------------------------------------ */
+
+.service-curve-suggest {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: var(--space-2);
+}
+
+.service-curve-suggest-title,
+.service-curve-suggest-note,
+.service-curve-suggest-result,
+.service-curve-suggest-invalid,
+.service-curve-suggest-error {
+  flex: 1 1 100%;
+}
+
+.service-curve-suggest-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.service-curve-suggest-label {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.service-curve-suggest-input {
+  width: 96px;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-figures);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.service-curve-suggest-go {
+  flex-shrink: 0;
+}
+
+.service-curve-suggest-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The answer's lines: the current and the suggested line (or the
+   out-of-reach line, or the nothing-to-measure line alone). */
+.service-curve-suggest-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.service-curve-suggest-current,
+.service-curve-suggest-suggested,
+.service-curve-suggest-none,
+.service-curve-suggest-nopart {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* The refused-input and the failed-read lines: the same error shape
+   as the card's own notes. Neither carries role="alert". */
+.service-curve-suggest-invalid,
+.service-curve-suggest-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

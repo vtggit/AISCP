@@ -1,0 +1,24 @@
+scope: AIERP
+area: north-star
+title: "North star"
+applies_to:
+  always: true
+summary: "Every mid-market ERP has an excellent transactional inventory module: receipts, issues, transfers, adjustments, counts — recorded with high fidelity and full auditability. What none of them do well is tell a planner **what to do next**: what to reorder and how much, what is quietly dying, what will stock out behind a lead time that changed three months ago, whether the safety-stock number set at go-live is still defensible. Those decisions get made in spreadsheets, by one experienced person, from memory. When that person is busy, on holiday, or leaves, the decisions get worse — and nothing in the system notices."
+items:
+  - key: AIERP-N-1
+    type: direction
+    title: "The inventory decisions the ERP records but never makes"
+    statement: "AIERP makes the inventory decisions that the ERP records but never makes."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-N-2
+    type: direction
+    title: "The decision layer over the system of record"
+    statement: "AIERP is the **decision layer** over the system of record. It does not replace the ERP, does not own the transactions, and does not become the source of truth for stock."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"

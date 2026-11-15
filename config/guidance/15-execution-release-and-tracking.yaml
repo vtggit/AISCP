@@ -1,0 +1,73 @@
+scope: AIERP
+area: execution-release-and-tracking
+title: "Execution: release and tracking"
+summary: "The plan only matters once it becomes purchase orders, and those orders only matter until the goods arrive. The execution stage closes that loop. A month's planned orders are released into the ERP as purchase orders, and each released order is followed until it is received. The operator chose this stage on 2026-10-21 and approved the first live release (17 orders) the same day. The defaults below were decided under delegation. Days waiting count from the order date while awaiting approval, and days late from the earliest late line's expected date."
+items:
+  - key: AIERP-D-95
+    type: design
+    title: "How it meets the read-first decision"
+    statement: "A release is a previewed, human-confirmed action: a planner previews a month, and an admin confirms the exact set shown; or, under a standing grant (AIERP-D-2), AIERP releases the set itself within the grant's limits. Every order is created **On Hold**, so it is not sent to a vendor until the ERP's own approval workflow lets it through. Writing also needs the instance switch (`ACUMATICA_ALLOW_WRITES`). With the switch off, preview still works, and neither a confirm nor a standing grant writes. Nothing is released automatically without a standing grant."
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1172"
+
+  - key: AIERP-D-96
+    type: design
+    title: "One purchase order per site and vendor"
+    statement: "One purchase order per site and vendor for the month's planned orders, with lines at the planned quantity and the item-site's unit cost. Unit cost is rounded half-up to cents, as the ERP does, so the audit matches the order."
+    decided:
+      by: model:claude
+      date: 2026-10-22
+      under: delegation
+      ref: "AIERP#593"
+
+  - key: AIERP-D-97
+    type: design
+    title: "Idempotent by origin"
+    statement: "Each order carries an origin key (plan month, site and vendor). A repeated confirm finds the existing order and reports \"Already in ERP\" instead of creating a second one. If the plan for an origin that was already released has changed since, that group is refused as a conflict and recorded as an error, never reported as already in the ERP. Only one confirm runs at a time, and a second one gets 409. Every confirm is recorded in the `plan_releases` audit (outcome, order number, lines, value and actor), including releases that a failure aborts."
+    decided:
+      by: model:claude
+      date: 2026-10-22
+      under: delegation
+      ref: "AIERP#593"
+
+  - key: AIERP-D-98
+    type: design
+    title: "Tracking states, in precedence order"
+    statement: "missing (the ERP no longer has it); cancelled; received (every active line complete or fully received); awaiting approval (On Hold or Pending Approval); late (an approved line past its expected date and not fully received). The expected date is the supplier's promise; a promise on or before the order date is only the ERP's default, so the expected date is then the order date plus the supplier's average lead time, the same rule Expedite uses (AIERP#643); partly received; open."
+    decided:
+      by: model:claude
+      date: 2026-10-22
+      under: delegation
+      ref: "AIERP#593"
+
+  - key: AIERP-D-99
+    type: design
+    title: "In-flight supply"
+    statement: "The ERP's purchase-line feed shows an order only once it is approved (On Hold and Pending Approval orders are left out). Until then, a released order counts as on-order supply from the release audit, arriving in its plan month, so the plan never proposes it twice. From the order number's first appearance in the feed it counts from the feed alone."
+    decided:
+      by: model:claude
+      date: 2026-10-22
+      under: delegation
+      ref: "AIERP#593"
+
+  - key: AIERP-D-100
+    type: design
+    title: "Where it shows"
+    statement: "The Aggregate screen's Release to ERP panel (preview and confirm), the Releases screen (every released order, its state and lines), and an Overview card (counts and the oldest wait)."
+    decided:
+      by: model:claude
+      date: 2026-10-22
+      under: delegation
+      ref: "AIERP#593"
+
+  - key: AIERP-D-101
+    type: design
+    title: "Not in this stage"
+    statement: "Changing or cancelling an order already in the ERP, approving it on the ERP's behalf, and receiving goods all stay in the ERP."
+    decided:
+      by: model:claude
+      date: 2026-10-22
+      under: delegation
+      ref: "AIERP#593"

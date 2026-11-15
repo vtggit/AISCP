@@ -1,0 +1,84 @@
+scope: AIERP
+area: replenishment-defaults
+title: "Replenishment defaults"
+summary: "These are DECIDED. Panels and the auto-answerer apply them as written; every default below is an instance setting with this value, not a constant buried in code."
+items:
+  - key: AIERP-D-10
+    type: design
+    title: "The anchor failure"
+    statement: "Reorder settings are set at go-live and never revisited, and they rot as demand, lead times and supplier reliability drift. Every wedge capability is judged by whether it surfaces and repairs that."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-01
+      ref: "AIERP#4"
+
+  - key: AIERP-D-11
+    type: design
+    title: "What counts as demand"
+    statement: "Stock that leaves to satisfy a need: customer shipments and production or kit issues. Transfers between warehouses, inventory adjustments and customer returns are NOT demand. Returns are tracked separately and never netted against demand."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-01
+      ref: "AIERP#4"
+
+  - key: AIERP-D-12
+    type: design
+    title: "Calculation defaults"
+    statement: "Cycle service level 95% (z = 1.645). Demand history is twelve 30-day buckets ending on the as-of date (see \"Demand buckets and classification\"). A supplier-item needs at least 3 observed lead times; with fewer, the ERP's master-data lead time is used and the recommendation is flagged low-confidence."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-02
+      ref: "AIERP#48"
+
+  - key: AIERP-D-13
+    type: design
+    title: "The as-of date"
+    statement: "Every history window ends at the latest transaction date present in the synced data, or today if that is earlier. On a live source the two are the same day; on a demo or frozen dataset the window stays on the data instead of running past its end."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-01
+      ref: "AIERP#24"
+
+  - key: AIERP-D-14
+    type: design
+    title: "Demand buckets and classification"
+    statement: "Demand buckets and classification (decided by Claude under operator delegation, 2026-10-02). Demand is summed into twelve consecutive 30-day buckets ending on the as-of date; an item first seen more recently uses only its complete buckets since then (at least one). The daily figures the formula needs are derived from the buckets: daily mean = bucket mean / 30, daily standard deviation = bucket standard deviation / sqrt(30). Each item-site is classified with the documented Syntetos-Boylan scheme: ADI (buckets / buckets with demand) and CV^2 (squared coefficient of variation of the non-zero buckets); ADI < 1.32 and CV^2 < 0.49 is smooth, ADI < 1.32 and CV^2 >= 0.49 is erratic, ADI >= 1.32 and CV^2 < 0.49 is intermittent, otherwise lumpy; no demand in the window is no_demand. Smooth and erratic items get a recommendation (erratic ones carry a \"variable demand\" note); intermittent, lumpy and no_demand items are flagged and receive no number. Evidence: on the reference ERP's demo data, daily buckets classified all 95 active item-sites as intermittent (no recommendation at all), weekly left 3 usable, and 30-day buckets give 65 smooth and 5 erratic."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-02
+      ref: "AIERP#48"
+
+  - key: AIERP-D-15
+    type: design
+    title: "Lead-time statistics"
+    statement: "Lead times come from receipts in the 24 months up to the as-of date. Before the mean and standard deviation are computed, observations above the upper quartile plus 3 times the interquartile range (Q3 + 3 * IQR, the documented \"far out\" fence) are dropped and counted, so one purchase order left open for years cannot inflate safety stock. An item's lead time pools all of its suppliers' observations (the preferred vendor is not synced yet); per-supplier statistics are still computed and shown."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-01
+      ref: "AIERP#40"
+
+  - key: AIERP-D-16
+    type: design
+    title: "Safety stock and reorder point method"
+    statement: "The documented service-level method with both demand and lead-time variability: safety stock SS = z * sqrt(LT * sd_d^2 + d^2 * sd_LT^2) and reorder point ROP = d * LT + SS, where d and sd_d are daily demand mean and standard deviation and LT and sd_LT are lead-time mean and standard deviation in days. Every result names this method. Items classified intermittent, lumpy or no_demand are flagged as unsuitable for this method and receive no number, rather than a misleading one."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-01
+      ref: "AIERP#4"
+
+  - key: AIERP-D-17
+    type: design
+    title: "Money at stake"
+    statement: "Over-protected items: (current reorder point - recommended reorder point) * unit cost, when positive. Under-protected items: expected units short per year at the current reorder point * unit cost. Units short per replenishment cycle come from the normal loss function over lead-time demand; cycles per year = annual demand / current order quantity; when the order quantity is missing, one 30-day bucket of demand is assumed and the row says so (decided by Claude under operator delegation, 2026-10-02). Units short per year are capped at the annual demand (365 * d): without the cap a tiny reorder point combined with a tiny order quantity implies more shortage than there is demand. Items with no reorder point set are not ranked; they are listed separately for the planner to confirm whether they are intentionally non-stocked (made to order, special order). Both decided by Claude under operator delegation, 2026-10-02. The ranked drift list orders items by this amount."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-01
+      ref: "AIERP#4"

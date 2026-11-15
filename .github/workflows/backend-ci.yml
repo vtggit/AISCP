@@ -1,0 +1,210 @@
+# Backend CI — quality gates + security hygiene + release metadata + DB-backed test suite.
+#
+# This workflow enforces:
+#   1. Release metadata consistency (version format, changelog, drift detection)
+#   2. Python formatting (black)
+#   3. Python linting (ruff)
+#   4. Shell script sanity (shellcheck)
+#   5. Python dependency vulnerability scanning (pip-audit)
+#   6. Secret-pattern scanning (gitleaks)
+#   7. Migrations apply cleanly against a fresh PostgreSQL database
+#   8. The full backend test suite passes (auth, authz, CRUD, audit, migrations)
+#
+# Lightweight checks (release metadata, quality, security) run without a database
+# so they complete quickly and fail fast. The backend test job requires PostgreSQL.
+
+name: Backend CI
+
+on:
+  push:
+    branches: [main, master]
+    # Markdown outside docs/ (READMEs and the like) needs no build; the Docs check covers it.
+    # docs/ is different: backend tests read docs/PRODUCT-VISION.md (test_issue419, 444, 502,
+    # 609), so a docs/ change must run them. On 2026-10-23 a vision edit merged with no
+    # backend run and turned main red (#593, fixed by #609). Patterns apply in order:
+    # every file, minus Markdown, plus docs/ again. Runnable tests still live in backend/tests.
+    paths:
+      - '**'
+      - '!**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '**'
+      - '!**/*.md'
+      - 'docs/**'
+
+# Cancel a superseded run (e.g. a force-push) instead of letting both finish — the main
+# GitHub Actions-minutes saver during iterative work. Keyed per ref, so distinct PRs and
+# main are independent; only redundant runs of the SAME ref are cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# The product runs in a UTC container and decides "today" in UTC. Run CI in UTC too, so
+# date-relative proofs never depend on the runner's clock.
+env:
+  TZ: UTC
+
+jobs:
+  release-metadata:
+    name: Release metadata (version, changelog, consistency)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check release metadata consistency
+        run: |
+          python3 scripts/check_release_metadata.py \
+            --base-ref "${{ github.event.pull_request.base.sha || '' }}"
+
+  quality:
+    name: Quality gates (format, lint, shellcheck)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install quality tools
+        run: pip install black ruff
+
+      - name: Check Python formatting (black)
+        run: black --check backend/
+
+      - name: Check Python linting (ruff)
+        run: ruff check backend/
+
+      - name: Check shell scripts (shellcheck)
+        run: |
+          shellcheck backend/run_tests.sh backend/start.sh
+
+  security-hygiene:
+    name: Security hygiene (dependency audit, secret scan)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit Python dependencies (pip-audit)
+        run: |
+          pip-audit -r backend/constraints.txt --no-deps --disable-pip
+
+      - name: Install gitleaks
+        run: |
+          url=https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          for i in 1 2 3 4 5; do wget -q -O /tmp/gitleaks.tar.gz "$url" && break; echo "gitleaks download attempt $i failed; retrying"; sleep $((i*5)); done
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp
+          chmod +x /tmp/gitleaks
+          mkdir -p "$HOME/.local/bin"
+          mv /tmp/gitleaks "$HOME/.local/bin/gitleaks"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/gitleaks" version
+
+      - name: Scan for committed secrets (gitleaks)
+        run: |
+          gitleaks detect --source=. --no-git --verbose -c .gitleaks.toml
+          
+  contract-check:
+    name: API contract (OpenAPI schema sync)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt -c backend/constraints.txt
+
+      - name: Verify OpenAPI schema is in sync
+        run: |
+          python3 scripts/export_openapi.py --output /tmp/openapi_check.json
+          if ! diff -q backend/openapi.json /tmp/openapi_check.json > /dev/null 2>&1; then
+            echo "::error::OpenAPI contract artifact is out of sync."
+            echo "::error::Regenerate it with: python3 scripts/export_openapi.py"
+            echo "--- Diff ---"
+            diff -u backend/openapi.json /tmp/openapi_check.json || true
+            exit 1
+          fi
+          echo "OpenAPI contract artifact is in sync."
+
+  backend-tests:
+    name: Backend tests (PostgreSQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: aierp
+          POSTGRES_USER: aierp
+          POSTGRES_PASSWORD: change-me-in-production
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt -c backend/constraints.txt
+
+      - name: Verify migrations apply cleanly
+        run: |
+          cd backend
+          DB_HOST=localhost \
+          DB_PORT=5432 \
+          DB_NAME=aierp \
+          DB_USER=aierp \
+          DB_PASSWORD=change-me-in-production \
+            python3 -m alembic upgrade head
+
+      - name: Run backend test suite
+        run: |
+          cd backend
+          DB_HOST=localhost \
+          DB_PORT=5432 \
+          DB_NAME=aierp \
+          DB_USER=aierp \
+          DB_PASSWORD=change-me-in-production \
+          AUTH_MODE=development \
+          AUTH_DEV_TOKEN=dev-secret-token \
+            python3 -m pytest tests/ -v --tb=short

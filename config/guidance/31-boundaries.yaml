@@ -1,0 +1,41 @@
+scope: AIERP
+area: boundaries
+title: "Hard boundaries"
+applies_to:
+  always: true
+items:
+  - key: AIERP-B-1
+    type: boundary
+    title: "Never answer around a governance blocker"
+    statement: "Never answer around a governance blocker, and never assume authority to write to a customer's ERP."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-B-2
+    type: boundary
+    title: "Never a recommendation without its inputs and arithmetic"
+    statement: "Never present a recommendation without its inputs and arithmetic."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-B-3
+    type: boundary
+    title: "Never claim parity with a named product"
+    statement: "Never claim parity with, or position against, a named product (legal wording rule)."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-B-4
+    type: boundary
+    title: "No accounting scope without a recorded operator decision"
+    statement: "Never move accounting-adjacent scope (GL, tax, revenue recognition, payroll) into the product without an explicit operator decision recorded here first."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"

@@ -1,0 +1,124 @@
+scope: AIERP
+area: parameter-write-back
+title: "Parameter write-back"
+summary: "A planner's accepted reorder-point decision changes nothing until someone retypes it into the ERP. The write-back closes that gap: an admin pushes accepted values into the ERP that owns the item-site. It covers BOTH ERPs (operator decision): Acumatica and Odoo."
+items:
+  - key: AIERP-D-126
+    type: design
+    title: "What is written"
+    statement: "Each accepted drift decision that is still outstanding, meaning the ERP's reorder point differs from the accepted value by more than 1 unit."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-127
+    type: design
+    title: "What is written: Reorder point"
+    statement: "**Reorder point:** the accepted value."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-128
+    type: design
+    title: "What is written: Max quantity"
+    statement: "**Max quantity:** the accepted reorder point plus the item-site's current order quantity (max − min), so the order size does not change. When there is no order quantity, the max is the current max if that is not below the new reorder point, and the new reorder point otherwise."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-129
+    type: design
+    title: "What is written: Safety stock"
+    statement: "**Safety stock:** not written. In both ERPs it does not drive a min/max reorder."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-130
+    type: design
+    title: "How it is written"
+    statement: "**Acumatica:** the `ItemWarehouse` entity, whose `ReorderPoint` is the item-warehouse minimum. It takes two requests: one turns on the overrides, and a second sets the values. Values sent in the same request as the overrides are silently ignored (proven on the test tenant, on both seasonal and non-seasonal items). **Odoo:** the product-warehouse reorder rule (`stock.warehouse.orderpoint` min and max). AIERP never creates a rule, and it refuses when there are several rules for the pair."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-131
+    type: design
+    title: "Safeguards: Writes stay off unless each ERP's write switch is set."
+    statement: "Writes stay off unless each ERP's write switch is set."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-132
+    type: design
+    title: "Safeguards: Every write is read back, and a mismatch"
+    statement: "Every write is read back, and a mismatch is a failure, never a silent success."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-133
+    type: design
+    title: "Safeguards: Every attempt (written, unchanged or failed) is stored"
+    statement: "Every attempt (written, unchanged or failed) is stored with who, before, requested and after."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-134
+    type: design
+    title: "Safeguards: A value already in place is not rewritten."
+    statement: "A value already in place is not rewritten."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-135
+    type: design
+    title: "Safeguards: After a verified write, AIERP's own copy"
+    statement: "After a verified write, AIERP's own copy of the item-site is updated, so the decision reads \"applied\" at once."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-136
+    type: design
+    title: "Odoo current values"
+    statement: "AIERP also reads Odoo's reorder rules, so Odoo item-sites have a current reorder point to compare against (#714). Before that, Odoo's side of drift was blank."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"
+
+  - key: AIERP-D-137
+    type: design
+    title: "Slices"
+    statement: "#714–#719, then the planner screen."
+    decided:
+      by: model:claude
+      date: 2026-10-28
+      under: delegation
+      ref: "AIERP#720"

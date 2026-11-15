@@ -1,0 +1,36 @@
+scope: AIERP
+area: method
+title: "Comparative-research method (when no decision exists)"
+applies_to:
+  always: true
+items:
+  - key: AIERP-D-213
+    type: design
+    title: "Decide by comparative research when nothing is recorded"
+    statement: "Answer by researching what **publicly documented practices across multiple established products in this category converge on**, scaled honestly to our current stage — then state that as the DECIDED TARGET. Identify the expected capability and the established domain concepts; design the implementation, UX, terminology, defaults, and data model **independently**. No single named product is the design ground truth, and matching a specific product is never the goal. Where an established inventory-management method exists in the public literature (service-level safety stock, EOQ and its critiques, ABC/XYZ classification, forecast-error-based buffers), prefer the documented method over an invented one, and state which method a number came from."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-D-214
+    type: design
+    title: "The document is authoritative: decide by the method, do not defer"
+    statement: "Operator steering for the panel and the auto-answerer. This document is authoritative: when a question has no recorded fact and no standing decision, answer from the comparative-research method below rather than deferring to a human."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-D-223
+    type: design
+    title: "When products and the discipline's practice disagree, the practice wins"
+    statement: "Where inventory and supply-chain management has an established, published practice for a decision (a method or standard with a citable source, such as the ASCM (APICS) body of knowledge, DDMRP as the Demand Driven Institute publishes it, or Syntetos-Boylan for intermittent demand), AIERP designs to that practice, names it in the decision, and, where businesses reasonably run it differently, ships it as the default with a setting. When what established products converge on (AIERP-D-213) differs from that practice, the practice wins and the decision says so. When the data AIERP holds shows that a practice does not fit, the measurement decides, and the decision records the practice, the measurement and the reason."
+    authority: executive
+    derives_from: [AIERP-D-213]
+    decided:
+      by: model:claude
+      date: 2026-11-13
+      under: "the operator's question of 2026-11-13"

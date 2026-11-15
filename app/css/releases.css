@@ -1,0 +1,802 @@
+/* AIERP planner screen — the Releases view (#/releases).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the bar keeps its natural size, the
+   table scrolls inside its own region, and the document never does. */
+#view-releases.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-releases.is-active #releases-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-releases.is-active #releases-root > .rl {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The bar: the state chips on the left, Refresh on the right. */
+.rl-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.rl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* State chips: the same pill treatment as the queue's filter chips,
+   each carrying its state's order count. */
+.rl-chip {
+  min-height: calc(var(--space-4) * 2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rl-chip:hover {
+  border-color: var(--color-ink-3);
+}
+
+.rl-chip.is-on {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-surface);
+}
+
+.rl-refresh {
+  flex-shrink: 0;
+}
+
+/* The body region: the skeleton, the error, the empty note and the
+   table all live in the same bounded column. It keeps the room of
+   four table rows: when the sections below are open and full, the
+   sections give up their height (each scrolls inside itself)
+   rather than the table's region. */
+.rl-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: calc(var(--row-min) * 4);
+  min-width: 0;
+}
+
+.rl-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.rl-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+.rl-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.rl-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.rl-empty {
+  margin: 0;
+  padding: var(--space-4) 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The table scrolls within its own region: the page never scrolls,
+   and at narrow widths the region — not the document — takes the
+   horizontal overflow. */
+.rl-table-region {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.rl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.rl-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.rl-table td {
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+/* Each row carries the row's full height, so the body's four-row
+   floor holds exactly four of them: the table does not overflow the
+   floor with more of its shorter, natural-height rows. The expanded
+   lines row (.rl-lines-row) keeps its own height. */
+.rl-table tbody tr.rl-row {
+  height: var(--row-min);
+  cursor: pointer;
+}
+
+.rl-table tbody tr.rl-row:hover {
+  background: var(--color-surface-muted);
+}
+
+.rl-table tbody tr.rl-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.rl-table tbody tr.rl-row[aria-expanded='true'] {
+  background: var(--color-accent-pale);
+}
+
+.rl-cell-order {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Dates and money never break inside the value. */
+.rl-cell-released,
+.rl-cell-value,
+.rl-cell-figure,
+.rl-cell-promised {
+  white-space: nowrap;
+}
+
+.rl-cell-value,
+.rl-cell-figure {
+  font-family: var(--font-figures);
+}
+
+/* Vendor and Warehouse may wrap between words only, never inside a
+   word; the other cells stay on one line. */
+.rl-cell-vendor,
+.rl-cell-warehouse {
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+/* The Released cell's second line: " by <actor>" in the secondary
+   ink token, on its own line beneath the date. */
+.rl-released-by {
+  display: block;
+  color: var(--color-ink-3);
+}
+
+/* The Promised cell's expected note: rendered only when the
+   promise is the ERP default (promise_is_default exactly true)
+   and the server carries an expected_on — "expected <date>" on
+   its own line beneath the promised date, in the secondary ink
+   token at 12px. A block of its own; the cell's nowrap keeps the
+   date span on one line. */
+.rl-cell-expected {
+  display: block;
+  color: var(--color-ink-2);
+  font-size: 12px;
+}
+
+/* The Vendor cell's identity: the name on its own line (the primary
+   line), with the vendor code beneath it in the secondary ink token. */
+.rl-vendor-name {
+  display: block;
+}
+
+.rl-vendor-code {
+  color: var(--color-ink-3);
+}
+
+.rl-cell-delay {
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+
+/* The state badges: the risk tokens and a leading marker for late,
+   the accent tokens for awaiting approval, neutral for the rest. */
+.rl-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rl-badge--late {
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+}
+
+.rl-badge--awaiting {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.rl-badge--neutral {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+/* The expanded line table: one row per order line beneath its order. */
+.rl-lines-row > td {
+  padding: 0 0 var(--space-3) var(--space-5);
+  background: var(--color-surface-muted);
+}
+
+.rl-lines {
+  width: 100%;
+  max-width: 760px;
+  border-collapse: collapse;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-size: 12px;
+}
+
+.rl-lines th {
+  text-align: left;
+  padding: var(--space-1) var(--space-3);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border-soft);
+  white-space: nowrap;
+}
+
+.rl-lines td {
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--color-border-soft);
+  white-space: nowrap;
+}
+
+.rl-lines .rl-cell-figure {
+  font-family: var(--font-figures);
+}
+
+/* The line table's Item cell: the description may wrap between
+   words; the other line cells stay on one line. Scoped under
+   .rl-lines so it out-specifies .rl-lines td's nowrap — an
+   unscoped .rl-cell-line-item would lose the specificity fight
+   (0,1,0 vs 0,1,1) and the cell would never wrap. */
+.rl-lines .rl-cell-line-item {
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+/* The line Item cell's identity: the description on its own line
+   (the primary line), with the code beneath it in the secondary ink
+   token; the code alone without a description. */
+.rl-line-item-desc {
+  display: block;
+}
+
+.rl-line-item-code {
+  color: var(--color-ink-3);
+}
+
+/* The Transfer orders section (issue #919): below the releases
+   table, visible to every signed-in user, fetched on demand only.
+   Capped, and giving up its height when the releases table's
+   region keeps its four rows — it then scrolls inside itself, so
+   every control in it can still be scrolled to and used — and the
+   page never scrolls sideways or downwards for it. */
+.rl-transfers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 0 1 auto;
+  min-height: 0;
+  min-width: 0;
+  max-height: 45%;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.rl-transfers-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+/** Out-specifies the shell's `.view h2` (0,1,1): the section title
+   keeps its own size and margin inside the releases view. */
+.rl-transfers .rl-transfers-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.rl-transfers-show {
+  flex-shrink: 0;
+}
+
+.rl-transfers-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+.rl-transfers-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The section's table scrolls inside its own region: the document
+   (and the section's cap) take no overflow from it. The region
+   keeps a row of room: when the section gives up its height, the
+   table's first rows stay visible and the rest scroll in the
+   region (or the section). */
+.rl-transfers-region {
+  flex: 1;
+  min-height: calc(var(--row-min));
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.rl-transfers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.rl-transfers-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.rl-transfers-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* The Lines cell may wrap: its item codes and quantities are the
+   longest content of the table. */
+.rl-transfers-table .rl-transfers-lines {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* The Standing grants section (issue #1211): below the Transfer      */
+/* orders section, visible to every signed-in user, fetched on        */
+/* demand only. Capped, and giving up its height when the releases    */
+/* table's region keeps its four rows — it then scrolls inside        */
+/* itself, so every control in it can still be scrolled to and        */
+/* used — and the page never scrolls sideways or downwards for it.    */
+/* ------------------------------------------------------------------ */
+
+.rl-role-probe {
+  display: none;
+}
+
+.rl-grants {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 0 1 auto;
+  min-height: 0;
+  min-width: 0;
+  max-height: 62%;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.rl-grants-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+/** Out-specifies the shell's `.view h2` (0,1,1): the section title
+   keeps its own size and margin inside the releases view. */
+.rl-grants .rl-grants-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.rl-grants-show {
+  flex-shrink: 0;
+}
+
+/* The switch line, from the settings answer: the off state reads in
+   the risk ink. */
+.rl-grants-switch {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.rl-grants-switch--off {
+  color: var(--color-risk);
+}
+
+.rl-grants-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.rl-grants-empty,
+.rl-grant-runs-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The section's tables scroll inside their own regions: the document
+   (and the section's cap) takes no overflow from them. The grants'
+   region keeps a row of room only: with the section giving up its
+   height, the table's header and first row stay visible, and the
+   admin's create form beneath the region stays close to the fold —
+   at 1280x720 the form's bottom clips at the section's own scroll,
+   never beyond it. */
+.rl-grants-region {
+  flex: 1 1 auto;
+  min-height: var(--row-min);
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.rl-grants-table,
+.rl-grants-runs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.rl-grants-table thead th,
+.rl-grants-runs-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.rl-grants-table td,
+.rl-grants-runs-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.rl-grant-money {
+  font-family: var(--font-figures);
+}
+
+/* The Created cell's second line: " by <actor>" in the secondary
+   ink token, on its own line beneath the date. */
+.rl-grant-created-by {
+  display: block;
+  color: var(--color-ink-3);
+}
+
+/* The runs' Reason cell may carry a long server message: it wraps,
+   the other run cells stay on one line. Scoped under the runs'
+   table so it out-specifies the table's td nowrap — an unscoped
+   .rl-grant-reason would lose the specificity fight (0,1,0 vs
+   0,1,1) and the cell would never wrap. */
+.rl-grants-runs-table .rl-grant-reason {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The runs' Outcome badge: neutral for the rest, "Failed" in the
+   risk tokens. */
+.rl-grant-outcome {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rl-grant-outcome--neutral {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+.rl-grant-outcome--failed {
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+}
+
+/* The admin's Revoke cell: the quiet secondary control of the
+   transfers' Remove, the confirm step in the risk colour, the row's
+   failure message beneath. */
+.rl-grant-revoke-head {
+  text-align: right;
+}
+
+/* The cell wraps its long failure message; scoped under the
+   grants' table so it out-specifies the table's td nowrap, the
+   same way the runs' Reason rule does. */
+.rl-grants-table .rl-grant-revoke-cell {
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rl-grant-revoke,
+.rl-grant-cancel {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rl-grant-revoke:hover {
+  background: var(--color-surface-muted);
+}
+
+.rl-grant-revoke--confirm {
+  border-color: var(--color-risk);
+  color: var(--color-risk);
+}
+
+.rl-grant-revoke--confirm:hover {
+  background: var(--color-risk-soft);
+}
+
+.rl-grant-cancel {
+  margin-left: var(--space-1);
+}
+
+.rl-grant-cancel:hover {
+  background: var(--color-surface-muted);
+}
+
+.rl-grant-revoke:focus-visible,
+.rl-grant-cancel:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.rl-grant-revoke:disabled,
+.rl-grant-cancel:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-3);
+  cursor: default;
+}
+
+.rl-grant-revoke-error {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: 11px;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The admin's create form, below the grants table: the controls
+   wrap rather than push the page, the message line beneath them. */
+.rl-grant-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.rl-grant-form-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rl-grant-form-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+
+/* The form's controls keep their control look. Scoped under the
+   form: the tables' Process cells share the .rl-grant-process
+   class, and they must look like the cells beside them — no
+   border except the row's bottom border, no background of their
+   own, the table's font size. */
+.rl-grant-form .rl-grant-process,
+.rl-grant-form .rl-grant-limit,
+.rl-grant-form .rl-grant-age {
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.rl-grant-form .rl-grant-process {
+  min-width: 140px;
+}
+
+.rl-grant-form .rl-grant-limit {
+  width: 110px;
+}
+
+.rl-grant-form .rl-grant-age {
+  width: 80px;
+}
+
+.rl-grant-form .rl-grant-process:disabled,
+.rl-grant-form .rl-grant-limit:disabled,
+.rl-grant-form .rl-grant-age:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-3);
+}
+
+.rl-grant-create {
+  flex-shrink: 0;
+}
+
+.rl-grant-create:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rl-grant-form-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* Narrow screens: the bar stacks, the table region keeps a usable
+   floor, and the page still never scrolls sideways. On the phone the
+   shell's top bar and page header take most of the height, so the
+   bar, the table's four rows and the two full sections cannot share
+   one viewport: the column scrolls instead, and the sections keep
+   their capped height (each still scrolling inside itself) rather
+   than being crushed to nothing. */
+@media (max-width: 900px) {
+  #view-releases.is-active #releases-root > .rl {
+    padding: var(--space-4);
+    overflow-y: auto;
+  }
+
+  .rl-refresh {
+    flex: 1 1 100%;
+  }
+
+  .rl-table-region {
+    min-height: calc(var(--row-min) * 3);
+  }
+
+  .rl-transfers-show {
+    flex: 1 1 100%;
+  }
+
+  .rl-grants-show {
+    flex: 1 1 100%;
+  }
+
+  /* The sections keep their capped height on the phone: the column
+     above scrolls for them, so their controls stay reachable and
+     they scroll inside themselves when the cap hides content. */
+  .rl-transfers,
+  .rl-grants {
+    flex-shrink: 0;
+  }
+}

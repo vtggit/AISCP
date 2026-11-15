@@ -1,0 +1,73 @@
+scope: AIERP
+area: stockout-foresight-defaults
+title: "Stockout foresight defaults"
+items:
+  - key: AIERP-D-24
+    type: design
+    title: "Window"
+    statement: "The replenishment window is the item's real lead time: the pooled observed lead-time mean and standard deviation from \"Lead-time statistics\" (or the master-data lead time with the low-confidence flag when there are fewer than 3 observations), at the same as-of date the drift and excess lists use."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#96"
+
+  - key: AIERP-D-25
+    type: design
+    title: "Which items"
+    statement: "Only item-sites whose reorder recommendation is computable (demand class smooth or erratic, status ok): the method needs the same daily demand mean and spread. The others are counted and reported as excluded, never given a number."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#96"
+
+  - key: AIERP-D-26
+    type: design
+    title: "Probability of a stockout inside the window"
+    statement: "Lead-time demand is treated as normal with mean d * LT and standard deviation sqrt(LT * sd_d^2 + d^2 * sd_LT^2), the variance the safety-stock formula already uses. P(stockout) = 1 - Phi((on hand - d * LT) / that standard deviation). An item-site is **at risk** when P > 1 - service level (5% at the default 95%), which is exactly \"on hand is below the recommended reorder point\"; it is **likely** to run out before a replenishment ordered today arrives when P > 50%."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#96"
+
+  - key: AIERP-D-27
+    type: design
+    title: "What each row shows"
+    statement: "P(stockout), the projected run-out date (as-of + on hand / d days), days of cover, the recommended reorder point, expected units short in the window (the normal loss function, as in \"Money at stake\"), and money at risk = expected units short * unit cost (no value, flagged \"unit cost missing\", when the cost is unknown)."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#96"
+
+  - key: AIERP-D-28
+    type: design
+    title: "Open supply"
+    statement: "Open purchase orders are not synced yet, so an item-site with an order already placed can be listed; every row says \"open purchase orders not included\" until they are."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#96"
+
+  - key: AIERP-D-29
+    type: design
+    title: "Ranking"
+    statement: "By P(stockout), highest first, then money at risk. Every row carries its inputs and its arithmetic."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#96"
+
+  - key: AIERP-D-30
+    type: design
+    title: "Evidence"
+    statement: "On the reference ERP's demo data at as-of 2026-06-30: 77 item-sites suit the method, 30 are at risk (exactly the 30 below their recommended reorder point) and 10 are likely to run out inside the lead time."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#96"

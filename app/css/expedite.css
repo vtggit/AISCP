@@ -1,0 +1,310 @@
+/* AIERP planner screen — the Expedite view (#/expedite).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the bar keeps its natural size, the
+   table scrolls inside its own region, and the document never does. */
+#view-expedite.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-expedite.is-active #expedite-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-expedite.is-active #expedite-root > .ex {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The bar: the reason chips on the left, Refresh on the right. */
+.ex-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.ex-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Reason chips: the same pill treatment as the releases' filter
+   chips, each carrying its reason's line count. */
+.ex-chip {
+  min-height: calc(var(--space-4) * 2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ex-chip:hover {
+  border-color: var(--color-ink-3);
+}
+
+.ex-chip.is-on {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-surface);
+}
+
+.ex-refresh {
+  flex-shrink: 0;
+}
+
+/* The body region: the skeleton, the error, the empty note and the
+   table all live in the same bounded column. */
+.ex-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.ex-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.ex-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+.ex-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.ex-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.ex-empty {
+  margin: 0;
+  padding: var(--space-4) 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The stale note: below the table, how many lines the answer left
+   out because they were promised more than 90 days ago. */
+.ex-stale {
+  margin: 0;
+  padding: var(--space-3) var(--space-1) 0;
+  font-size: 12px;
+  color: var(--color-ink-3);
+  flex-shrink: 0;
+}
+
+/* The table scrolls within its own region: the page never scrolls,
+   and at narrow widths the region — not the document — takes the
+   horizontal overflow. */
+.ex-table-region {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.ex-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ex-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.ex-table td {
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+.ex-cell-order {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Dates, units and money never break inside the value. */
+.ex-cell-promised,
+.ex-cell-late,
+.ex-cell-units,
+.ex-cell-value,
+.ex-cell-cover,
+.ex-cell-stockout {
+  white-space: nowrap;
+}
+
+.ex-cell-units,
+.ex-cell-value {
+  font-family: var(--font-figures);
+}
+
+/* Item, Site and the supplier code may wrap between words only,
+   never inside a word; the other cells stay on one line. */
+.ex-cell-item,
+.ex-cell-site,
+.ex-cell-supplier {
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+/* The Item cell's identity: the description on its own line (the
+   primary line), with the code beneath it in the secondary ink
+   token; the code alone without a description. */
+.ex-item-desc {
+  display: block;
+}
+
+.ex-item-code {
+  color: var(--color-ink-3);
+}
+
+.ex-cell-late {
+  color: var(--color-ink-2);
+}
+
+/* The on-time rate follows the supplier code: the secondary ink by
+   default, the risk colour tokens below the risk rate. */
+.ex-supplier-rate {
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+
+/* The supplier risk badge (issue #1071): the level's zone tokens on
+   a pill, after the on-time rate in the supplier cell. */
+.ex-supplier-risk {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ex-supplier-risk.is-high {
+  background: var(--color-zone-red-soft);
+  color: var(--color-zone-red-ink);
+}
+
+.ex-supplier-risk.is-medium {
+  background: var(--color-zone-amber-soft);
+  color: var(--color-zone-amber-ink);
+}
+
+/* The supplier identity: the name on its own line (the primary line),
+   with the vendor code beneath it in the secondary ink token; the
+   on-time note stays after the code, as today. */
+.ex-supplier-name {
+  display: block;
+}
+
+.ex-supplier-code {
+  color: var(--color-ink-3);
+}
+
+.ex-supplier-rate--risk {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+/* The stockout date: plain ink, the risk colour tokens with a
+   leading marker when the line arrives after the item runs out. */
+.ex-stockout-date {
+  white-space: nowrap;
+}
+
+.ex-stockout-date--risk {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+/* The reason badges: the risk tokens, the screen's whole reason for
+   being. */
+.ex-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: var(--space-1);
+  margin-right: var(--space-1);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+}
+
+.ex-badge:last-child {
+  margin-right: 0;
+}
+
+/* Narrow screens: the bar stacks, the table region keeps a usable
+   floor, and the page still never scrolls sideways. */
+@media (max-width: 900px) {
+  #view-expedite.is-active #expedite-root > .ex {
+    padding: var(--space-4);
+  }
+
+  .ex-refresh {
+    flex: 1 1 100%;
+  }
+
+  .ex-table-region {
+    min-height: calc(var(--row-min) * 3);
+  }
+}

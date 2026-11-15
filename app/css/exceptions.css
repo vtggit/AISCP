@@ -1,0 +1,272 @@
+/* AIERP planner screen — the Exceptions view (#/exceptions).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; the severity styling uses the zone and risk tokens
+   only. */
+
+/* The view owns its full height: the toolbar and the notes keep
+   their natural size, the table scrolls inside its own region, and
+   the document never does. */
+#view-exceptions.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-exceptions.is-active #exceptions-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-exceptions.is-active #exceptions-root > .ex {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The toolbar: the summary on the left, the "Show snoozed" toggle
+   and the Refresh button on the right. */
+.ex-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.ex-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.ex-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+  cursor: pointer;
+}
+
+.ex-toggle input {
+  margin: 0;
+}
+
+.ex-refresh {
+  flex-shrink: 0;
+}
+
+/* The "Signal" filter: the client-side kind select, next to "New
+   only". It keeps its natural width but shrinks before the toolbar
+   can overflow, so a hostilely long label never pushes the page
+   wide. Tokens only. */
+.ex-kind-filter {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+/* The notes: the failed-sources line and the non-admin note. */
+.ex-note {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+}
+
+.ex-note--failed {
+  background: var(--color-snooze-soft);
+  color: var(--color-snooze-ink);
+}
+
+.ex-note--admin {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+/* The inline action error. */
+.ex-action-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-size: 13px;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The table region: the table scrolls inside it, in both directions
+   at narrow widths, so the page itself never scrolls sideways. */
+.ex-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.ex-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ex-th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ex-table tbody tr {
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.ex-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.ex-table td {
+  padding: var(--space-2) var(--space-3);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+/* The severity badge: the DDMRP zone tokens for the two severities,
+   the neutral tokens for anything the API has not named. */
+.ex-sev {
+  white-space: nowrap;
+}
+
+.ex-sev--high {
+  color: var(--color-zone-red-ink);
+  font-weight: 600;
+}
+
+.ex-sev--medium {
+  color: var(--color-zone-amber-ink);
+  font-weight: 600;
+}
+
+.ex-sev--other {
+  color: var(--color-neutral-ink);
+}
+
+.ex-pair {
+  white-space: nowrap;
+  font-family: var(--font-figures);
+  font-size: 12px;
+  color: var(--color-ink-2);
+}
+
+.ex-detected {
+  white-space: nowrap;
+  font-family: var(--font-figures);
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+.ex-open-link {
+  color: var(--color-accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.ex-open-link:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+/* The row actions: a tight group of secondary buttons. */
+.ex-actions {
+  white-space: nowrap;
+}
+
+.ex-actions .ex-action {
+  min-height: 0;
+  padding: var(--space-1) var(--space-2);
+  margin-right: var(--space-1);
+  font-size: 12px;
+}
+
+.ex-actions .ex-action:last-child {
+  margin-right: 0;
+}
+
+/* The "New" badge in the Signal cell: the row's new flag, after the
+   label. The accent tokens only. */
+.ex-signal .exc-new {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  vertical-align: middle;
+}
+
+/* The "<n> new today" count, directly after the summary in the
+   toolbar. The accent tokens only. */
+.ex-new-count {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent-ink);
+  white-space: nowrap;
+}
+
+/* The empty and the load-error states. */
+.ex-empty {
+  margin: var(--space-5) var(--space-4);
+  text-align: center;
+  color: var(--color-ink-3);
+  font-size: 14px;
+}
+
+/* The first-load skeleton. */
+.ex-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+}
+
+.ex-skel-block {
+  height: calc(var(--row-min) * 3);
+  width: 100%;
+}

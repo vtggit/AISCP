@@ -1,0 +1,339 @@
+/* AIERP planner screen — the Push to ERP view (#/writeback).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the bar keeps its natural size, the
+   two table regions scroll inside their own boxes, and the document
+   never does. */
+#view-writeback.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-writeback.is-active #writeback-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-writeback.is-active #writeback-root > .wb {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The bar: the summary on the left, Refresh on the right. */
+.wb-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.wb-summary {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.wb-refresh {
+  flex-shrink: 0;
+}
+
+/* The panes split the remaining height: the outstanding list above,
+   the write history below. Each keeps a usable floor so a short
+   answer never collapses a region to nothing. */
+.wb-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  min-width: 0;
+}
+
+.wb-outstanding {
+  flex: 1 1 55%;
+}
+
+.wb-history {
+  flex: 1 1 45%;
+}
+
+/* The tables scroll within their own region: the page never scrolls,
+   and at narrow widths the region — not the document — takes the
+   horizontal overflow. */
+.wb-table-region {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.wb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.wb-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.wb-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+/* Units, money and timestamps never break inside the value. */
+.wb-cell-params,
+.wb-cell-money,
+.wb-cell-when {
+  white-space: nowrap;
+}
+
+.wb-cell-params,
+.wb-cell-money {
+  font-family: var(--font-figures);
+}
+
+.wb-cell-money {
+  text-align: right;
+}
+
+.wb-table th:nth-child(n + 4),
+.wb-cell-money {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Select column: the checkbox alone, sized to the control. */
+.wb-cell-select {
+  width: calc(var(--target-min) / 2 + var(--space-2) * 2);
+}
+
+.wb-cell-select input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Item and Site may wrap between words only, never inside a word. */
+.wb-cell-item {
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+/* The error cell keeps long reasons readable. */
+.wb-cell-error {
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The skeletons while a fetch is out. */
+.wb-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.wb-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+/* The load errors: the message and their own Retry. */
+.wb-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.wb-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The empty notes. */
+.wb-empty {
+  margin: 0;
+  padding: var(--space-4) var(--space-3);
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The non-admin note: the push controls are absent. */
+.wb-note {
+  margin: 0;
+  padding: var(--space-2) var(--space-1) 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+  flex-shrink: 0;
+}
+
+/* The admin push bar: Push on the left, the confirm panel and the
+   last push's error and results to its right. */
+.wb-pushbar {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.wb-push {
+  flex-shrink: 0;
+}
+
+/* The inline confirm panel: a risk-tinted card — writing into the
+   ERP changes its planning parameters. */
+.wb-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-risk);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.wb-confirm-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.wb-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* The last failed push: 403 or any other failure. */
+.wb-push-error {
+  margin: 0;
+  padding-top: var(--space-2);
+  font-size: 13px;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The per-pair results of the last confirmed push. */
+.wb-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.wb-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.wb-result-reason {
+  font-size: 12px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The outcome badges: written and ready are the accent tokens,
+   unchanged is neutral, failed is the risk tokens, skipped is the
+   snooze tokens. */
+.wb-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wb-badge--ready,
+.wb-badge--written {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.wb-badge--unchanged {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+.wb-badge--failed {
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+}
+
+.wb-badge--skipped {
+  background: var(--color-snooze-soft);
+  color: var(--color-snooze-ink);
+}
+
+.wb-badge--other {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+/* Narrow screens: the bar and push bar stack, the table regions keep
+   a usable floor, and the page still never scrolls sideways. */
+@media (max-width: 900px) {
+  #view-writeback.is-active #writeback-root > .wb {
+    padding: var(--space-4);
+  }
+
+  .wb-refresh,
+  .wb-push {
+    flex: 1 1 100%;
+  }
+
+  .wb-outstanding,
+  .wb-history {
+    min-height: calc(var(--row-min) * 3);
+  }
+}

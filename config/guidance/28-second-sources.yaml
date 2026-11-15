@@ -1,0 +1,54 @@
+scope: AIERP
+area: second-sources
+title: "Second sources"
+summary: "Knowing that an item depends on one supplier is half an answer. The other half: who else could supply it, and how much stock covers the time it takes to switch."
+items:
+  - key: AIERP-D-202
+    type: design
+    title: "Who else"
+    statement: "For every sole-source item AIERP lists, first, the suppliers that already have purchasing terms for the item but have not delivered it, and then up to three suppliers of similar items. Each candidate carries its own risk rating."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-203
+    type: design
+    title: "Similar means the same item family"
+    statement: "Two items are similar when their codes start with the same characters: three by default, a setting, and 0 turns the suggestion off. It follows how the ERP's item codes are built; matching on description words was tried on real data and found too little."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-204
+    type: design
+    title: "Bridge stock"
+    statement: "What to hold until a second source can deliver is the item's daily demand times the bridge days. The bridge days are a supplier's own lead time when one with terms for the item states it; the item's observed lead time when suppliers with terms exist but state none; and the days needed to qualify a new supplier (60, a setting) when no other supplier has terms for the item. A stored lead time of 0 means the ERP holds none, never same-day delivery. The result is compared with the stock on hand, and the arithmetic is shown."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-205
+    type: design
+    title: "The inbox notices only the urgent ones"
+    statement: "A sole-source item is an exception when its supplier is high risk, no other supplier has terms for it and its stock is short of the bridge; the severity is high when there is no candidate at all."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-206
+    type: design
+    title: "Read-only"
+    statement: "AIERP says whom to approach and what to hold. It creates no supplier, no terms and no order."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"

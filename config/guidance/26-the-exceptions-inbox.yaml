@@ -1,0 +1,74 @@
+scope: AIERP
+area: the-exceptions-inbox
+title: "The exceptions inbox"
+summary: "AIERP computes many signals: a buffer in the red, a likely stockout, a late order, a release that failed. Each lives on its own screen. A planner should not have to open every screen to learn what needs attention today. The inbox is the one triage list."
+items:
+  - key: AIERP-D-189
+    type: design
+    title: "One list, read-only"
+    statement: "Every source of attention feeds it: the DDMRP buffers, stockout risk, expedite lines, releases and transfers that failed or are waiting in the ERP, failed parameter pushes, forecast bias, a missing S&OP sign-off, ERP code clashes, currency mismatches, opportunities across ERPs, high-risk suppliers and sole-source items short of stock. A new kind of signal becomes a new source of this list, not a second place to look."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-190
+    type: design
+    title: "Each row says what, where and how bad"
+    statement: "A kind, a severity (high or medium), the item, order or supplier it is about, and one sentence with the numbers."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-191
+    type: design
+    title: "A failing source never hides the others"
+    statement: "Each source is read on its own. One that fails is named in the answer, and the rest still list."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-192
+    type: design
+    title: "Stored ERP error text is never repeated here"
+    statement: "A failed release reads \"release to the supplier failed\"; the error itself stays with the release."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-193
+    type: design
+    title: "New, acknowledged, snoozed"
+    statement: "AIERP records the day it first saw each exception and marks the ones first seen today. An admin can acknowledge an exception, with an optional date to snooze it until; a snoozed exception leaves the list and the counts until that date."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-194
+    type: design
+    title: "The thresholds are settings"
+    statement: "How large a forecast bias must be (50 percent, over at least 3 compared periods), how many days a released order may wait for approval in the ERP (3), and the day of the month after which a missing S&OP sign-off appears (10)."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-195
+    type: design
+    title: "In the app first"
+    statement: "Email or chat notices come later (operator, 2026-10-29). Until then nothing about an exception leaves AIERP."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-10-29
+      ref: "AIERP#1119"

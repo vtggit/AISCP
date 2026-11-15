@@ -1,0 +1,146 @@
+/* AIERP Work queue (#/queue) — the admin-only "Approve → draft PO"
+   section of the detail pane (issue #455). Colours, radii and spacing
+   come from app/css/tokens.css; the .q- base styles it sits in live
+   in app/css/app.css. The section is inside the detail pane's own
+   scroll region, so it can never scroll the page sideways. */
+
+.q-draftpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.q-draftpo-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.q-draftpo-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.q-draftpo-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.q-draftpo-input {
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.q-draftpo-buttons {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.q-draftpo-result {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.q-draftpo-result:empty {
+  display: none;
+}
+
+.q-draftpo-error {
+  color: var(--color-risk);
+}
+
+/* ------------------------------------------------------------------ */
+/* The tab bar's CSV download buttons and their failure message       */
+/* (issue #694). Colours come from app/css/tokens.css. The buttons    */
+/* wrap (the bar and the group are both flex with wrap) so the page   */
+/* never scrolls sideways — at 390x844 included.                      */
+/* ------------------------------------------------------------------ */
+
+.q-chips {
+  margin-left: auto;
+}
+
+.q-downloads {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.q-downloads .btn {
+  min-height: calc(var(--space-4) * 2);
+  padding: var(--space-1) var(--space-3);
+  font-size: 13px;
+}
+
+.q-downloads .btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.q-download-msg {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* The ERP source tags and the ERP filter (issue #1003). Colours come */
+/* from app/css/tokens.css. The tag is a short pill: on its own line  */
+/* in the list pane's item and site cell (the cell is a flex column), */
+/* and beside the site line in the detail pane. The filter is a       */
+/* native select in the tab bar. Both wrap or cap instead of widening */
+/* the page — at 390x844 included.                                    */
+/* ------------------------------------------------------------------ */
+
+.q-erp-tag {
+  display: inline-block;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.q-detail-site .q-erp-tag {
+  margin-left: var(--space-2);
+}
+
+.q-erp-filter {
+  max-width: 100%;
+  min-height: calc(var(--space-4) * 2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}

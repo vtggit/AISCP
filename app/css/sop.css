@@ -1,0 +1,718 @@
+/* AIERP planner screen — the S&OP review view (#/sop).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the bar and the cards keep their
+   natural size, the month table scrolls inside its own region, and
+   the document never scrolls sideways. */
+#view-sop.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-sop.is-active #sop-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-sop.is-active #sop-root > .sop {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The bar: the horizon label and select on the left, Refresh on the
+   right. */
+.sop-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.sop-months-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.sop-months {
+  min-height: var(--target-min);
+  min-width: 120px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: inherit;
+}
+
+.sop-refresh {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* The body region: the skeleton, the error and the figures scroll
+   together; the month table keeps its own scroll region. */
+.sop-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.sop-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  flex-shrink: 0;
+}
+
+.sop-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+.sop-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+  flex-shrink: 0;
+}
+
+.sop-error-msg {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-risk);
+}
+
+/* The status / sign-off and the forecast accuracy cards. */
+.sop-card {
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: var(--space-3) var(--space-4);
+}
+
+.sop-card-title {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+}
+
+.sop-status {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.sop-signoff {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+}
+
+.sop-signoff-note {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The sign-off control: the open button under the status line, and
+   the panel it opens — the sentence, the optional note and the
+   confirm / Cancel pair. The panel sits between the bar and the body
+   and renders from module state, so a review refresh or a horizon
+   change keeps it open with its note; nothing on it may widen the
+   page at phone widths. */
+.sop-signoff-open {
+  margin-top: var(--space-3);
+}
+
+.sop-signoff-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.sop-signoff-sentence {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+.sop-signoff-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.sop-signoff-text {
+  width: 100%;
+  min-height: calc(var(--row-min) * 2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.sop-signoff-error {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.sop-signoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.sop-forecast {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-ink);
+}
+
+.sop-forecast-overrides {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+}
+
+.sop-forecast-signals {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+}
+
+/* The month table scrolls inside its own region: the region — not
+   the document — takes any horizontal overflow, wide horizons
+   included. */
+.sop-table-region {
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.sop-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sop-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+/* The row-label column keeps its width so the figures line up. */
+.sop-table th.sop-corner {
+  min-width: 160px;
+}
+
+.sop-table th.sop-row-label {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-ink-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  white-space: nowrap;
+}
+
+.sop-table tr.sop-group-row th.sop-group {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+  background: var(--color-surface-muted);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Units and money never break inside the value; the shortage sites
+   wrap, so a long site list cannot widen the page. */
+.sop-table td.sop-cell {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  white-space: nowrap;
+  font-family: var(--font-figures);
+}
+
+.sop-cell-sites {
+  font-family: var(--font-ui);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The flag: an over-budget cell and a non-empty shortage are both
+   words and colour. */
+.sop-flag {
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+/* The "Since the last sign-off" block: directly above the month
+   table, the sentence and the delta table scrolling inside its own
+   region. A delta is never marked good or bad by colour — a rise
+   can be either — so its cells keep the neutral table ink, and
+   nothing on the block may widen the page at phone widths. */
+.sop-since-card {
+  min-width: 0;
+}
+
+.sop-since-base {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.sop-since-none {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+.sop-since-region {
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+/* The missing-cost note, below the table. */
+.sop-no-cost {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-snooze-ink);
+  flex-shrink: 0;
+}
+
+/* Where to act: the sibling screens the review points at. */
+.sop-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  flex-shrink: 0;
+}
+
+.sop-links a {
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.sop-links a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+/* The Scenarios section: directly above the Sign-offs section, for
+   every signed-in user, whether or not the review has loaded. The
+   comparison table scrolls inside its own region, the scenario name
+   and its levers wrap, and nothing on the section may widen the
+   page at phone widths. */
+.sop-scenarios {
+  min-width: 0;
+}
+
+.sop-scenarios-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+
+.sop-scenarios-head .sop-card-title {
+  margin: 0;
+}
+
+.sop-scenarios-show {
+  flex-shrink: 0;
+}
+
+.sop-scenarios-heading {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+.sop-scenarios-error {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.sop-scenarios-empty {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.sop-scenarios-link {
+  color: var(--color-accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.sop-scenarios-link:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+.sop-scenarios-region {
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  min-width: 0;
+  margin-top: var(--space-2);
+}
+
+.sop-scenarios-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sop-scenarios-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+  background: var(--color-surface-head);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.sop-scenarios-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  font-family: var(--font-figures);
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.sop-scenarios-name {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  color: var(--color-ink-2);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sop-scenarios-levers {
+  margin-top: var(--space-1);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.sop-scenarios-bad-cell {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  color: var(--color-risk);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sop-scenarios-more {
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+/* The Demand signals section: directly above the Scenarios section,
+   for every signed-in user, whether or not the review has loaded.
+   The list table scrolls inside its own region, the reason wraps,
+   and nothing on the section may widen the page at phone widths. */
+.sop-signals {
+  min-width: 0;
+}
+
+.sop-signals-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+
+.sop-signals-head .sop-card-title {
+  margin: 0;
+}
+
+.sop-signals-show {
+  flex-shrink: 0;
+}
+
+.sop-signals-error {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.sop-signals-empty {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The list table: its own scroll region, capped so even the full
+   200-row answer scrolls inside the region; the reason wraps, so a
+   long one cannot widen the page. */
+.sop-signals-region {
+  overflow: auto;
+  max-height: calc(var(--row-min) * 12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  min-width: 0;
+  margin-top: var(--space-2);
+}
+
+.sop-signals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sop-signals-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+  background: var(--color-surface-head);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.sop-signals-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  font-family: var(--font-figures);
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.sop-signals-item {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.sop-signals-link {
+  color: var(--color-accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.sop-signals-link:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+.sop-signals-reason {
+  font-family: var(--font-ui);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sop-signals-more {
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+/* The Sign-offs section: below the links, for every signed-in user,
+   whether or not the review has loaded. The list table scrolls
+   inside its own region, and the frozen figures of the picked row
+   render below the list from module state; nothing on the section
+   may widen the page at phone widths. */
+.sop-history {
+  min-width: 0;
+}
+
+.sop-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+
+.sop-history-head .sop-card-title {
+  margin: 0;
+}
+
+.sop-history-show {
+  flex-shrink: 0;
+}
+
+.sop-history-error {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.sop-history-empty {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The list table: its own scroll region; the note wraps, so a long
+   one cannot widen the page. */
+.sop-history-region {
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  min-width: 0;
+  margin-top: var(--space-2);
+}
+
+.sop-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sop-history-table thead th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.sop-history-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.sop-history-note {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sop-history-action {
+  text-align: right;
+}
+
+.sop-history-view {
+  flex-shrink: 0;
+}
+
+/* The frozen figures of the picked row: read-only, no sign-off
+   control; its month table keeps its own scroll region. */
+.sop-history-figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.sop-history-figures-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+
+.sop-history-figures-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.sop-history-fig-error {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}

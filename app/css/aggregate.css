@@ -1,0 +1,686 @@
+/* AIERP planner screen — the Aggregate planning view (#/aggregate).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the controls keep their natural
+   size, the group blocks scroll inside their own region, and the
+   document never does. */
+#view-aggregate.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-aggregate.is-active #aggregate-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-5) var(--space-6);
+}
+
+/* The controls: the months window, the units/dollars toggle and the
+   plan select, all disabled while a fetch is out. */
+.ag-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+  flex-shrink: 0;
+}
+
+.ag-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.ag-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.ag-select {
+  min-height: var(--target-min);
+  min-width: 132px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+/* The body region: the skeleton, the error, the empty note and the
+   grid all live in the same bounded scroll box, so the view owns the
+   height and the document never scrolls. */
+.ag-grid-region {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+/* The grid: one card per site group, in the order the answer
+   returns them. */
+.ag-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ag-group {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.ag-group-title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-figures);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* The bucket table: the months run as columns, the three metrics as
+   rows. A wide window scrolls sideways inside its own wrapper instead
+   of pushing the page. */
+.ag-table-wrap {
+  overflow-x: auto;
+}
+
+.ag-table {
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.ag-table th,
+.ag-table td {
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  white-space: nowrap;
+  min-width: 72px;
+}
+
+.ag-table th.ag-rowhead {
+  min-width: 140px;
+}
+
+.ag-table thead th {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-head);
+  color: var(--color-ink-2);
+  font-weight: 600;
+  text-align: right;
+}
+
+.ag-table thead th.ag-corner {
+  text-align: left;
+}
+
+.ag-table tbody th {
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-head);
+  color: var(--color-ink-2);
+  font-weight: 500;
+  text-align: left;
+}
+
+.ag-table tbody td {
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  text-align: right;
+}
+
+.ag-table th.ag-num,
+.ag-table td.ag-num {
+  font-family: var(--font-figures);
+}
+
+/* The on-hand flags: the leading marker (▼ shortfall, ▲ excess,
+   drawn by ::before) is the cue, the token colour a second signal
+   — never the only one. A shortfall is a rolled on-hand below
+   zero, the risk treatment; an excess an on-hand of at least three
+   times the bucket's demand, the accent treatment, so the two flags
+   read as different hues. */
+.ag-table td.ag-cell-shortfall {
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+.ag-table td.ag-cell-excess {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  font-weight: 600;
+}
+
+/* The leading markers: generated content, so the cell's text (the
+   figure) is unchanged. */
+.ag-table td.ag-cell-shortfall::before,
+.ag-table td.ag-cell-excess::before {
+  margin-right: var(--space-1);
+}
+
+.ag-table td.ag-cell-shortfall::before {
+  content: '\25bc';
+}
+
+.ag-table td.ag-cell-excess::before {
+  content: '\25b2';
+}
+
+/* The legend: below the controls, one swatch and label per flag in
+   the same tokens the cells use; shown whenever the grid has groups. */
+.ag-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  flex-shrink: 0;
+}
+
+.ag-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--color-ink-2);
+}
+
+.ag-legend-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  font-family: var(--font-figures);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ag-legend-swatch.ag-legend-shortfall {
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+}
+
+.ag-legend-swatch.ag-legend-excess {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+/* The scenario caption: the line under the controls naming the chosen
+   scenario and its levers, in the planned note's tone. A long hostile
+   name wraps instead of pushing the page sideways. */
+.ag-scenario-caption {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The plan note: what "With planned orders" means for the figures.
+   Under the legend, in the planned view only. */
+.ag-plan-note {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The per-group note: the item-sites without a unit cost, excluded
+   from the dollar figures. */
+.ag-exclusion {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+/* The empty note: before any load, and on a load that returns no
+   groups. */
+.ag-empty {
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  color: var(--color-ink-3);
+  line-height: 1.5;
+}
+
+/* The skeleton while a fetch is out: the grid's shape, pulsing like
+   every other view's loading state. */
+.ag-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ag-skel-block {
+  height: calc(var(--row-min) * 5);
+  width: 90%;
+}
+
+/* The failed load: the same shape as the other views' load errors —
+   the server's message and a Retry that re-fetches the current
+   months. */
+.ag-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.ag-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The Spend vs budget block: between the legend and notes and the
+   site grid. A wide table scrolls sideways inside its own wrapper,
+   never the page. */
+.ag-spend {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.ag-spend-title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-figures);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* The over-budget mark on a Remaining cell: the shortfall's risk
+   treatment, the leading marker (▼) drawn by ::before so the
+   figure is untouched. */
+.ag-table td.ag-spend-over {
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+.ag-table td.ag-spend-over::before {
+  content: '\25bc';
+  margin-right: var(--space-1);
+}
+
+/* The notes under the spend table: the planned-spend explanation,
+   and, when the answer carries them, the no-budget and no-unit-cost
+   lines. */
+.ag-spend-notes {
+  margin: var(--space-3) 0 0;
+}
+
+.ag-spend-line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.ag-spend-line + .ag-spend-line {
+  margin-top: var(--space-1);
+}
+
+/* The spend block's own skeleton: the spend fetch's loading state,
+   independent of the grid's. */
+.ag-spend-skel-block {
+  height: calc(var(--row-min) * 3);
+  width: 90%;
+}
+
+/* The failed or malformed spend answer: the same shape as the
+   grid's load error, with its own Retry (a link, not a button, so
+   the screen stays free of mutating controls) that re-fetches only
+   the spend. */
+.ag-spend-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.ag-spend-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.ag-spend-retry {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent-ink);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* The "What to defer" block: directly under the Spend vs budget
+   block, only while the latest spend answer has an over-budget
+   month. Its own states never touch the spend block or the grid. */
+.ag-deferrals {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.ag-deferrals-title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-figures);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* One over-budget month: the heading, the summary, the warning and
+   the candidates table. Later months separate on a soft rule. */
+.ag-deferral-month + .ag-deferral-month {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.ag-deferral-month-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-figures);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.ag-deferral-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The following-month warning: the risk treatment, like the
+   over-budget mark — a cue, never the only one. */
+.ag-deferral-warning {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The candidates table scrolls within its own region, sideways and
+   vertically, so neither axis can push the page. */
+.ag-deferral-wrap {
+  overflow: auto;
+  max-height: calc(var(--row-min) * 5);
+}
+
+/* The Item · site and the Status columns read as text, not
+   figures: left-aligned head and cells alike. */
+.ag-deferral-table td:first-child,
+.ag-deferral-table th:first-child,
+.ag-deferral-table td:last-child,
+.ag-deferral-table th:last-child {
+  text-align: left;
+}
+
+/* The suggested row: the accent treatment, like the excess flag. */
+.ag-deferral-table tr.ag-deferral-suggested td {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  font-weight: 600;
+}
+
+/* The would-stock-out row: muted ink, the stockout's tone. */
+.ag-deferral-table tr.ag-deferral-stockout td {
+  color: var(--color-ink-3);
+}
+
+
+/* The "Release to ERP" panel: directly under the "What to defer"
+   block, in the "With planned orders" view only. Its own states
+   never touch the spend block, the deferrals block or the grid. */
+.ag-release {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.ag-release-title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-figures);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* The controls: the month select and the Preview release button. */
+.ag-release-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+}
+
+/* While a saved scenario is chosen: the baseline-only message, no
+   controls of any kind. */
+.ag-release-baseline-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The request's loading state and the not-configured note. */
+.ag-release-note {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The failed request's message: the risk treatment, inline in the
+   panel, the last shown answer kept below it. */
+.ag-release-error {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.ag-release-summary {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* The groups table scrolls within its own region, sideways and
+   vertically, so neither axis can push the page. */
+.ag-release-wrap {
+  overflow: auto;
+  max-height: calc(var(--row-min) * 5);
+}
+
+/* The Warehouse, Vendor and Status columns read as text, not
+   figures: left-aligned head and cells alike. */
+.ag-release-table td:first-child,
+.ag-release-table th:first-child,
+.ag-release-table td:last-child,
+.ag-release-table th:last-child {
+  text-align: left;
+}
+
+/* The unreleasable note: muted ink, the stockout's tone. */
+.ag-release-unreleasable {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The non-admin's release control: the note instead of the button. */
+.ag-release-admin-note {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.ag-release [data-testid='aggregate-release-confirm'] {
+  margin-top: var(--space-3);
+}
+
+/* The inline confirm ask: the question and the Confirm release /
+   Cancel pair; nothing is sent until Confirm. */
+.ag-release-confirm-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.ag-release-confirm-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* The block's own skeleton: the deferrals fetch's loading state. */
+.ag-deferrals-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 90%;
+}
+
+/* The failed or malformed deferrals answer: the same shape as the
+   spend block's error, with its own Retry (a real button, re-fetching
+   only the deferrals). */
+.ag-deferrals-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.ag-deferrals-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* Narrow: the controls stack and the view's padding tightens; the
+   grid region keeps its own bounded scroll, nothing may push the page
+   sideways. The stacked controls, the spend table and the notes can
+   outrun the viewport's height, so the root itself scrolls vertically
+   inside its own region (the document — and the horizontal axis —
+   never do), and the grid region keeps a usable floor instead of
+   being squeezed away by the flex column. */
+@media (max-width: 900px) {
+  #view-aggregate.is-active #aggregate-root {
+    padding: var(--space-4);
+    overflow-y: auto;
+  }
+
+  .ag-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ag-select {
+    width: 100%;
+  }
+
+  .ag-grid-region {
+    padding: var(--space-3);
+    min-height: calc(var(--row-min) * 3);
+  }
+
+  .ag-group {
+    padding: var(--space-3);
+  }
+
+  .ag-spend {
+    padding: var(--space-3);
+  }
+
+  .ag-deferrals {
+    padding: var(--space-3);
+  }
+
+  .ag-deferrals-error {
+    padding: var(--space-3);
+  }
+
+  .ag-release {
+    padding: var(--space-3);
+  }
+
+  .ag-release-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ag-release-controls .ag-select {
+    width: 100%;
+  }
+
+  .ag-release-controls .btn {
+    width: 100%;
+  }
+}

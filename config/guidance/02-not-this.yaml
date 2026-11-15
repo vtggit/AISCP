@@ -1,0 +1,41 @@
+scope: AIERP
+area: not-this
+title: "What AIERP is NOT"
+applies_to:
+  always: true
+items:
+  - key: AIERP-N-3
+    type: direction
+    title: "Not a system of record"
+    statement: "The ERP owns items, quantities, transactions, and costs. AIERP reads them and recommends; the ERP remains authoritative, and AIERP writes to it only under a grant a person gave (AIERP-D-2)."
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1172"
+
+  - key: AIERP-N-4
+    type: direction
+    title: "Not an accounting product"
+    statement: "General ledger, tax determination, revenue recognition, and payroll are explicitly out of scope. They carry regulatory liability that requires specialist ownership, and they are not where this product earns its keep."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-N-5
+    type: direction
+    title: "Not ERP-specific"
+    statement: "The data substrate is AIDW, which ingests any OData-speaking ERP on a schedule. Adding a source is configuration, not a port."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-N-6
+    type: direction
+    title: "Not a black box"
+    statement: "Every recommendation states its inputs, its arithmetic, and its confidence. A planner who cannot audit a number will not act on it — correctly."
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"

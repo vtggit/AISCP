@@ -1,0 +1,926 @@
+/* AIERP planner screen — the Demand view (#/demand).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The demand view owns its full height: the chip bar and the split
+   panes fill the view, only the list body and the detail pane scroll,
+   and the document never does. */
+#view-demand.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-demand.is-active #demand-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Filter chips, above the list */
+
+.d-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+}
+
+.d-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: calc(var(--space-4) * 2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.d-chip:hover {
+  border-color: var(--color-ink-3);
+}
+
+.d-chip.is-on {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-surface);
+}
+
+.d-chip-count {
+  font-family: var(--font-figures);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* The realised-accuracy line between the chips and the split panes:
+   it wraps at narrow widths and never scrolls of its own. */
+.d-realised-summary {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+/* The demand signals line directly under it (issue #984): the same
+   width behaviour and wrap, a quieter ink — the better and worse
+   wording keeps the overrides clause' token colours from app.css. */
+.d-realised-signals {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+/* Split panes */
+
+.d-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.d-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 60%;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.d-detail {
+  flex: 0 0 var(--detail-width);
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--color-surface);
+}
+
+.d-list-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Sticky column header and rows (at least 52px tall, each a button) */
+
+.d-row-head,
+.d-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.5fr)
+    minmax(0, 1fr)
+    minmax(0, 1.1fr)
+    minmax(0, 1fr)
+    minmax(110px, max-content)
+    minmax(110px, max-content)
+    minmax(110px, max-content);
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 0 var(--space-5);
+}
+
+.d-row-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  border-bottom: 1px solid var(--color-border-soft);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.d-row {
+  border: none;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.d-row:hover {
+  background: var(--color-surface-muted);
+}
+
+.d-row.is-selected {
+  background: var(--color-accent-soft);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+/* The item cell: the item code and, when the row's overridden_buckets
+   is above 0, the "Has overrides" marker beside it. */
+.d-item-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.d-item,
+.d-site {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.d-item {
+  flex: 1 1 auto;
+  font-weight: 500;
+}
+
+/* The row's override marker: a small dot pill in the override token
+   colour; its accessible text is the aria-label in the markup. */
+.d-ovr-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-override);
+  border-radius: var(--radius-pill);
+}
+
+.d-ovr-badge::before {
+  content: '';
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-override);
+}
+
+.d-class,
+.d-method {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-ink-2);
+}
+
+.d-total,
+.d-bt-error,
+.d-realised {
+  font-family: var(--font-figures);
+  white-space: nowrap;
+}
+
+/* The row's backtest error cell (.d-bt-error) shares no class with
+   the view-level load error below: it is a plain grid cell with
+   exactly the box model of the .d-realised cell beside it — no
+   risk background, no alert padding or margin, no flex layout. */
+
+/* Centred empty state in the list pane */
+
+.d-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.d-empty h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.d-empty p {
+  color: var(--color-ink-3);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Detail pane */
+
+.d-detail-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6);
+}
+
+.d-detail-empty {
+  margin: 0;
+  padding: var(--space-4) 0;
+  color: var(--color-ink-3);
+  font-size: 14px;
+}
+
+.d-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.d-detail-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.d-detail-sub {
+  font-size: 14px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* Chart: history first, then the forecast, in date order. The two
+   series take two different token colours, echoed by the legend. */
+
+.d-chart {
+  margin: 0;
+}
+
+.d-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.d-bar-history {
+  fill: var(--color-ink-3);
+}
+
+.d-bar-forecast {
+  fill: var(--color-accent);
+}
+
+.d-bar-override {
+  fill: var(--color-override);
+}
+
+.d-chart-baseline {
+  stroke: var(--color-border);
+}
+
+.d-chart-legend {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+.d-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.d-legend::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-control);
+}
+
+.d-legend-history::before {
+  background: var(--color-ink-3);
+}
+
+.d-legend-forecast::before {
+  background: var(--color-accent);
+}
+
+.d-legend-override::before {
+  background: var(--color-override);
+}
+
+/* The detail's sections */
+
+.d-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.d-section h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.d-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.d-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.d-fact dt {
+  color: var(--color-ink-3);
+  font-size: 13px;
+}
+
+.d-fact dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.d-arithmetic {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  font-family: var(--font-figures);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Forecast periods: one row per forecast bucket — the period's dates,
+   the statistical quantity, always shown, and the effective quantity
+   beside it with the coverage note. */
+.d-periods {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.d-periods th {
+  padding: 0 var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-3);
+  text-align: left;
+}
+
+.d-periods td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink-2);
+  vertical-align: top;
+}
+
+.d-periods th:not(:first-child),
+.d-periods td:not(:first-child) {
+  text-align: right;
+}
+
+/* Current overrides: the stored rows that apply, each with the
+   period's dates and the quantity, the reason, who made it and when;
+   or the note for why none are listed. */
+.d-overrides {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.d-overrides-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+/* Admin override controls [rule: OVR-10]: the periods table's action
+   column and its compact Override button, the override form under a
+   period row, and the withdrawal form under a stored row. */
+
+.d-h-act {
+  text-align: right;
+}
+
+.d-p-act {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The compact Override / Withdraw buttons of the periods table and
+   the override rows: pills in the override token colour. */
+.d-ovr-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(var(--space-4) * 2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-override);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-override);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.d-ovr-btn:hover {
+  background: var(--color-override);
+  color: var(--color-surface);
+}
+
+/* The override form, the row under the period it overrides. */
+.d-ovr-form-row td {
+  padding: 0 var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-muted);
+}
+
+/* The periods table's signal note (issue #965): a period whose
+   signal quantity is above 0 gains the "+N from signals" tag beside
+   its coverage text, in the accent tokens. */
+.d-p-signal {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Demand signals (issue #965): the section after "Current
+   overrides" — the on-demand button toolbar, the notes, the table
+   that scrolls inside its own region, and the admin's add and
+   withdrawal forms. */
+
+.d-signals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.d-signals-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.d-signals-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+.d-signals-error-note {
+  color: var(--color-risk);
+}
+
+/* The table's own scroll region: a wide table scrolls here, never
+   the page. */
+.d-signals-scroll {
+  max-height: calc(var(--space-6) * 10);
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+}
+
+.d-signals-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.d-signals-table th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-3);
+  text-align: left;
+  background: var(--color-surface-head);
+  white-space: nowrap;
+}
+
+.d-signals-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink-2);
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.d-signals-table .d-sig-units {
+  font-family: var(--font-figures);
+  white-space: nowrap;
+}
+
+/* The add form: the kind select, the dates, the units and the
+   reason; the field grid reuses the override form's. */
+.d-signal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.d-signal-form select {
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+/* The withdrawal form, the row under the signal it withdraws. */
+.d-signal-form-row td {
+  padding: 0 var(--space-2) var(--space-3);
+  background: var(--color-surface-muted);
+}
+
+.d-signal-withdraw-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+
+.d-ovr-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.d-ovr-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.d-ovr-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 0 0 150px;
+}
+
+.d-ovr-field-wide {
+  flex: 1 1 180px;
+}
+
+.d-ovr-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-3);
+}
+
+.d-ovr-field input {
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+/* The server's refusal, in the open form; hidden while empty. */
+.d-ovr-form-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+}
+
+.d-ovr-form-error:empty {
+  display: none;
+}
+
+.d-ovr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The withdrawal form, under the stored row it withdraws. */
+.d-ovr-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.d-withdraw-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+/* The periods table receives the focus after a withdrawal lands; the
+   global :focus-visible rule covers keyboard focus, this one the
+   programmatic landing. */
+.d-periods:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.d-override-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.d-ovr-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.d-ovr-dates {
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+.d-ovr-qty {
+  font-family: var(--font-figures);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-override);
+}
+
+.d-ovr-reason {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.d-ovr-who {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+/* Backtest: the method's MAE beside the baseline's, plus error and
+   bias as percentages — or the not-enough-history note. */
+
+.d-backtest-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.d-bt-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.d-bt-label {
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+.d-bt-value {
+  font-family: var(--font-figures);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.d-backtest-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+/* The realised section's notes (loading, not available, nothing
+   compared, no demand) read like the backtest note. */
+.d-realised-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+/* The empirical reorder point section (issue #684): the pane's last
+   section, only for an intermittent or a lumpy selection. The
+   arithmetic pre reuses .d-arithmetic (pre-wrap, wrapped long
+   lines), so the narrow pane never scrolls sideways. */
+
+.d-empirical [data-testid="demand-empirical-summary"] {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.d-empirical [data-testid="demand-empirical-current"] {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.d-empirical-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+/* Detail-pane error: the message and a Try again that refetches. */
+
+.d-detail-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.d-detail-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+}
+
+/* View-level load error. Only the list's failed load uses this class:
+   the row's backtest error cells are .d-bt-error, so no row cell
+   inherits the alert's risk styling. */
+
+.d-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: auto var(--space-7);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-control);
+  background: var(--color-risk-soft);
+}
+
+.d-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+}
+
+/* Loading skeleton rows (the .skel base is in app.css) */
+
+.skel-d-row {
+  height: var(--row-min);
+  margin: var(--space-2) var(--space-5);
+}
+
+/* ------------------------------------------------------------------ */
+/* Narrow: the list and detail panes stack to one column               */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  .d-chips {
+    padding: var(--space-3) var(--space-5) var(--space-2);
+  }
+
+  .d-split {
+    flex-direction: column;
+  }
+
+  .d-list {
+    flex: 1 1 55%;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .d-detail {
+    flex: 1 1 45%;
+  }
+
+  .d-row-head,
+  .d-row {
+    grid-template-columns:
+      minmax(0, 1.4fr)
+      minmax(0, 1fr)
+      minmax(90px, max-content)
+      minmax(90px, max-content);
+  }
+
+  /* The class, method and realised columns drop off on narrow
+     screens; the total and the backtest error stay visible. */
+  .d-class,
+  .d-h-class,
+  .d-method,
+  .d-h-method,
+  .d-realised,
+  .d-h-realised {
+    display: none;
+  }
+
+  /* The coverage note drops off on narrow screens — but only while
+     the admin action column is present (it is the 4th of 5 columns
+     then; read-only the table stays 4 columns and the note keeps
+     showing), so the table fits without a sideways scroll. */
+  .d-periods th:nth-child(4):not(:last-child),
+  .d-periods td:nth-child(4):not(:last-child) {
+    display: none;
+  }
+
+  .d-backtest-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

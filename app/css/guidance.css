@@ -1,0 +1,468 @@
+/* AIERP planner screen — the Guidance view (#/guidance).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the bar and the source line keep
+   their natural size, the sections scroll inside their own region,
+   and the document never scrolls sideways. */
+#view-guidance.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-guidance.is-active #guidance-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-guidance.is-active #guidance-root > .g {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The bar: the find input and the count, Refresh on the right. */
+.g-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.g-find {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: var(--space-2);
+  min-width: 200px;
+}
+
+.g-find-label {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--color-ink-2);
+}
+
+.g-find-input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.g-find-input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+.g-count {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+
+.g-refresh {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* The body region: the skeleton, the notes, the error and the
+   sections scroll together. */
+.g-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.g-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  flex-shrink: 0;
+}
+
+.g-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+/* A failed load: the message and the "Try again" button that sends
+   the request again. */
+.g-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+  flex-shrink: 0;
+}
+
+.g-error-msg {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-risk);
+}
+
+/* Nothing published yet and the no-match line: one note each. */
+.g-note {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  color: var(--color-ink-2);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* Where the answer came from, above the items. */
+.g-source {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-ink-2);
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The sections by type, and the retired section. */
+.g-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.g-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.g-section-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* An area group inside a type section. */
+.g-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.g-area-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.g-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* One item block. */
+.g-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: var(--space-4);
+}
+
+.g-item-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.g-item-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The proposed and retired tags: the word carries the meaning, the
+   colour is only a second signal. */
+.g-status {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.g-status-proposed {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.g-status-retired {
+  background: var(--color-neutral-soft);
+  color: var(--color-neutral-ink);
+}
+
+/* The stamp: key and hash, a long one wraps inside its block. */
+.g-stamp {
+  margin-left: auto;
+  font-family: var(--font-figures);
+  font-size: 12px;
+  color: var(--color-ink-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.g-item-statement {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.g-item-decided {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The item's history: the "History" button below the block's lines
+   and the list of versions it opens inside the block. */
+.g-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.g-history-btn {
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
+.g-history-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.g-history-body[hidden] {
+  display: none;
+}
+
+.g-history-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.g-history-error,
+.g-history-withdrawn {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* One row of the history, one per version of the answer. */
+.g-version {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.g-version-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.g-version-stamp {
+  font-family: var(--font-figures);
+  font-size: 12px;
+  color: var(--color-ink-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.g-version-statement {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.g-version-decided,
+.g-version-period {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The stamp lookup: the find names a stamp the answer carries no
+   item with, and the block that shows what the stamp says — one
+   block above the item sections, in place of "No item matches.". */
+.g-lookup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: var(--space-4);
+  flex-shrink: 0;
+}
+
+.g-lookup-head {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g-lookup-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g-lookup-statement {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g-lookup-state {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g-lookup-version {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g-lookup-loading,
+.g-lookup-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g-lookup-error {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-risk);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g-lookup-btn {
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
+/* The code run of a statement, in the item, the history row and the
+   looked-up block: the monospace font and the colours from tokens.css
+   only; a long run wraps inside its block. */
+.g-item-statement code,
+.g-version-statement code,
+.g-lookup-statement code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  font-family: var(--font-figures);
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}

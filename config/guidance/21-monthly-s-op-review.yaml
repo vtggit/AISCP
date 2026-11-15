@@ -1,0 +1,54 @@
+scope: AIERP
+area: monthly-s-op-review
+title: "Monthly S&OP review"
+summary: "The Aggregate planning screen answers \"what do the numbers say\". This capability adds the process around them: once a month the people who own demand, supply and money look at one page, agree the plan, and the agreement is recorded with the figures they agreed to."
+items:
+  - key: AIERP-D-156
+    type: design
+    title: "One page, no new numbers"
+    statement: "The review is a read over what already exists: the aggregate projection, spend against budget, realised forecast accuracy and saved scenarios. It computes no second projection and has no method of its own, so it can never disagree with the screens it summarises."
+    decided:
+      by: model:claude
+      date: 2026-11-02
+      under: delegation
+      ref: "AIERP#926"
+
+  - key: AIERP-D-157
+    type: design
+    title: "The review month is the current calendar month"
+    statement: "The review month is the current calendar month , by the server date, and the default horizon is three months. Only the current review month can be signed off."
+    decided:
+      by: model:claude
+      date: 2026-11-02
+      under: delegation
+      ref: "AIERP#926"
+
+  - key: AIERP-D-158
+    type: design
+    title: "A sign-off freezes the figures"
+    statement: "The server computes the review at the moment of signing and stores that answer with the row. A client never supplies figures, so \"what did we agree\" stays answerable after later syncs move the numbers."
+    decided:
+      by: model:claude
+      date: 2026-11-02
+      under: delegation
+      ref: "AIERP#926"
+
+  - key: AIERP-D-159
+    type: design
+    title: "Sign-offs are append-only and admin-only"
+    statement: "A month can be signed off more than once, for example after a re-plan; the newest row is the current agreement and earlier rows stay as history. There is no route to edit or delete one. Reading them is open to any signed-in user."
+    decided:
+      by: model:claude
+      date: 2026-11-02
+      under: delegation
+      ref: "AIERP#926"
+
+  - key: AIERP-D-160
+    type: design
+    title: "A sign-off changes nothing else"
+    statement: "It is a record of agreement. It releases no order, sets no budget, adopts no scenario and changes no recommendation, and the review makes no ERP call of any kind. Acting on the agreement stays with the existing release, budget and scenario controls."
+    decided:
+      by: model:claude
+      date: 2026-11-02
+      under: delegation
+      ref: "AIERP#926"

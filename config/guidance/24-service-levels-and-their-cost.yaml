@@ -1,0 +1,64 @@
+scope: AIERP
+area: service-levels-and-their-cost
+title: "Service levels and their cost"
+summary: "A planner knows the service level in force. What nobody can say from the ERP is what one more point of service would cost, class by class, or which levels to choose. This capability answers both, read-only."
+items:
+  - key: AIERP-D-177
+    type: design
+    title: "The curve"
+    statement: "For each ABC class AIERP lists the service levels 90, 92, 95, 97, 98, 99 and 99.5 percent, plus the class's current level, with the safety stock each one needs in units and in money, its holding cost a year at the holding rate, and the step up from the level before. Safety stock is z times sigma for each item-site, with sigma the square root of LT times sd_d squared plus d squared times sd_LT squared, from the same inputs the reorder recommendation shows."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-178
+    type: design
+    title: "The fill rate to expect"
+    statement: "Each level also states the share of demand served straight from stock: 1 minus the expected units short per cycle (sigma times the standard normal loss at z) times the cycles a year (yearly demand over the order quantity), over the yearly demand. An item-site without a recommended order quantity takes no part, and the class says how many do."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-179
+    type: design
+    title: "What a level means is a setting"
+    statement: "`replenishment.service_target` is `cycle` by default: a level is the chance of not running out in a replenishment cycle. Set to `fill_rate`, a level is the share of demand served from stock, and each item-site's safety stock is solved to meet it: the smallest z between 0 and 4 whose expected shortage fits. The curve follows the setting, so its rows are always the stock the recommendations would hold."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-180
+    type: design
+    title: "One level for all, or one per class"
+    statement: "One service level for every class (95 percent) unless the per-class switch is on (A 98, B 95, C 90). These are settings, as every judgement call is."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-181
+    type: design
+    title: "The suggestion"
+    statement: "For an overall fill-rate target, AIERP names the combination of one level per class that reaches it at the lowest holding cost, next to what the current levels cost and achieve. The search is exhaustive over the ladder, so the answer is exact and its arithmetic is the curve's own. Nothing is applied: an admin changes the settings."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-182
+    type: design
+    title: "Nothing here writes to the ERP"
+    statement: "Changing a level is a settings change in AIERP, and the recommendations follow at the next read."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"

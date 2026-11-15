@@ -1,0 +1,145 @@
+# Business rules for planner forecast overrides. Source: docs/PRODUCT-VISION.md, "Demand
+# planning", "Planner overrides". OVR-8, OVR-9 and OVR-13 were proposed beyond the vision's
+# first text; the operator accepted them on 2026-10-11 and the vision now states them.
+document: forecast_override
+title: Planner forecast override
+
+applies_to:
+  - backend/app/forecast/*override*.py
+  - backend/app/api/*override*.py
+  - backend/app/repositories/*override*.py
+
+parameters:
+  - id: forecast.horizon_buckets
+    statement: How many future 30-day buckets carry a forecast, and so can be overridden.
+    default: 12
+    scope: fixed
+
+rules:
+  - id: OVR-1
+    kind: must
+    scenario: normal
+    statement: >-
+      A planner may replace the forecast of one future bucket for one item-site with their
+      own quantity. The override stores the quantity, the reason, who made it and when.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-2
+    kind: must
+    scenario: normal
+    statement: >-
+      Overrides are append-only. A new override for the same item-site and period is a new
+      row, and the latest one applies.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-3
+    kind: must
+    scenario: normal
+    statement: >-
+      The effective forecast of a bucket is its latest override when one exists, otherwise
+      the statistical forecast. An overridden bucket shows both values.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue348_freeform.py::test_issue348_freeform
+  - id: OVR-4
+    kind: prohibited
+    scenario: normal
+    statement: >-
+      An override never changes or hides the statistical forecast underneath it. Accuracy is
+      measured for both, so the product can show whether overrides helped.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-5
+    kind: prohibited
+    scenario: failure
+    statement: >-
+      An override with no reason, or a reason of only spaces, is rejected and nothing is
+      stored.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-6
+    kind: prohibited
+    scenario: failure
+    statement: >-
+      An override whose quantity is negative or not a number is rejected. Zero is allowed: a
+      planner may say nothing will sell.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-7
+    kind: prohibited
+    scenario: failure
+    statement: >-
+      An override for a period beyond the forecast horizon, or for a period that has already
+      completed, is rejected.
+    parameters: [forecast.horizon_buckets]
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-8
+    kind: prohibited
+    scenario: failure
+    statement: >-
+      An override for an item-site that has no statistical forecast (no demand) is
+      rejected, because there is nothing to replace and nothing to compare it with.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-9
+    kind: must
+    scenario: reversal
+    statement: >-
+      A planner withdraws an override by recording a withdrawal with a reason. It is
+      a new row, the earlier override stays in the history, and the bucket's effective
+      forecast returns to the statistical forecast.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-10
+    kind: prohibited
+    scenario: authorization
+    statement: >-
+      Only a user with the admin role may create or withdraw an override. Any other signed-in
+      user is refused, an anonymous caller is refused, and nothing is stored. Any signed-in
+      user may read overrides.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-11
+    kind: must
+    scenario: unusual
+    statement: >-
+      An override applies to a fixed calendar period. Forecast buckets are counted from the
+      day the forecast is computed, so recomputing on a later day must not move an override
+      to a different period or drop it without saying so.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue348_freeform.py::test_issue348_freeform
+  - id: OVR-12
+    kind: must
+    scenario: unusual
+    statement: >-
+      When a period completes, its override can no longer be changed or withdrawn. It stays
+      in the history and is compared with the actual demand in realised accuracy.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+  - id: OVR-13
+    kind: must
+    scenario: unusual
+    statement: >-
+      When two overrides for the same item-site and period arrive at nearly the
+      same time, both are stored and the one stored last applies. The result never depends
+      on clock ties.
+    exceptions: none
+    tests:
+      - backend/tests/test_issue339_freeform.py::test_issue339_freeform
+
+not_applicable:
+  partial_completion: >-
+    An override is one row for one period, written in one statement, so it has no partial
+    state. If a request ever carries several periods, this becomes an all-or-nothing rule.

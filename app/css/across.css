@@ -1,0 +1,330 @@
+/* AIERP planner screen — the Across ERPs view (#/across).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the bar and the list keep their
+   natural size, the site tables scroll inside their own regions, and
+   the document never scrolls sideways. */
+#view-across.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-across.is-active #across-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-across.is-active #across-root > .across {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The bar: Refresh on the right. */
+.across-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.across-refresh {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* The body region: the skeleton, the error and the content scroll
+   together; the site tables keep their own scroll regions. */
+.across-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.across-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  flex-shrink: 0;
+}
+
+.across-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+/* A failed load: the message and the "Try again" button that sends
+   the request again. */
+.across-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+  flex-shrink: 0;
+}
+
+.across-error-msg {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-risk);
+}
+
+/* The count and the limits, above the list. */
+.across-count {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  flex-shrink: 0;
+}
+
+.across-limits {
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  padding: var(--space-3) var(--space-4);
+}
+
+.across-limits p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+  line-height: 1.5;
+}
+
+.across-limits p + p {
+  margin-top: var(--space-1);
+}
+
+/* The list: one card per item, opportunities first. */
+.across-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.across-item {
+  min-width: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: var(--space-3) var(--space-4);
+}
+
+.across-item-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.across-item-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* The opportunity tag: the word carries the meaning, the colour is
+   only a second signal. */
+.across-opportunity {
+  margin-left: auto;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The move line, after the opportunity tag: how many whole units
+   could move from the excess ERP to the short one. The word carries
+   the meaning; the colour is only a second signal. */
+.across-move {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-snooze-soft);
+  color: var(--color-snooze-ink);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The two sides, side by side; they stack below 720px. */
+.across-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.across-side {
+  min-width: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  padding: var(--space-3);
+}
+
+.across-side-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+
+.across-side-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.across-side-code {
+  font-family: var(--font-figures);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.across-side-total {
+  margin: 0 0 0 auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+
+/* The side's currency line, after the side's title: where the source
+   reports in. A mismatch — a stored code that differs from the
+   reporting currency — reads in the risk colour; the word carries the
+   meaning, the colour is only a second signal. */
+.across-side-currency {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-3);
+}
+
+.across-side-currency.is-mismatch {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+/* The site table scrolls inside its own region: the region is a
+   bounded scroll box, so a wide table never widens the document. */
+.across-site-region {
+  max-height: calc(var(--row-min) * 8);
+  overflow: auto;
+  border-radius: var(--radius-control);
+}
+
+.across-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.across-table th,
+.across-table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-soft);
+  white-space: nowrap;
+}
+
+.across-table th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-weight: 600;
+}
+
+.across-table td {
+  color: var(--color-ink-2);
+  font-family: var(--font-figures);
+}
+
+.across-state {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  color: var(--color-ink-3);
+}
+
+.across-state.is-stockout {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+.across-state.is-excess {
+  color: var(--color-snooze-ink);
+  font-weight: 600;
+}
+
+/* A side the ERP holds no stock record for. */
+.across-side-empty {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* No rows at all: the note and the link to the mappings. */
+.across-empty {
+  flex-shrink: 0;
+  border: 1px dashed var(--color-control-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: var(--space-4) var(--space-5);
+}
+
+.across-empty-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-ink-2);
+}
+
+.across-empty-link {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+/* Narrow: the two sides stack, one above the other. */
+@media (max-width: 720px) {
+  .across-sides {
+    grid-template-columns: 1fr;
+  }
+}

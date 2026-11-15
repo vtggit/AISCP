@@ -1,0 +1,39 @@
+{
+ "value": [
+  {
+   "BAccountID": 7117,
+   "AcctCD": "AASERVICES",
+   "AcctName": "AA Services",
+   "Type": "VE",
+   "Status": "R"
+  },
+  {
+   "BAccountID": 6995,
+   "AcctCD": "AAVENDOR  ",
+   "AcctName": "Goto Vendor Inc",
+   "Type": "VE",
+   "Status": "R"
+  },
+  {
+   "BAccountID": 7124,
+   "AcctCD": "ACADOIT   ",
+   "AcctName": "Can Do It",
+   "Type": "VE",
+   "Status": "R"
+  },
+  {
+   "BAccountID": 7048,
+   "AcctCD": "AACUSTOMER",
+   "AcctName": "Alta Ace",
+   "Type": "CU",
+   "Status": "A"
+  },
+  {
+   "BAccountID": 2891,
+   "AcctCD": "EP00000001",
+   "AcctName": "Michael Andrews",
+   "Type": "EP",
+   "Status": "A"
+  }
+ ]
+}

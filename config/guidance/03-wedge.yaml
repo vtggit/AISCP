@@ -1,0 +1,64 @@
+scope: AIERP
+area: wedge
+title: "The wedge (first 6 months)"
+summary: "**Replenishment intelligence: reorder points and quantities that maintain themselves.** The failure this addresses is near-universal in mid-market implementations: min/max or reorder-point values are set during go-live, are never revisited, and silently rot as demand, lead times, and supplier reliability drift. The result is the signature symptom — **simultaneous stockouts of fast movers and years of cover on slow ones**, in the same warehouse, on the same day. Concretely, the first capabilities are:"
+items:
+  - key: AIERP-R-1
+    type: roadmap
+    title: "Demand and lead-time truth from history"
+    statement: "Demand and lead-time truth from history — actual consumption and actual supplier lead times (including their variability), computed from ERP transaction history rather than from static master-data fields."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-R-2
+    type: roadmap
+    title: "Recomputed reorder points and quantities"
+    statement: "Recomputed reorder points and quantities , with the arithmetic shown and the assumptions named, at a stated service level."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-R-3
+    type: roadmap
+    title: "Drift detection"
+    statement: "Drift detection — which items' current settings no longer match their behaviour, ranked by the money at stake, so a planner fixes the twenty that matter rather than reviewing four thousand."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-R-4
+    type: roadmap
+    title: "Dead and excess identification"
+    statement: "Dead and excess identification — what has not moved, what has more cover than any plausible demand justifies, and what that capital is worth."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-R-5
+    type: roadmap
+    title: "Stockout foresight"
+    statement: "Stockout foresight — what will run out inside the replenishment window, given real lead times rather than the field somebody typed in 2019."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"
+
+  - key: AIERP-D-1
+    type: design
+    title: "Defensible to a skeptical planner in one screen"
+    statement: "Each capability must be defensible to a skeptical planner in one screen: the number, the inputs behind it, and the reason it changed."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-08-24
+      ref: "AIERP@e0fb33bf"

@@ -1,0 +1,25 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["backend"]
+
+# Same lint contract as the sibling products: practical issues, not style
+# micromanagement. B (bugbear) is deliberately NOT selected — B008 flags FastAPI's
+# mandatory `Depends()`-in-defaults pattern, which every router the recipes generate
+# uses (measured on the first AIERP build).
+# scripts/ca_gate/ is vendored VERBATIM from the engine — it is not ours to restyle,
+# and the build normalizer only lints the write set, so this never fires in a build.
+# Excluding it keeps a bare `ruff check .` honest for a developer.
+exclude = ["scripts/ca_gate"]
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "SIM", "UP"]
+
+# Intentionally relaxed:
+# - E501: line-too-long (black owns formatting)
+# - SIM102: nested-if-with-no-else (sometimes clearer)
+ignore = ["E501", "SIM102"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use imported fixtures that read as unused
+"backend/tests/**/*.py" = ["F401"]

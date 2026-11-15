@@ -1,0 +1,875 @@
+/* AIERP planner screen — the Suppliers view (#/suppliers).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the bar keeps its natural size, the
+   table scrolls inside its own region, and the document never does. */
+#view-suppliers.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-suppliers.is-active #suppliers-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-suppliers.is-active #suppliers-root > .sp {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The bar: the window label and select on the left. */
+.sp-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.sp-window-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.sp-window {
+  min-height: var(--target-min);
+  min-width: 132px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.sp-window:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-3);
+}
+
+/* The body region: the skeleton, the error, the empty note and the
+   table all live in the same bounded column. */
+.sp-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.sp-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.sp-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+.sp-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+}
+
+.sp-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.sp-empty {
+  margin: 0;
+  padding: var(--space-4) 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The table scrolls within its own region: the page never scrolls,
+   and at narrow widths the region — not the document — takes the
+   horizontal overflow. */
+.sp-table-region {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.sp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sp-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.sp-table td {
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+.sp-cell-supplier {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The supplier identity: the name on its own line (the primary line),
+   with the vendor code beneath it in the secondary ink token. */
+.sp-supplier-name {
+  display: block;
+}
+
+.sp-supplier-code {
+  font-weight: 400;
+  color: var(--color-ink-3);
+}
+
+/* Figures and dates never break inside the value. */
+.sp-cell-figure,
+.sp-cell-date {
+  white-space: nowrap;
+}
+
+.sp-cell-figure {
+  font-family: var(--font-figures);
+}
+
+/* The On time cell: the risk tokens and a leading ▼ marker below
+   80%, neutral otherwise; "No promised dates" stays quiet. */
+.sp-rate {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--color-ink-2);
+}
+
+.sp-rate--risk {
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-risk-soft);
+  color: var(--color-risk);
+}
+
+.sp-cell-rate {
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* The Supplier terms section, below the performance table.           */
+/* ------------------------------------------------------------------ */
+
+/* The section keeps its natural height; the performance region above
+   it takes the rest (it can shrink to zero), so the page never
+   scrolls and the document never does at narrow widths either. */
+.sp-terms {
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.sp-terms-heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.sp-terms-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.sp-terms-supplier {
+  min-height: var(--target-min);
+  min-width: 220px;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+/* The pending note, the empty note and the load error all sit where
+   the answer's table would. */
+.sp-terms-note,
+.sp-terms-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+.sp-terms-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The answer's table scrolls within its own region, like the
+   performance table: the region — not the document — takes any
+   horizontal overflow. */
+.sp-terms-region {
+  min-width: 0;
+  max-height: calc(var(--row-min) * 8);
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.sp-terms-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sp-terms-caption {
+  caption-side: top;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-3);
+  text-align: left;
+  padding: var(--space-2);
+}
+
+.sp-terms-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.sp-terms-table td {
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+/* The item code may be a long, hostile string: wrap it so the
+   column — not the page — takes the overflow. */
+.sp-terms-item {
+  overflow-wrap: anywhere;
+}
+
+/* Figures and the Default cell never break inside the value. */
+.sp-terms-figure,
+.sp-terms-default {
+  white-space: nowrap;
+}
+
+.sp-terms-figure {
+  font-family: var(--font-figures);
+}
+
+.sp-terms-default {
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+/* ------------------------------------------------------------------ */
+/* The Supplier risk section, between the performance table and the   */
+/* supplier terms.                                                     */
+/* ------------------------------------------------------------------ */
+
+/* The section keeps its natural height, like the terms below it; the
+   performance region above takes the rest, so the page never
+   scrolls. */
+.sp-risk {
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.sp-risk-heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+/* The short skeleton while the read is out: no words, only pulses. */
+.sp-risk-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.sp-risk-skel-block {
+  height: calc(var(--row-min) * 3);
+  width: 100%;
+}
+
+.sp-risk-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.sp-risk-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The table scrolls within its own region, like the terms' table:
+   the region — not the document — takes any horizontal overflow. */
+.sp-risk-region {
+  min-width: 0;
+  max-height: calc(var(--row-min) * 8);
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.sp-risk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sp-risk-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.sp-risk-table td {
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+/* The supplier name may be a long, hostile string: wrap it so the
+   column — not the page — takes the overflow. */
+.sp-risk-supplier {
+  overflow-wrap: anywhere;
+}
+
+.sp-risk-level-cell {
+  white-space: nowrap;
+}
+
+/* The level badge: the level's zone tokens on a pill. */
+.sp-risk-badge {
+  display: inline-block;
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sp-risk-badge.is-high {
+  background: var(--color-zone-red-soft);
+  color: var(--color-zone-red-ink);
+}
+
+.sp-risk-badge.is-medium {
+  background: var(--color-zone-amber-soft);
+  color: var(--color-zone-amber-ink);
+}
+
+.sp-risk-badge.is-low {
+  background: var(--color-zone-green-soft);
+  color: var(--color-zone-green-ink);
+}
+
+/* The Why cell may carry three signs: let it wrap. */
+.sp-risk-why {
+  overflow-wrap: anywhere;
+}
+
+/* The figures never break inside the value. */
+.sp-risk-figure {
+  font-family: var(--font-figures);
+  white-space: nowrap;
+}
+
+/* The Why cell's sole-source toggle: a quiet inline pill that reveals
+   the supplier's item codes in a row beneath the row; it only
+   re-renders, it sends no request. */
+.sp-risk-items-toggle {
+  margin-left: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sp-risk-items-toggle:hover {
+  background: var(--color-surface-muted);
+}
+
+.sp-risk-items-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* The open row's single cell: the codes on the muted surface,
+   wrapping rather than pushing the table. */
+.sp-risk-items-row td {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* The Second sources section, directly after the supplier risk and   */
+/* before the supplier terms.                                          */
+/* ------------------------------------------------------------------ */
+
+/* The section keeps its natural height, like the risk section above
+   it and the terms below it; the performance region takes the rest,
+   so the page never scrolls. */
+.sp-second {
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.sp-second-heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+/* The short skeleton while the read is out: no words, only pulses. */
+.sp-second-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.sp-second-skel-block {
+  height: calc(var(--row-min) * 3);
+  width: 100%;
+}
+
+.sp-second-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.sp-second-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The table scrolls within its own region, like the risk' table:
+   the region — not the document — takes any horizontal overflow. */
+.sp-second-region {
+  min-width: 0;
+  max-height: calc(var(--row-min) * 8);
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.sp-second-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sp-second-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.sp-second-table td {
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+/* The item code may be a long, hostile string: wrap it so the
+   column — not the page — takes the overflow; the description sits
+   beneath it in the secondary ink token, like the performance
+   table's vendor code beneath the name. */
+.sp-second-item {
+  overflow-wrap: anywhere;
+}
+
+.sp-second-item-desc {
+  display: block;
+  color: var(--color-ink-3);
+  font-size: 11px;
+}
+
+.sp-second-supplier {
+  overflow-wrap: anywhere;
+}
+
+/* The candidates wrap rather than push the table. */
+.sp-second-candidates {
+  overflow-wrap: anywhere;
+}
+
+/* One candidate: a quiet chip so the list scans left to right. */
+.sp-second-candidate {
+  display: inline-block;
+  margin: 1px 0;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* The "no other supplier" note, in the muted ink. */
+.sp-second-none {
+  color: var(--color-ink-3);
+}
+
+/* The hold cell: the figures in the figure face; the arithmetic
+   rides on the title, so the cell never breaks inside the value. */
+.sp-second-hold {
+  font-family: var(--font-figures);
+  white-space: nowrap;
+}
+
+/* The summary line above the table: the figures in the secondary
+   ink, the short-only filter beside it. The line stands directly
+   above the table while the section shows it. */
+.sp-second-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.sp-second-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The short-only filter beside the summary: a quiet checkbox, the
+   label in the secondary ink. Toggling it sends no request. */
+.sp-second-short-only {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 12px;
+  color: var(--color-ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sp-second-short-only input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+/* The "no item is short" note, in the muted ink: where the table
+   stands while the filter is checked and no entry is short. */
+.sp-second-none-short {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* ------------------------------------------------------------------ */
+/* The Order minimums section, the screen's last section, below the   */
+/* supplier terms.                                                     */
+/* ------------------------------------------------------------------ */
+
+/* The section keeps its natural height, like the terms above it; the
+   performance region takes the rest, so the page never scrolls and
+   the document never does at narrow widths either. */
+.sp-minimums {
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.sp-minimums-heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+/* The short skeleton while the list read is out: no words, only
+   pulses — never the word "Loading". */
+.sp-minimums-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.sp-minimums-skel-block {
+  height: calc(var(--row-min) * 3);
+  width: 100%;
+}
+
+.sp-minimums-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.sp-minimums-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+
+/* The table scrolls within its own region, like the terms' table:
+   the region — not the document — takes any horizontal overflow. */
+.sp-minimums-region {
+  min-width: 0;
+  max-height: calc(var(--row-min) * 8);
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.sp-minimums-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sp-minimums-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.sp-minimums-table td {
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: middle;
+}
+
+/* The supplier label and the source may be long, hostile strings:
+   wrap them so the column — not the page — takes the overflow. */
+.sp-minimums-supplier,
+.sp-minimums-source {
+  overflow-wrap: anywhere;
+}
+
+/* The dollar figure and the updated line never break inside the
+   value. */
+.sp-minimums-amount,
+.sp-minimums-updated {
+  white-space: nowrap;
+}
+
+.sp-minimums-amount {
+  font-family: var(--font-figures);
+}
+
+/* The row's Remove button: a quiet secondary control in the row's
+   last cell, disabled while its DELETE is out. */
+.sp-minimums-remove-cell {
+  text-align: right;
+}
+
+.sp-minimums-remove {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sp-minimums-remove:hover {
+  background: var(--color-surface-muted);
+}
+
+.sp-minimums-remove:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.sp-minimums-remove:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-3);
+  cursor: default;
+}
+
+/* The admin's save form, below the table: the controls wrap rather
+   than push the page, the message line beneath them. */
+.sp-minimums-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sp-minimums-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.sp-minimums-supplier-select {
+  min-height: var(--target-min);
+  min-width: 220px;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.sp-minimums-amount-input {
+  min-height: var(--target-min);
+  width: 120px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.sp-minimums-amount-input:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-3);
+}
+
+/* The message line: the muted ink by default, the risk colour on a
+   failure, the secondary ink on a success. */
+.sp-minimums-message {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.sp-minimums-message.is-error {
+  color: var(--color-risk);
+}
+
+.sp-minimums-message.is-ok {
+  color: var(--color-ink-2);
+}

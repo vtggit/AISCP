@@ -1,0 +1,202 @@
+# CodeAgent contract merge-gate — ENFORCING (contract-v2 Phase 4a.4).
+#
+# Resolves a PR's codeagent-pr-contract against the linked issue's
+# codeagent-contract + a real test run, and posts a per-AC verdict to the job
+# summary. The checker uses real exit codes, so a failing verdict FAILS this job
+# (a red check). It only BLOCKS merge once a maintainer marks the
+# "CodeAgent contract gate" check REQUIRED in branch protection — see
+# docs/branch-protection.md.
+#
+# TWO FAMILIES: a backend PR is proven by the pytest suite (Postgres service); a
+# FRONTEND PR (proof-map nodeids under app/tests/*.spec.js) is proven by the
+# @playwright/test suite run in real Chromium — the checker is junit-format-
+# agnostic, so the same per-AC binding applies with --repo-root app.
+name: CodeAgent merge gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    # Pure-documentation PRs need no contract-gate build (mirrors backend-ci.yml).
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: ca-merge-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# The product runs in a UTC container and decides "today" in UTC. Run CI in UTC too, so
+# date-relative proofs never depend on the runner's clock.
+env:
+  TZ: UTC
+
+jobs:
+  contract-gate:
+    name: CodeAgent contract gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: aierp
+          POSTGRES_USER: aierp
+          POSTGRES_PASSWORD: change-me-in-production
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install gate tooling
+        run: python -m pip install -U pip pytest
+
+      - name: ca_gate self-tests (no DB)
+        # Blocking: these are fast unit tests of the gate scripts with no network and no
+        # database. If they fail, the gate itself is broken and its verdict means nothing.
+        run: python -m pytest tests/ca_gate/ -q
+
+      - name: Fetch PR body + changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR="${{ github.event.pull_request.number }}"
+          gh pr view "$PR" --repo "${{ github.repository }}" --json body -q .body > "${RUNNER_TEMP}/pr_body.md"
+          gh pr diff "$PR" --repo "${{ github.repository }}" --name-only > "${RUNNER_TEMP}/changed.txt"
+
+      - name: Detect proof family (contract nodeids first; changed files fallback)
+        id: fam
+        run: |
+          # The CONTRACT is the authority on how a PR is proven. A scoped-write frontend
+          # deliverable can ship alongside a PYTEST proof (AIDW#250: the wizard wiring PR
+          # carries app/tests/250_ac_1.spec.js as a deliverable while its proving test is
+          # backend/tests/test_issue250_freeform.py) — the old changed-files grep routed
+          # such a PR's proof through a Playwright junit that cannot contain the contract's
+          # pytest nodeids, failing an honestly green build with "not collected". Nodeid
+          # TYPE decides when a contract exists; the grep stays as the fallback for
+          # contract-less (hand-built) PRs.
+          NODES=$(python scripts/ca_gate/list_proof_nodeids.py \
+            --pr-body-file "${RUNNER_TEMP}/pr_body.md" 2>/dev/null || true)
+          if [ -n "$NODES" ]; then
+            if printf '%s\n' "$NODES" | grep -q '\.spec\.js'; then FAM=frontend; else FAM=backend; fi
+            echo "family from contract nodeids: $FAM"
+          elif grep -qE '^app/tests/.*\.spec\.js$' "${RUNNER_TEMP}/changed.txt"; then
+            FAM=frontend; echo "family from changed files: frontend"
+          else
+            FAM=backend; echo "family from changed files: backend"
+          fi
+          if [ "$FAM" = "frontend" ]; then
+            echo "family=frontend" >> "$GITHUB_OUTPUT"
+            echo "repo_root=app"   >> "$GITHUB_OUTPUT"
+          else
+            echo "family=backend" >> "$GITHUB_OUTPUT"
+            echo "repo_root=backend" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install backend deps
+        if: steps.fam.outputs.family == 'backend'
+        run: |
+          python -m pip install alembic
+          pip install -r backend/requirements.txt -c backend/constraints.txt
+
+      - name: Run backend PROOF tests -> junitxml
+        if: steps.fam.outputs.family == 'backend'
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: aierp
+          DB_USER: aierp
+          DB_PASSWORD: change-me-in-production
+          AUTH_MODE: development
+          AUTH_DEV_TOKEN: dev-secret-token
+        run: |
+          # De-dup (cost): run ONLY the contract's proving nodeids, not the whole suite —
+          # the full-suite regression stays backend-ci's job. list_proof_nodeids emits BASE
+          # nodeids so pytest runs every parametrization (matches the gate's base check).
+          # No mapped tests => empty junit; check_pr_contract then reports the missing proof.
+          # List BEFORE cd so contract_lib resolves; nodeids are backend-relative (tests/...).
+          python scripts/ca_gate/list_proof_nodeids.py \
+            --pr-body-file "${RUNNER_TEMP}/pr_body.md" > "${RUNNER_TEMP}/nodeids.txt"
+          echo "proving nodeids:"; cat "${RUNNER_TEMP}/nodeids.txt"
+          # array + count guard (not [ -s ]): a blank/whitespace line can never fall through
+          # to a bare pytest (which would run the whole suite); quoted expansion = no mis-split.
+          mapfile -t IDS < "${RUNNER_TEMP}/nodeids.txt"
+          if [ "${#IDS[@]}" -gt 0 ]; then
+            cd backend
+            python -m alembic upgrade head || true
+            python -m pytest "${IDS[@]}" -q --junitxml="${RUNNER_TEMP}/report.xml" || true
+          else
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<testsuite name="no-proof" tests="0"></testsuite>\n' \
+              > "${RUNNER_TEMP}/report.xml"
+          fi
+
+      - name: Run frontend Playwright suite -> junitxml
+        if: steps.fam.outputs.family == 'frontend'
+        run: |
+          # Serve the static frontend for the suite (AIDW#306): before this, NOTHING
+          # listened while the specs ran, every navigating spec died on ECONNREFUSED,
+          # and `|| true` swallowed it — a frontend PR could not be honestly proven.
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory app > /tmp/static.log 2>&1 &
+          for i in $(seq 1 50); do curl -sf -o /dev/null http://127.0.0.1:8080/ && break; sleep 0.2; done
+          curl -sf -o /dev/null http://127.0.0.1:8080/ || {
+            echo "::error::static server never became ready at http://127.0.0.1:8080 — infrastructure failure, no spec ran"
+            cat /tmp/static.log; exit 1; }
+          cd app/tests
+          # rc is CAPTURED, not swallowed: the contract gate is the arbiter of the PROOF
+          # nodeids in the junit, so unrelated live-stack specs (they assume a real
+          # backend and fail 501 against a static server) may be red here without
+          # failing the job — but the infra classes below fail it LOUDLY, named.
+          # Run the suite in the official Playwright image, which carries the browsers and
+          # their system libraries, as the engine's own build gate does. Host networking
+          # reaches the static server;
+          # the runner's uid owns what it writes, so the next checkout can clean it.
+          # Mount the whole frontend root and run from its tests dir, as the engine's
+          # build gate does: a spec that reads ../js/<screen>.js passed the build and
+          # then failed here, where only app/tests was mounted (#1077).
+          docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -e BASE_URL=http://127.0.0.1:8080 -v "$(dirname "$PWD")":/app -w /app/tests \
+            mcr.microsoft.com/playwright:v1.57.0-noble bash -c \
+            'npm i --prefix "$PWD" @playwright/test@1.57.0 --no-save --no-audit --no-fund --silent && npx playwright test --output=test-results' \
+            && rc=0 || rc=$?
+          [ -f report.xml ] || {
+            echo "::error::playwright produced no junit (rc=$rc) — an npx/container failure, not a spec verdict"; exit 1; }
+          if grep -E 'net::ERR_CONNECTION_|net::ERR_EMPTY_RESPONSE|ECONNREFUSED' report.xml | grep -q '127.0.0.1:8080'; then
+            echo "::error::spec(s) could not reach the served app at http://127.0.0.1:8080 — infrastructure failure, not an assertion"
+            exit 1; fi
+          echo "playwright exited rc=$rc — proof verdicts are enforced by the contract gate"
+          # playwright.config.js writes ./report.xml (junit reporter); mirror the
+          # local builder's fixup: add the repo-relative `file` attr per testcase
+          # so the checker's changed-files binding + --repo-root stripping align.
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          t = ET.parse("report.xml")
+          for tc in t.getroot().iter("testcase"):
+              cn = tc.get("classname") or ""
+              if cn and not tc.get("file"):
+                  tc.set("file", "app/tests/%s" % cn)
+          t.write("report.xml")
+          PY
+          cp report.xml "${RUNNER_TEMP}/report.xml"
+
+      - name: Contract gate (enforcing)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python scripts/ca_gate/check_pr_contract.py \
+            --pr-body-file "${RUNNER_TEMP}/pr_body.md" \
+            --junit "${RUNNER_TEMP}/report.xml" \
+            --changed-files-file "${RUNNER_TEMP}/changed.txt" \
+            --repo-root "${{ steps.fam.outputs.repo_root }}"

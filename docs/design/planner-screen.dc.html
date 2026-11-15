@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIERP Planner</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#EEF1F4}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+.app{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#17212B;font-variant-numeric:tabular-nums}
+.num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.navbtn{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 14px;border:0;border-radius:8px;background:transparent;color:#C9D3DD;font:inherit;font-size:14px;cursor:pointer;text-align:left}
+.navbtn:hover{background:#1F2D3A;color:#FFFFFF}
+.navbtn.on{background:#24384A;color:#FFFFFF;font-weight:600}
+.tab{min-height:44px;padding:0 16px;border:0;border-bottom:2px solid transparent;background:transparent;font:inherit;font-size:14px;color:#4A5865;cursor:pointer;display:flex;align-items:center;gap:8px}
+.tab.on{border-bottom-color:#1D4ED8;color:#17212B;font-weight:600}
+.count{font-size:12px;padding:2px 8px;border-radius:999px;background:#E3E8EE;color:#33414E}
+.chip{min-height:32px;padding:0 12px;border:1px solid #CBD3DB;border-radius:999px;background:#FFFFFF;font:inherit;font-size:13px;color:#33414E;cursor:pointer}
+.chip.on{background:#17212B;border-color:#17212B;color:#FFFFFF}
+.row{display:grid;grid-template-columns:44px minmax(0,2.2fr) 70px minmax(0,1.2fr) minmax(0,1fr) 120px;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 16px;border:0;border-bottom:1px solid #E6EAEE;background:#FFFFFF;font:inherit;font-size:14px;color:#17212B;text-align:left;cursor:pointer}
+.row:hover{background:#F5F8FB}
+.row.sel{background:#EAF0FD;box-shadow:inset 3px 0 0 #1D4ED8}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.b-none{background:#EEF1F4;color:#4A5865}
+.b-accepted{background:#E0E9FD;color:#1E3A8A}
+.b-applied{background:#1D4ED8;color:#FFFFFF}
+.b-dismissed{background:#ECECEC;color:#3F3F46}
+.b-snoozed{background:#FDF0DC;color:#7A3E06}
+.b-risk{background:#FDE8D3;color:#8A3B05}
+.btn{min-height:44px;padding:0 18px;border-radius:8px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;border:1px solid #CBD3DB;background:#FFFFFF;color:#17212B}
+.btn:hover{border-color:#8D9AA6}
+.btn.primary{background:#1D4ED8;border-color:#1D4ED8;color:#FFFFFF}
+.btn.primary:hover{background:#1E40AF}
+.btn.ghost{border-color:transparent;background:transparent;color:#4A5865}
+.opt{min-height:44px;padding:0 14px;border:1px solid #CBD3DB;border-radius:8px;background:#FFFFFF;font:inherit;font-size:14px;color:#17212B;cursor:pointer;text-align:left}
+.opt.on{border-color:#1D4ED8;background:#EAF0FD;font-weight:600}
+.field{width:100%;box-sizing:border-box;min-height:44px;padding:10px 12px;border:1px solid #CBD3DB;border-radius:8px;font:inherit;font-size:14px;color:#17212B;background:#FFFFFF}
+.card{background:#FFFFFF;border:1px solid #DDE3E9;border-radius:12px}
+.kpi-label{font-size:13px;color:#4A5865;font-weight:500}
+.kpi-value{font-size:30px;font-weight:600;letter-spacing:-0.01em}
+.attn{display:grid;grid-template-columns:76px minmax(0,1fr) 120px 28px;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 16px;border:0;border-top:1px solid #E6EAEE;background:#FFFFFF;font:inherit;font-size:14px;color:#17212B;text-align:left;cursor:pointer}
+.attn:hover{background:#F5F8FB}
+.shell{display:flex;height:100vh;min-height:640px}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.split{flex:1 1 auto;min-height:0;display:flex}
+.listpane{flex:1 1 60%;min-width:0;display:flex;flex-direction:column;border-right:1px solid #DDE3E9}
+.detailpane{flex:0 0 440px;min-width:0;overflow-y:auto;background:#FFFFFF}
+@media (max-width:900px){
+.shell{flex-direction:column;height:auto}
+.side{flex-direction:row !important;width:auto !important;flex-wrap:wrap}
+.split{flex-direction:column}
+.listpane{border-right:0}
+.detailpane{flex:1 1 auto}
+.row{grid-template-columns:36px minmax(0,1fr) 110px}
+.hide-sm{display:none}
+.ovgrid{grid-template-columns:minmax(0,1fr) !important}
+}
+</style>
+</helmet>
+<div class="app shell">
+
+<nav class="side" aria-label="Main" style="display: flex; flex-direction: column; gap: 6px; width: 232px; flex-shrink: 0; box-sizing: border-box; padding: 20px 14px; background: #16212C">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 20px">
+<div style="width: 30px; height: 30px; border-radius: 8px; background: #1D4ED8; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-weight: 700; font-size: 14px">A</div>
+<div style="display: flex; flex-direction: column">
+<span style="color: #FFFFFF; font-weight: 600; font-size: 15px">AIERP</span>
+<span style="color: #9AA8B5; font-size: 12px">Inventory decisions</span>
+</div>
+</div>
+<sc-for list="{{ nav }}" as="n" hint-placeholder-count="3">
+<button type="button" class="{{ n.cls }}" onClick="{{ n.go }}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ n.icon }}"></path></svg>
+<span>{{ n.label }}</span>
+<sc-if value="{{ n.hasCount }}" hint-placeholder-val="{{ false }}"><span class="count" style="margin-left: auto; background: #2C4152; color: #E3E8EE">{{ n.count }}</span></sc-if>
+</button>
+</sc-for>
+<div style="margin-top: auto; padding: 12px 10px; border-top: 1px solid #253645; display: flex; flex-direction: column; gap: 4px">
+<span style="color: #9AA8B5; font-size: 12px">ERP feed</span>
+<span style="color: #E3E8EE; font-size: 13px">Synced today 07:30 UTC</span>
+<span style="color: #9AA8B5; font-size: 12px">Sample data, not live</span>
+</div>
+</nav>
+
+<main class="main">
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 28px; background: #FFFFFF; border-bottom: 1px solid #DDE3E9">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-size: 20px; font-weight: 600">{{ pageTitle }}</h1>
+<span style="font-size: 13px; color: #4A5865">{{ pageSub }}</span>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-size: 13px; color: #4A5865">As of 2026-10-08 · service level 95%</span>
+</div>
+</header>
+
+<sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+<div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; box-sizing: border-box; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px">
+<section aria-label="Value" class="ovgrid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 6px">
+<span class="kpi-label">Accepted, money at stake</span>
+<span class="kpi-value num">{{ tot.accepted }}</span>
+<span style="font-size: 13px; color: #4A5865">{{ tot.acceptedCount }} decisions across all three lists</span>
+</div>
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 6px">
+<span class="kpi-label">Applied in the ERP</span>
+<span class="kpi-value num" style="color: #1D4ED8">{{ tot.applied }}</span>
+<div style="height: 8px; border-radius: 999px; background: #E3E8EE; overflow: hidden"><div style="height: 8px; background: #1D4ED8; width: {{ tot.appliedPct }}"></div></div>
+<span style="font-size: 13px; color: #4A5865">{{ tot.appliedPctText }} of accepted money has reached the ERP</span>
+</div>
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 6px">
+<span class="kpi-label">Accepted, still outstanding</span>
+<span class="kpi-value num" style="color: #8A3B05">{{ tot.outstanding }}</span>
+<span style="font-size: 13px; color: #4A5865">{{ tot.outstandingCount }} accepted changes not yet seen in the ERP</span>
+</div>
+</section>
+
+<section aria-label="Lists" class="ovgrid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<sc-for list="{{ kindCards }}" as="k" hint-placeholder-count="3">
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">{{ k.title }}</h2>
+<span style="font-size: 13px; color: #4A5865">{{ k.open }} to decide</span>
+</div>
+<span style="font-size: 13px; color: #4A5865">{{ k.blurb }}</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #4A5865">Accepted</span><span class="num" style="font-size: 16px; font-weight: 500">{{ k.accepted }}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #4A5865">Applied</span><span class="num" style="font-size: 16px; font-weight: 500; color: #1D4ED8">{{ k.applied }}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #4A5865">Dismissed</span><span class="num" style="font-size: 16px; font-weight: 500">{{ k.dismissed }}</span></div>
+</div>
+<button type="button" class="btn" style="align-self: flex-start" onClick="{{ k.open_ }}">Open {{ k.title }} list</button>
+</div>
+</sc-for>
+</section>
+
+<section aria-label="Needs attention" class="card" style="overflow: hidden">
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 16px 16px 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">Needs a decision, largest money first</h2>
+<span style="font-size: 13px; color: #4A5865">Top 5 across all lists</span>
+</div>
+<sc-for list="{{ attention }}" as="t" hint-placeholder-count="5">
+<button type="button" class="attn" onClick="{{ t.go }}">
+<span class="badge {{ t.kindCls }}">{{ t.kindLabel }}</span>
+<span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ t.item }} · {{ t.site }}</span><span style="font-size: 13px; color: #4A5865; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ t.why }}</span></span>
+<span class="num" style="text-align: right; font-weight: 500">{{ t.money }}</span>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4A5865" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</button>
+</sc-for>
+</section>
+</div>
+</sc-if>
+
+<sc-if value="{{ isQueue }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 0 28px; background: #FFFFFF; border-bottom: 1px solid #DDE3E9">
+<div role="tablist" aria-label="Recommendation lists" style="display: flex; gap: 4px">
+<sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="3">
+<button type="button" role="tab" aria-selected="{{ tb.on }}" class="{{ tb.cls }}" onClick="{{ tb.go }}">{{ tb.label }} <span class="count">{{ tb.count }}</span></button>
+</sc-for>
+</div>
+<div style="display: flex; gap: 8px; padding: 8px 0">
+<sc-for list="{{ filters }}" as="f" hint-placeholder-count="3">
+<button type="button" class="{{ f.cls }}" aria-pressed="{{ f.on }}" onClick="{{ f.go }}">{{ f.label }}</button>
+</sc-for>
+</div>
+</div>
+<div class="split">
+<section class="listpane" aria-label="{{ kindTitle }} rows">
+<div class="row hide-sm" style="min-height: 40px; cursor: default; background: #F7F9FB; font-size: 12px; font-weight: 600; color: #4A5865; text-transform: uppercase; letter-spacing: 0.04em">
+<span>#</span><span>Item · site</span><span class="hide-sm">Site</span><span>{{ colA }}</span><span>{{ colB }}</span><span>Decision</span>
+</div>
+<div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; background: #FFFFFF">
+<sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+<button type="button" class="{{ r.cls }}" aria-current="{{ r.sel }}" onClick="{{ r.pick }}">
+<span class="num" style="color: #4A5865">{{ r.rank }}</span>
+<span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 600">{{ r.item }}</span><span style="font-size: 13px; color: #4A5865; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ r.desc }}</span></span>
+<span class="hide-sm" style="color: #33414E">{{ r.site }}</span>
+<span class="num hide-sm">{{ r.a }}</span>
+<span class="num" style="font-weight: 500">{{ r.b }}</span>
+<span><span class="badge {{ r.badgeCls }}">{{ r.badge }}</span></span>
+</button>
+</sc-for>
+<sc-if value="{{ noRows }}" hint-placeholder-val="{{ false }}">
+<div style="padding: 48px 24px; text-align: center; color: #4A5865; font-size: 14px">Nothing here. Every row in this view has a decision.</div>
+</sc-if>
+</div>
+</section>
+
+<aside class="detailpane" aria-label="Selected row">
+<sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+<div style="padding: 24px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; color: #4A5865">{{ sel.kindLabel }} · rank {{ sel.rank }}</span>
+<h2 style="margin: 0; font-size: 20px; font-weight: 600">{{ sel.item }}</h2>
+<span style="font-size: 14px; color: #33414E">{{ sel.desc }} · site {{ sel.site }}</span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<div style="background: #F5F7FA; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #4A5865">{{ sel.k1 }}</span><span class="num" style="font-size: 22px; font-weight: 600">{{ sel.v1 }}</span></div>
+<div style="background: #F5F7FA; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #4A5865">{{ sel.k2 }}</span><span class="num" style="font-size: 22px; font-weight: 600; color: #1D4ED8">{{ sel.v2 }}</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600">Why</h3>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #33414E">{{ sel.why }}</p>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; font-size: 13px">
+<sc-for list="{{ sel.inputs }}" as="i" hint-placeholder-count="4">
+<span style="color: #4A5865">{{ i.k }}</span><span class="num" style="text-align: right">{{ i.v }}</span>
+</sc-for>
+</div>
+<code class="num" style="display: block; padding: 10px 12px; border-radius: 8px; background: #F5F7FA; font-size: 12px; color: #33414E; white-space: pre-wrap">{{ sel.arith }}</code>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid #E6EAEE">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600">Decision</h3>
+<span class="badge {{ sel.badgeCls }}">{{ sel.badge }}</span>
+</div>
+
+<sc-if value="{{ modeNone }}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<sc-if value="{{ hasActions }}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 13px; color: #33414E">Accept with an action</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{ actions }}" as="ac" hint-placeholder-count="3">
+<button type="button" class="{{ ac.cls }}" aria-pressed="{{ ac.on }}" onClick="{{ ac.pick }}">{{ ac.label }}</button>
+</sc-for>
+</div>
+</sc-if>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<button type="button" class="btn primary" onClick="{{ accept }}">{{ acceptLabel }}</button>
+<button type="button" class="btn" onClick="{{ startDismiss }}">Dismiss</button>
+<button type="button" class="btn" onClick="{{ startSnooze }}">Snooze</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ modeDismiss }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="reason" style="font-size: 13px; font-weight: 600">Why dismiss? A reason is required.</label>
+<textarea id="reason" class="field" rows="3" value="{{ reasonDraft }}" onChange="{{ onReason }}" placeholder="e.g. seasonal stock, strategic spare"></textarea>
+<div style="display: flex; gap: 8px">
+<button type="button" class="btn primary" onClick="{{ confirmDismiss }}">Dismiss row</button>
+<button type="button" class="btn ghost" onClick="{{ cancel }}">Cancel</button>
+</div>
+<sc-if value="{{ reasonError }}" hint-placeholder-val="{{ false }}"><span role="alert" style="font-size: 13px; color: #8A3B05">Add a reason before dismissing.</span></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ modeSnooze }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; font-weight: 600">Snooze until (at most {{ snoozeMax }} days)</span>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{ snoozeOpts }}" as="so" hint-placeholder-count="3">
+<button type="button" class="{{ so.cls }}" aria-pressed="{{ so.on }}" onClick="{{ so.pick }}">{{ so.label }}</button>
+</sc-for>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" class="btn primary" onClick="{{ confirmSnooze }}">Snooze row</button>
+<button type="button" class="btn ghost" onClick="{{ cancel }}">Cancel</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasHistory }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<span style="font-weight: 600">History</span>
+<sc-for list="{{ sel.history }}" as="h" hint-placeholder-count="2">
+<span style="color: #33414E">{{ h }}</span>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ noSel }}" hint-placeholder-val="{{ false }}">
+<div style="padding: 48px 24px; color: #4A5865; font-size: 14px">Pick a row to see why it is listed and to decide.</div>
+</sc-if>
+</aside>
+</div>
+</sc-if>
+
+<sc-if value="{{ isLog }}" hint-placeholder-val="{{ false }}">
+<div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; box-sizing: border-box; padding: 24px 28px">
+<section class="card" aria-label="Decision log" style="overflow: hidden">
+<div style="display: grid; grid-template-columns: 110px minmax(0, 1.4fr) minmax(0, 1fr) 130px 140px; gap: 12px; padding: 12px 16px; background: #F7F9FB; font-size: 12px; font-weight: 600; color: #4A5865; text-transform: uppercase; letter-spacing: 0.04em">
+<span>List</span><span>Item · site</span><span>Decision</span><span>Money</span><span>Status</span>
+</div>
+<sc-for list="{{ log }}" as="l" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 110px minmax(0, 1.4fr) minmax(0, 1fr) 130px 140px; gap: 12px; align-items: center; min-height: 52px; padding: 0 16px; border-top: 1px solid #E6EAEE; font-size: 14px">
+<span style="color: #33414E">{{ l.kind }}</span>
+<span style="font-weight: 600">{{ l.item }} · {{ l.site }}</span>
+<span style="color: #33414E">{{ l.what }}</span>
+<span class="num">{{ l.money }}</span>
+<span><span class="badge {{ l.badgeCls }}">{{ l.badge }}</span></span>
+</div>
+</sc-for>
+</section>
+</div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      view: 'overview', kind: 'drift', filter: 'open', selected: 'D1',
+      mode: 'none', reasonDraft: '', reasonError: false, actionDraft: null, snoozeDays: 14,
+      decisions: {
+        D4: { decision: 'accepted', applied: true, note: 'Accepted 2026-09-24; ERP reorder point now 210' },
+        D6: { decision: 'accepted', applied: false, note: 'Accepted 2026-10-02; ERP still at 60' },
+        X3: { decision: 'accepted', action: 'Dispose', applied: true, note: 'Accepted: dispose, 2026-09-18; left the list' },
+        X5: { decision: 'dismissed', reason: 'Strategic spare for line 2', note: 'Dismissed 2026-09-30: strategic spare for line 2' },
+        S4: { decision: 'accepted', action: 'Expedite', applied: false, note: 'Accepted: expedite, 2026-10-06' }
+      }
+    };
+  }
+
+  data() {
+    return {
+      drift: [
+        { id: 'D1', item: 'AACOMPUT01', desc: 'Acer laptop computer', site: 'WHOLESALE', cur: 40, rec: 118, money: 18720, d: '1.9/day', sdd: '0.8/day', lt: '24 days', sdlt: '6 days', driver: 'lead time' },
+        { id: 'D2', item: 'CONGRILL', desc: 'Commercial gas grill', site: 'RETAIL', cur: 12, rec: 31, money: 11400, d: '0.42/day', sdd: '0.30/day', lt: '41 days', sdlt: '9 days', driver: 'demand variability' },
+        { id: 'D3', item: 'AAPOWERAID', desc: 'Power adapter, 65 W', site: 'WHOLESALE', cur: 300, rec: 186, money: 2280, d: '6.1/day', sdd: '2.0/day', lt: '18 days', sdlt: '3 days', driver: 'demand level' },
+        { id: 'D4', item: 'CONBABY01', desc: 'Baby monitor kit', site: 'RETAIL', cur: 150, rec: 210, money: 4500, d: '4.7/day', sdd: '1.6/day', lt: '30 days', sdlt: '7 days', driver: 'lead time' },
+        { id: 'D5', item: 'AALEGO500', desc: 'Building set, 500 pcs', site: 'WHOLESALE', cur: 80, rec: 97, money: 935, d: '2.2/day', sdd: '0.9/day', lt: '28 days', sdlt: '5 days', driver: 'demand level' },
+        { id: 'D6', item: 'CONDECOR', desc: 'Decor bundle', site: 'RETAIL', cur: 60, rec: 88, money: 840, d: '1.6/day', sdd: '0.7/day', lt: '35 days', sdlt: '8 days', driver: 'lead time variability' }
+      ],
+      excess: [
+        { id: 'X1', item: 'AAMACHINE1', desc: 'Espresso machine, pro', site: 'WHOLESALE', onhand: 64, just: 10, ex: 54, cover: '38 months', money: 27540, cat: 'excess', last: '2026-04-11' },
+        { id: 'X2', item: 'CONFRIDGE', desc: 'Mini fridge, 3 cu ft', site: 'RETAIL', onhand: 22, just: 0, ex: 22, cover: 'no demand', money: 6380, cat: 'dead · stopped', last: '2025-06-02' },
+        { id: 'X3', item: 'AAVACUUM', desc: 'Robot vacuum', site: 'WHOLESALE', onhand: 0, just: 0, ex: 0, cover: 'cleared', money: 4100, cat: 'excess', last: '2026-09-20' },
+        { id: 'X4', item: 'CONHEADSET', desc: 'Wireless headset', site: 'RETAIL', onhand: 140, just: 96, ex: 44, cover: '17 months', money: 2420, cat: 'excess', last: '2026-10-01' },
+        { id: 'X5', item: 'AASPARE07', desc: 'Conveyor drive belt', site: 'WHOLESALE', onhand: 9, just: 0, ex: 9, cover: 'no demand', money: 1890, cat: 'dead · never moved', last: 'never' }
+      ],
+      stockout: [
+        { id: 'S1', item: 'AAPHONE10', desc: 'Smartphone, 128 GB', site: 'WHOLESALE', onhand: 14, supply: 0, p: 0.82, cover: '3 days', runout: '2026-10-11', money: 9310, cat: 'likely', lt: '21 days' },
+        { id: 'S2', item: 'CONCHARGER', desc: 'USB-C charger', site: 'RETAIL', onhand: 40, supply: 60, p: 0.41, cover: '9 days', runout: '2026-10-17', money: 1540, cat: 'at risk', lt: '14 days' },
+        { id: 'S3', item: 'AATABLET', desc: 'Tablet, 10 inch', site: 'WHOLESALE', onhand: 6, supply: 20, p: 0.36, cover: '5 days', runout: '2026-10-13', money: 3880, cat: 'at risk', lt: '28 days' },
+        { id: 'S4', item: 'CONSPEAKER', desc: 'Bluetooth speaker', site: 'RETAIL', onhand: 11, supply: 0, p: 0.67, cover: '6 days', runout: '2026-10-14', money: 2210, cat: 'likely', lt: '19 days' }
+      ]
+    };
+  }
+
+  money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+
+  badgeFor(id) {
+    const d = this.state.decisions[id];
+    if (!d) return { badge: 'Undecided', cls: 'b-none' };
+    if (d.decision === 'accepted') return d.applied ? { badge: 'Applied', cls: 'b-applied' } : { badge: 'Accepted' + (d.action ? ' · ' + d.action : ''), cls: 'b-accepted' };
+    if (d.decision === 'dismissed') return { badge: 'Dismissed', cls: 'b-dismissed' };
+    return { badge: 'Snoozed', cls: 'b-snoozed' };
+  }
+
+  rowView(kind, r, i) {
+    if (kind === 'drift') return { a: r.cur + ' → ' + r.rec, b: this.money(r.money), why: 'Reorder point ' + r.cur + ' → ' + r.rec + ', driven by ' + r.driver };
+    if (kind === 'excess') return { a: r.ex + ' units', b: this.money(r.money), why: r.ex + ' units over need · ' + r.cover };
+    return { a: Math.round(r.p * 100) + '% risk', b: this.money(r.money), why: Math.round(r.p * 100) + '% chance of running out · ' + r.cover + ' of cover' };
+  }
+
+  detail(kind, r) {
+    if (kind === 'drift') return {
+      kindLabel: 'Reorder point', k1: 'ERP reorder point', v1: String(r.cur), k2: 'Recommended', v2: String(r.rec),
+      why: 'The reorder point set in the ERP no longer covers demand over the real lead time at a 95% service level. The biggest contributor is ' + r.driver + '.',
+      inputs: [{ k: 'Demand', v: r.d }, { k: 'Demand variability', v: r.sdd }, { k: 'Lead time', v: r.lt }, { k: 'Lead-time variability', v: r.sdlt }, { k: 'Money at stake', v: this.money(r.money) }],
+      arith: 'ROP = d·LT + z·√(LT·σd² + d²·σLT²)\nz = 1.645 (95% service level)',
+      actions: []
+    };
+    if (kind === 'excess') return {
+      kindLabel: 'Excess and dead stock', k1: 'On hand', v1: String(r.onhand), k2: 'Excess units', v2: String(r.ex),
+      why: 'Stock on hand is above what 12 months of demand or the recommended reorder point justify. Category: ' + r.cat + '.',
+      inputs: [{ k: 'Justified units', v: String(r.just) }, { k: 'Months of cover', v: r.cover }, { k: 'Last demand', v: r.last }, { k: 'Money tied up', v: this.money(r.money) }],
+      arith: 'excess = on hand − max(12-month demand, reorder point)\nmoney = excess × unit cost',
+      actions: ['Stop replenishing', 'Reduce', 'Dispose']
+    };
+    return {
+      kindLabel: 'Stockout risk', k1: 'On hand + open supply', v1: r.onhand + ' + ' + r.supply, k2: 'Chance of stockout', v2: Math.round(r.p * 100) + '%',
+      why: 'Demand over the real lead time is likely to exceed stock on hand plus open purchase supply. Projected run-out ' + r.runout + '.',
+      inputs: [{ k: 'Lead time', v: r.lt }, { k: 'Days of cover', v: r.cover }, { k: 'Category', v: r.cat }, { k: 'Money at risk', v: this.money(r.money) }],
+      arith: 'P(stockout) = 1 − Φ((on hand − d·LT) / σLT-demand)\nat risk when P > 5%, likely when P > 50%',
+      actions: ['Expedite', 'Raise order', 'Transfer']
+    };
+  }
+
+  decide(id, rec) {
+    const decisions = Object.assign({}, this.state.decisions);
+    decisions[id] = rec;
+    this.setState({ decisions: decisions, mode: 'none', reasonDraft: '', reasonError: false, actionDraft: null });
+  }
+
+  renderVals() {
+    const s = this.state, data = this.data(), self = this;
+    const kinds = [
+      { key: 'drift', title: 'Reorder points', blurb: 'Settings the ERP holds that no longer fit demand and lead time.' },
+      { key: 'excess', title: 'Excess and dead stock', blurb: 'Capital tied up in stock nothing will need soon.' },
+      { key: 'stockout', title: 'Stockout risk', blurb: 'Items likely to run out before supply arrives.' }
+    ];
+    const kindLabel = { drift: 'Reorder', excess: 'Excess', stockout: 'Stockout' };
+    const kindCls = { drift: 'b-accepted', excess: 'b-snoozed', stockout: 'b-risk' };
+    const isOpen = (id) => { const d = s.decisions[id]; return !d || (d.decision === 'accepted' && !d.applied && false); };
+    const undecided = (id) => !s.decisions[id];
+
+    let accepted = 0, applied = 0, outstanding = 0, accCount = 0, outCount = 0;
+    const kindCards = kinds.map((k) => {
+      let a = 0, ap = 0, dis = 0, open = 0;
+      data[k.key].forEach((r) => {
+        const d = s.decisions[r.id];
+        if (!d) { open += 1; return; }
+        if (d.decision === 'accepted') { a += r.money; accCount += 1; if (d.applied) { ap += r.money; } else { outstanding += r.money; outCount += 1; } }
+        if (d.decision === 'dismissed') dis += 1;
+      });
+      accepted += a; applied += ap;
+      return { title: k.title, blurb: k.blurb, open: open, accepted: this.money(a), applied: this.money(ap), dismissed: dis,
+        open_: () => self.setState({ view: 'queue', kind: k.key, filter: 'open', selected: (data[k.key].find((r) => undecided(r.id)) || data[k.key][0]).id, mode: 'none' }) };
+    });
+    const pct = accepted ? Math.round((applied / accepted) * 100) : 0;
+
+    const attention = [];
+    kinds.forEach((k) => data[k.key].forEach((r, i) => { if (undecided(r.id)) attention.push({ k: k.key, r: r, i: i }); }));
+    attention.sort((x, y) => y.r.money - x.r.money);
+
+    const nav = [
+      { key: 'overview', label: 'Overview', icon: 'M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-3H4zM14 7h6V4h-6z' },
+      { key: 'queue', label: 'Work queue', icon: 'M4 6h16M4 12h16M4 18h10' },
+      { key: 'log', label: 'Decision log', icon: 'M8 4h11v16H8zM5 8h3M5 12h3M5 16h3' }
+    ].map((n) => ({ label: n.label, icon: n.icon, cls: 'navbtn' + (s.view === n.key ? ' on' : ''),
+      hasCount: n.key === 'queue', count: attention.length, go: () => self.setState({ view: n.key, mode: 'none' }) }));
+
+    const list = data[s.kind];
+    const filtered = list.filter((r) => s.filter === 'all' ? true : s.filter === 'open' ? undecided(r.id) : !undecided(r.id));
+    const rows = filtered.map((r) => {
+      const v = this.rowView(s.kind, r), b = this.badgeFor(r.id), on = s.selected === r.id;
+      return { item: r.item, desc: r.desc, site: r.site, rank: list.indexOf(r) + 1, a: v.a, b: v.b, badge: b.badge, badgeCls: b.cls,
+        sel: on ? 'true' : 'false', cls: 'row' + (on ? ' sel' : ''), pick: () => self.setState({ selected: r.id, mode: 'none', reasonError: false, actionDraft: null }) };
+    });
+    const selRow = list.find((r) => r.id === s.selected);
+    let sel = { history: [], inputs: [] }, actions = [];
+    if (selRow) {
+      const dt = this.detail(s.kind, selRow), b = this.badgeFor(selRow.id), d = s.decisions[selRow.id];
+      sel = Object.assign({}, dt, { item: selRow.item, desc: selRow.desc, site: selRow.site, rank: list.indexOf(selRow) + 1, badge: b.badge, badgeCls: b.cls, history: d && d.note ? [d.note] : [] });
+      actions = dt.actions.map((a) => ({ label: a, on: s.actionDraft === a ? 'true' : 'false', cls: 'opt' + (s.actionDraft === a ? ' on' : ''), pick: () => self.setState({ actionDraft: a }) }));
+    }
+    const snoozeMax = s.kind === 'stockout' ? 30 : 90;
+    const snoozeOpts = [7, 14, snoozeMax].map((n) => ({ label: n + ' days', on: s.snoozeDays === n ? 'true' : 'false', cls: 'chip' + (s.snoozeDays === n ? ' on' : ''), pick: () => self.setState({ snoozeDays: n }) }));
+
+    const log = [];
+    kinds.forEach((k) => data[k.key].forEach((r) => { const d = s.decisions[r.id]; if (d) { const b = this.badgeFor(r.id);
+      log.push({ kind: kindLabel[k.key], item: r.item, site: r.site, what: d.decision === 'dismissed' ? 'Dismissed: ' + d.reason : d.decision === 'snoozed' ? 'Snoozed' : 'Accepted' + (d.action ? ': ' + d.action.toLowerCase() : ''), money: this.money(r.money), badge: b.badge, badgeCls: b.cls }); } }));
+
+    const titles = { overview: ['Overview', 'What planners decided, and how much of it has reached the ERP'], queue: ['Work queue', 'Decide each recommendation; the reason is always one click away'], log: ['Decision log', 'Every decision, newest first'] };
+    const colsA = { drift: 'Reorder point', excess: 'Excess', stockout: 'Risk' };
+    const colsB = { drift: 'Money at stake', excess: 'Money tied up', stockout: 'Money at risk' };
+
+    return {
+      nav: nav, pageTitle: titles[s.view][0], pageSub: titles[s.view][1],
+      isOverview: s.view === 'overview', isQueue: s.view === 'queue', isLog: s.view === 'log',
+      tot: { accepted: this.money(accepted), applied: this.money(applied), outstanding: this.money(outstanding), acceptedCount: accCount, outstandingCount: outCount, appliedPct: pct + '%', appliedPctText: pct + '%' },
+      kindCards: kindCards,
+      attention: attention.slice(0, 5).map((t) => ({ kindLabel: kindLabel[t.k], kindCls: kindCls[t.k], item: t.r.item, site: t.r.site, why: this.rowView(t.k, t.r).why, money: this.money(t.r.money),
+        go: () => self.setState({ view: 'queue', kind: t.k, filter: 'open', selected: t.r.id, mode: 'none' }) })),
+      tabs: kinds.map((k) => ({ label: k.title, count: data[k.key].filter((r) => undecided(r.id)).length, on: s.kind === k.key ? 'true' : 'false', cls: 'tab' + (s.kind === k.key ? ' on' : ''),
+        go: () => self.setState({ kind: k.key, selected: (data[k.key].find((r) => undecided(r.id)) || data[k.key][0]).id, mode: 'none', actionDraft: null }) })),
+      filters: [['open', 'To decide'], ['decided', 'Decided'], ['all', 'All']].map((f) => ({ label: f[1], on: s.filter === f[0] ? 'true' : 'false', cls: 'chip' + (s.filter === f[0] ? ' on' : ''), go: () => self.setState({ filter: f[0] }) })),
+      kindTitle: kinds.find((k) => k.key === s.kind).title, colA: colsA[s.kind], colB: colsB[s.kind],
+      rows: rows, noRows: rows.length === 0,
+      hasSel: !!selRow, noSel: !selRow, sel: sel, actions: actions, hasActions: actions.length > 0,
+      acceptLabel: s.kind === 'drift' ? 'Accept new reorder point' : (s.actionDraft ? 'Accept: ' + s.actionDraft.toLowerCase() : 'Accept'),
+      hasHistory: sel.history.length > 0,
+      modeNone: s.mode === 'none', modeDismiss: s.mode === 'dismiss', modeSnooze: s.mode === 'snooze',
+      reasonDraft: s.reasonDraft, reasonError: s.reasonError, snoozeMax: snoozeMax, snoozeOpts: snoozeOpts,
+      onReason: (e) => self.setState({ reasonDraft: e.target.value, reasonError: false }),
+      startDismiss: () => self.setState({ mode: 'dismiss', reasonError: false }),
+      startSnooze: () => self.setState({ mode: 'snooze', snoozeDays: 14 }),
+      cancel: () => self.setState({ mode: 'none', reasonError: false }),
+      accept: () => { if (!selRow) return; if (s.kind !== 'drift' && !s.actionDraft) { self.setState({ actionDraft: actions[0] ? actions[0].label : null }); return; }
+        self.decide(selRow.id, { decision: 'accepted', action: s.kind === 'drift' ? null : s.actionDraft, applied: false, note: 'Accepted just now' + (s.actionDraft && s.kind !== 'drift' ? ': ' + s.actionDraft.toLowerCase() : '') }); },
+      confirmDismiss: () => { if (!selRow) return; if (!s.reasonDraft.trim()) { self.setState({ reasonError: true }); return; }
+        self.decide(selRow.id, { decision: 'dismissed', reason: s.reasonDraft.trim(), note: 'Dismissed just now: ' + s.reasonDraft.trim() }); },
+      confirmSnooze: () => { if (!selRow) return; self.decide(selRow.id, { decision: 'snoozed', note: 'Snoozed just now for ' + s.snoozeDays + ' days' }); },
+      log: log
+    };
+  }
+}
+</script>
+</body>
+</html>

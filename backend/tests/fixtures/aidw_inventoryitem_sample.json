@@ -1,0 +1,28 @@
+{
+ "value": [
+  {
+   "InventoryID": 10035,
+   "InventoryCD": "CONPAPERST",
+   "Descr": "Letter Paper Ream Standard",
+   "BaseUnit": "EA",
+   "StkItem": true,
+   "ItemStatus": "AC"
+  },
+  {
+   "InventoryID": 699,
+   "InventoryCD": "AAPOWERAID",
+   "Descr": "Poweraid 32 Oz - lot numbered",
+   "BaseUnit": "EA",
+   "StkItem": true,
+   "ItemStatus": "AC"
+  },
+  {
+   "InventoryID": 10033,
+   "InventoryCD": "<N/A>     ",
+   "Descr": null,
+   "BaseUnit": "HOUR",
+   "StkItem": false,
+   "ItemStatus": "XX"
+  }
+ ]
+}

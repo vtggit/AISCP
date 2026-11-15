@@ -1,0 +1,78 @@
+"""Alembic migration environment configuration.
+
+Reads database connection parameters from the same environment variables
+used by the AIERP backend (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD)
+so migration tooling and the application share the same configuration model.
+"""
+
+import os
+from logging.config import fileConfig
+from urllib.parse import quote_plus
+
+from alembic import context
+from sqlalchemy import engine_from_config, pool
+
+# ---------------------------------------------------------------------------
+# Alembic config and logging
+# ---------------------------------------------------------------------------
+config = context.config
+
+# Override the placeholder sqlalchemy.url with the real connection string
+# built from environment variables (same source as app/config.py).  The
+# components that can carry arbitrary characters (user, password and
+# database name) are percent-encoded so a hostile value cannot rewrite
+# the URL structure.
+db_url = (
+    "postgresql+psycopg2://"
+    f"{quote_plus(os.getenv('DB_USER', 'aierp'))}:"
+    f"{quote_plus(os.getenv('DB_PASSWORD', 'aierp'))}@"
+    f"{os.getenv('DB_HOST', 'localhost')}:"
+    f"{os.getenv('DB_PORT', '5432')}/"
+    f"{quote_plus(os.getenv('DB_NAME', 'aierp'))}"
+)
+config.set_main_option("sqlalchemy.url", db_url)
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+# ---------------------------------------------------------------------------
+# Run migrations
+# ---------------------------------------------------------------------------
+
+
+def run_migrations_offline() -> None:
+    """Run migrations in 'offline' mode (generates SQL scripts)."""
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=None,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode (applies to live database)."""
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=None,
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()

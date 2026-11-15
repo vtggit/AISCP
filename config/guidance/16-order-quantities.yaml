@@ -1,0 +1,84 @@
+scope: AIERP
+area: order-quantities
+title: "Order quantities"
+summary: "The wedge promises recomputed reorder points **and quantities**. Until now a recommendation carried a reorder point and only the shortfall below it, so at the reorder point itself it suggested nothing. The ERP's own order quantity and max were synced but never compared with anything. The defaults below were decided under delegation."
+items:
+  - key: AIERP-D-102
+    type: design
+    title: "Order quantity"
+    statement: "Order quantity is the economic order quantity, EOQ = sqrt(2 * D * S / (h * c)). D is annual demand (365 times the recommendation's daily demand, on its active demand basis), S is the cost of placing one order, h is the annual holding-cost rate, and c is the item-site's unit cost."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#646"
+
+  - key: AIERP-D-103
+    type: design
+    title: "Named assumptions, shown with the arithmetic"
+    statement: "S defaults to $50 an order and h to 25% a year. An instance overrides them with `AIERP_ORDER_COST` and `AIERP_HOLDING_RATE`, the way the service level is set today. Editing them on the Settings screen needs numeric settings, which is a later slice."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#646"
+
+  - key: AIERP-D-104
+    type: design
+    title: "Bounds"
+    statement: "the quantity stays between 7 and 365 days of demand, so a very cheap or very expensive item never gets an absurd lot. A result that hit a bound says so."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#646"
+
+  - key: AIERP-D-105
+    type: design
+    title: "No unit cost"
+    statement: "with no positive unit cost the quantity is 30 days of demand, the same assumption drift already makes, and it is labelled as assumed."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#646"
+
+  - key: AIERP-D-106
+    type: design
+    title: "Recommended max"
+    statement: "Recommended max is the recommended reorder point plus the order quantity: the min/max form the ERP stores. Each recommendation shows it next to the ERP's current order quantity and max."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#646"
+
+  - key: AIERP-D-107
+    type: design
+    title: "Not changed by this"
+    statement: "the shortfall figure (`suggested_order_quantity`), drift ranking, the aggregate projection and the release lines."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#646"
+
+  - key: AIERP-D-108
+    type: design
+    title: "Planned orders keep the monthly order-up-to policy"
+    statement: "Planned orders keep the monthly order-up-to policy (decided by Claude under delegation, 2026-10-26). The aggregate plan reviews each item-site once a month and orders up to the reorder point plus that month's demand: a periodic-review (R, S) policy. The order quantity is for the ERP's continuous reorder-point settings, which trigger an order whenever stock falls to the reorder point. Using it in the monthly plan would mix the two policies, and it would move the projected spend without anyone deciding so."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#683"
+
+  - key: AIERP-D-109
+    type: design
+    title: "Not in this stage"
+    statement: "supplier minimums, pack sizes and price breaks (the feed does not carry them yet), and quantity discounts."
+    decided:
+      by: model:claude
+      date: 2026-10-26
+      under: delegation
+      ref: "AIERP#646"

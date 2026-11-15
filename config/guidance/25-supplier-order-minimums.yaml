@@ -1,0 +1,63 @@
+scope: AIERP
+area: supplier-order-minimums
+title: "Supplier order minimums"
+summary: "The order plan says what to buy from each supplier this week. The decision the ERP never makes comes next: the order is below the supplier's minimum, so do we wait, order anyway, or add something, and if so what? Buyers answer that from memory. AIERP answers it from the items that are due next."
+items:
+  - key: AIERP-D-183
+    type: design
+    title: "The minimum is a fact AIERP is told, never one it guesses"
+    statement: "A minimum order value for a supplier of one source system, an amount in the same money as the order plan's values (AIERP does not convert currencies), entered by an admin. A supplier without one has no minimum. Reading it from the ERP comes later, where the ERP holds one."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-184
+    type: design
+    title: "The order plan says when an order is short"
+    statement: "Each supplier's group shows its value, the minimum, and the shortfall."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-185
+    type: design
+    title: "Top-ups come from what is due next"
+    statement: "For a short order AIERP suggests more lines from the same supplier: items not yet due, the soonest to reach its reorder point first, each fitted to the supplier's ordering terms, until the minimum is met. It looks no further ahead than a setting allows (30 days by default) and never suggests an item the excess list holds. Every suggestion states the days until the item would have been due and what holding it early costs."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-186
+    type: design
+    title: "When the minimum cannot be reached, AIERP says so"
+    statement: "When the minimum cannot be reached, AIERP says so, and by how much, rather than padding the order."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"
+
+  - key: AIERP-D-187
+    type: design
+    title: "Nothing is added silently"
+    statement: "Top-ups are suggestions. A release includes them only when the planner chose them, and it is previewed, confirmed and audited like every other release a person approves; a release under a standing grant (AIERP-D-2) includes none."
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1172"
+
+  - key: AIERP-D-188
+    type: design
+    title: "The inbox notices"
+    statement: "An order that is short of its minimum while one of its lines must be ordered within two days is an exception."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1116"

@@ -1,0 +1,80 @@
+/* AIERP design tokens: the approved planner-screen design (docs/design/planner-screen.md).
+   Every screen uses these variables, never raw values. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-figures: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-ground: #EEF1F4;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F5F7FA;
+  --color-surface-head: #F7F9FB;
+  --color-sidebar: #16212C;
+  --color-sidebar-hover: #1F2D3A;
+  --color-sidebar-active: #24384A;
+  --color-sidebar-text: #C9D3DD;
+  --color-sidebar-muted: #9AA8B5;
+
+  --color-ink: #17212B;
+  --color-ink-2: #33414E;
+  --color-ink-3: #4A5865;
+  --color-border: #DDE3E9;
+  --color-border-soft: #E6EAEE;
+  --color-control-border: #CBD3DB;
+
+  --color-accent: #1D4ED8;
+  --color-accent-hover: #1E40AF;
+  --color-accent-soft: #EAF0FD;
+  --color-accent-pale: #E0E9FD;
+  --color-accent-ink: #1E3A8A;
+
+  --color-risk: #8A3B05;
+  --color-risk-soft: #FDE8D3;
+  --color-snooze-soft: #FDF0DC;
+  --color-snooze-ink: #7A3E06;
+  --color-neutral-soft: #ECECEC;
+  --color-neutral-ink: #3F3F46;
+
+  /* The third chart series of the Demand view: a forecast bucket with
+     overridden days, its list-row marker and its override quantity. */
+  --color-override: #0F766E;
+
+  /* DDMRP buffer zones (the Buffers view): the red, amber and green
+     zone fills of the buffer bar, the soft badge backgrounds and the
+     badge inks. The "over" zone reuses the neutral tokens. */
+  --color-zone-red: #B42318;
+  --color-zone-red-soft: #FEE4E2;
+  --color-zone-red-ink: #84200F;
+  --color-zone-amber: #B54708;
+  --color-zone-amber-soft: #FEF0C7;
+  --color-zone-amber-ink: #93370D;
+  --color-zone-green: #067647;
+  --color-zone-green-soft: #DEF7EC;
+  --color-zone-green-ink: #054F31;
+
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+
+  --sidebar-width: 232px;
+  --detail-width: 440px;
+  --target-min: 44px;
+  --row-min: 52px;
+}
+
+html, body {
+  margin: 0;
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}

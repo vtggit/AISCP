@@ -1,0 +1,64 @@
+scope: AIERP
+area: recommendation-changes
+title: "Recommendation changes"
+summary: "The wedge promises that each number is defensible \"in one screen\", which includes the reason it changed. A planner who sees a recommended reorder point move from 140 to 190 needs to know whether demand rose, lead times stretched, or either one became more variable, before acting on it. The change in the exact (unrounded) reorder point is split among the four inputs with the Shapley value. This is the documented cooperative-game decomposition: each input's contribution is its average marginal effect over every order in which the inputs could switch from their earlier values to their current ones, which takes 16 evaluations of the formula. The four contributions sum exactly to the total change, with no unexplained residual. That is why this method was chosen over one-at-a-time sensitivity, which leaves an interaction term a planner cannot interpret. The input with the largest absolute contribution is named the primary driver."
+items:
+  - key: AIERP-D-36
+    type: design
+    title: "What is compared"
+    statement: "The recommendation at the as-of date against the recommendation at an earlier date, `since`, both computed by the same method at the same service level. The default `since` is the as-of date minus 30 days, one demand bucket, so the comparison shows what the latest month of history changed. `since` must be earlier than the as-of date."
+    decided:
+      by: model:claude
+      date: 2026-10-06
+      under: delegation
+      ref: "AIERP#122"
+
+  - key: AIERP-D-37
+    type: design
+    title: "Which item-sites are listed"
+    statement: "Every item-site whose recommended whole-unit reorder point differs between the two dates. An item-site whose status changed, for example from `ok` to `not_recommendable_demand` or to `insufficient_lead_time`, is listed with both statuses and no attribution, since there is no pair of numbers to compare."
+    decided:
+      by: model:claude
+      date: 2026-10-06
+      under: delegation
+      ref: "AIERP#122"
+
+  - key: AIERP-D-38
+    type: design
+    title: "Attribution method"
+    statement: "The reorder point is ROP = d * LT + z * sqrt(LT * sd_d^2 + d^2 * sd_LT^2), a function of four inputs: demand level (d); demand variability (sd_d); lead time (LT); lead-time variability (sd_LT)."
+    decided:
+      by: model:claude
+      date: 2026-10-06
+      under: delegation
+      ref: "AIERP#122"
+
+  - key: AIERP-D-39
+    type: design
+    title: "What a row shows"
+    statement: "The reorder point then and now, both exact and in whole units. The change in units. The four inputs then and now. The four contributions. The primary driver. Whether the master-data lead time was used on either date. A change in that flag is itself a reason, so the row notes it."
+    decided:
+      by: model:claude
+      date: 2026-10-06
+      under: delegation
+      ref: "AIERP#122"
+
+  - key: AIERP-D-40
+    type: design
+    title: "Ranking"
+    statement: "By the money the change represents: the absolute change in whole-unit reorder point times the item-site's unit cost. Rows without a positive unit cost follow, ordered by the absolute change in units."
+    decided:
+      by: model:claude
+      date: 2026-10-06
+      under: delegation
+      ref: "AIERP#122"
+
+  - key: AIERP-D-41
+    type: design
+    title: "Surfaces"
+    statement: "An API list and a CSV export, like drift, excess and stockout, and later an OData collection for Excel."
+    decided:
+      by: model:claude
+      date: 2026-10-06
+      under: delegation
+      ref: "AIERP#122"

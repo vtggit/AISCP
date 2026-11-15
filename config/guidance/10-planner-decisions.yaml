@@ -1,0 +1,84 @@
+scope: AIERP
+area: planner-decisions
+title: "Planner decisions"
+summary: "The north star says decisions get made \"from memory\" and that \"nothing in the system notices\" when they get worse. A ranked drift list that forgets what a planner already decided has the same flaw. On each visit the planner re-reads the twenty rows they handled last week, and when that planner is away nobody can tell which recommendations were acted on. Planner decisions give AIERP that memory, and they are the record that any later screen or approved write-back acts on."
+items:
+  - key: AIERP-D-42
+    type: design
+    title: "What a decision is about"
+    statement: "One item-site's reorder-point drift recommendation, the money-ranked core of the wedge. Excess and stockout decisions can follow on the same model later."
+    decided:
+      by: model:claude
+      date: 2026-10-07
+      under: delegation
+      ref: "AIERP#171"
+
+  - key: AIERP-D-43
+    type: design
+    title: "The three decisions"
+    statement: "`accepted`: the planner will change the ERP's reorder point to the recommended value. The row stays listed until the change is seen. `dismissed`: the planner disagrees. A reason is required, because a dismissal without a reason cannot be reviewed. `snoozed`: not now. It needs a `snooze_until` date at most 90 days ahead, and the row returns on that date."
+    decided:
+      by: model:claude
+      date: 2026-10-07
+      under: delegation
+      ref: "AIERP#171"
+
+  - key: AIERP-D-44
+    type: design
+    title: "What is recorded"
+    statement: "The decision, the reason, the snooze date, the recommendation it was made against (as-of date, recommended whole-unit reorder point, the ERP's reorder point at that moment, money at stake), who decided (the token subject) and when. Decisions are append-only history; the latest decision for an item-site is its current one. Nothing is written to the ERP. This is the read-first standing decision."
+    decided:
+      by: model:claude
+      date: 2026-10-07
+      under: delegation
+      ref: "AIERP#171"
+
+  - key: AIERP-D-45
+    type: design
+    title: "Who may decide"
+    statement: "For now, users with the `admin` role, since `admin` is the only role allowed to change data. Any authenticated user can read decisions. A dedicated planner role can replace `admin` here later without changing the model."
+    decided:
+      by: model:claude
+      date: 2026-10-07
+      under: delegation
+      ref: "AIERP#171"
+
+  - key: AIERP-D-46
+    type: design
+    title: "Effect on the drift list"
+    statement: "Each row carries its current decision. A dismissed row, or a row snoozed until a future date, is hidden by default, and `include_decided=true` shows every row. An accepted row stays listed with its decision so the planner can see the change is still outstanding."
+    decided:
+      by: model:claude
+      date: 2026-10-07
+      under: delegation
+      ref: "AIERP#171"
+
+  - key: AIERP-D-47
+    type: design
+    title: "When a dismissal stops applying"
+    statement: "A dismissal holds only for the recommendation it was made against. When the recommended whole-unit reorder point moves away from the dismissed value by at least the larger of 1 unit and 10% of that value, the row returns, with its earlier dismissal shown. The planner disagreed with a number, not with the item-site forever."
+    decided:
+      by: model:claude
+      date: 2026-10-07
+      under: delegation
+      ref: "AIERP#171"
+
+  - key: AIERP-D-48
+    type: design
+    title: "Applied"
+    statement: "An accepted decision counts as applied when the ERP's current reorder point for the item-site equals the accepted recommended value to within 1 unit. This is computed when read, from the synced item-site data, so applying a change needs no extra step. It also gives the product its own measure of value: the money at stake on recommendations that were accepted and then applied."
+    decided:
+      by: model:claude
+      date: 2026-10-07
+      under: delegation
+      ref: "AIERP#171"
+
+  - key: AIERP-D-49
+    type: design
+    title: "Surfaces"
+    statement: "An API to record and list decisions, the decision on each drift row, and a summary of accepted, applied and outstanding decisions with their money. Later, an OData collection for Excel."
+    decided:
+      by: model:claude
+      date: 2026-10-07
+      under: delegation
+      ref: "AIERP#171"

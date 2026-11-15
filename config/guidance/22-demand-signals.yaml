@@ -1,0 +1,83 @@
+scope: AIERP
+area: demand-signals
+title: "Demand signals"
+summary: "A forecast built from history cannot know about next month's promotion or a large order a salesperson expects to close. People do know. This capability lets them say so, keeps what they said separate from the statistics, and carries it into the plan."
+items:
+  - key: AIERP-D-161
+    type: design
+    title: "What a signal is"
+    statement: "Known extra demand for one item-site over a stated window: a first and last day, the extra units in total, a kind (`promotion`, `deal` or `event`) and a required reason. An admin enters it, as for overrides. The extra units must be above zero. A known drop in demand is left to overrides for now."
+    decided:
+      by: model:claude
+      date: 2026-11-03
+      under: delegation
+      ref: "AIERP#961"
+
+  - key: AIERP-D-162
+    type: design
+    title: "It adds, and never replaces"
+    statement: "The statistical forecast stays as it is. The effective forecast is the override where there is one, else the statistical quantity, plus the signal's share. The units are spread evenly over the window's days. A day covered by an override takes no signal share, because an override states the planner's whole number for that period. Several signals on one day add together."
+    decided:
+      by: model:claude
+      date: 2026-11-03
+      under: delegation
+      ref: "AIERP#961"
+
+  - key: AIERP-D-163
+    type: design
+    title: "Only the future"
+    statement: "A signal's first day must be after the as-of date and its last day inside the forecast horizon. Past demand is already in the history. An item-site with no statistical forecast is refused, as for overrides."
+    decided:
+      by: model:claude
+      date: 2026-11-03
+      under: delegation
+      ref: "AIERP#961"
+
+  - key: AIERP-D-164
+    type: design
+    title: "Append-only, like overrides"
+    statement: "A signal cannot be edited or deleted. A withdrawal is a new row with a reason, and the signal stays in the history. A window that has fully passed can no longer be withdrawn."
+    decided:
+      by: model:claude
+      date: 2026-11-03
+      under: delegation
+      ref: "AIERP#961"
+
+  - key: AIERP-D-165
+    type: design
+    title: "It reaches the plan on either demand basis"
+    statement: "`replenishment.demand_basis` decides how the underlying demand is estimated, and its default stays `history`. A signal is a decision a person made, not a change of method, so the reorder point and the aggregate projection count it on both bases. It lands in the months its window covers, without being counted twice."
+    decided:
+      by: model:claude
+      date: 2026-11-03
+      under: delegation
+      ref: "AIERP#961"
+
+  - key: AIERP-D-166
+    type: design
+    title: "Measured"
+    statement: "The statistical forecast stays measured on its own, so the product can show whether people's signals made the forecast better or worse."
+    decided:
+      by: model:claude
+      date: 2026-11-03
+      under: delegation
+      ref: "AIERP#961"
+
+  - key: AIERP-D-167
+    type: design
+    title: "A CRM feed is a later decision"
+    statement: "The `deal` kind is entered by a person for now. CRM deals in this product family carry no item lines, so a live feed needs a data-model change there and an API credential, and those are operator decisions. Pipeline value is not turned into units by probability weighting."
+    decided:
+      by: model:claude
+      date: 2026-11-03
+      under: delegation
+      ref: "AIERP#961"
+
+  - key: AIERP-D-168
+    type: design
+    title: "Read-only toward the ERP"
+    statement: "Signals change AIERP's own forecast and plan. Reaching the ERP still goes through the write controls of AIERP-D-2 and the audit."
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1172"

@@ -1,0 +1,740 @@
+/* AIERP planner screen — the Order plan view (#/orders).
+   Every colour, radius and step comes from the design tokens in
+   tokens.css; never raw values. */
+
+/* The view owns its full height: the bar and the summary keep their
+   natural size, the groups' tables scroll inside their own regions,
+   and the document never scrolls sideways. */
+#view-orders.is-active {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#view-orders.is-active #orders-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#view-orders.is-active #orders-root > .op {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+}
+
+/* The bar: the horizon label and select on the left, Refresh on the
+   right. */
+.op-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.op-horizon-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+}
+
+.op-horizon {
+  min-height: var(--target-min);
+  min-width: 120px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: inherit;
+}
+
+.op-horizon:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-3);
+}
+
+.op-refresh {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* The Download CSV button: next to Refresh in the bar, shown only
+   while a plan answer with at least one line is loaded. */
+.op-download {
+  flex-shrink: 0;
+}
+
+/* The plan's one-line summary, above the supplier groups. */
+.op-summary {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  flex-shrink: 0;
+}
+
+/* The body region: the skeleton, the error, the empty note and the
+   groups all live in the same scrollable column. */
+.op-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.op-skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  flex-shrink: 0;
+}
+
+.op-skel-block {
+  height: calc(var(--row-min) * 4);
+  width: 100%;
+}
+
+.op-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-risk-soft);
+  flex-shrink: 0;
+}
+
+.op-error-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+.op-empty {
+  margin: 0;
+  padding: var(--space-4) 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+  flex-shrink: 0;
+}
+
+/* One card per supplier group, in the answer's order. */
+.op-supplier {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.op-supplier-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* The group's heading: id-scoped so it wins over the shared .view h2
+   size and margin, dropping the heading to the card's scale. */
+#view-orders .op-supplier-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.op-supplier-vendor {
+  font-size: 12px;
+  color: var(--color-ink-3);
+  font-family: var(--font-figures);
+}
+
+/* The supplier risk badge in the block's head (issue #1060): the
+   level's zone tokens on a pill, after the vendor code. */
+.op-supplier-risk {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.op-supplier-risk.is-high {
+  background: var(--color-zone-red-soft);
+  color: var(--color-zone-red-ink);
+}
+
+.op-supplier-risk.is-medium {
+  background: var(--color-zone-amber-soft);
+  color: var(--color-zone-amber-ink);
+}
+
+.op-supplier-totals {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-3);
+  font-family: var(--font-figures);
+}
+
+/* The group's table scrolls within its own region: the page never
+   scrolls sideways, and at narrow widths the region — not the
+   document — takes the horizontal overflow. */
+.op-lines-region {
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  min-width: 0;
+}
+
+.op-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.op-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-head);
+  color: var(--color-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.op-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-ink);
+  vertical-align: top;
+}
+
+.op-cell-pair {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Due, dates, quantity and money never break inside the value; the
+   Why text wraps, so a long arithmetic line cannot widen the page. */
+.op-cell-due,
+.op-cell-date,
+.op-cell-qty-num,
+.op-cell-money {
+  white-space: nowrap;
+}
+
+.op-cell-date,
+.op-cell-qty-num,
+.op-cell-money {
+  font-family: var(--font-figures);
+}
+
+.op-cell-why {
+  overflow-wrap: anywhere;
+}
+
+/* The supplier reason in the Why cell (issue #1077): the line the
+   plan switched the supplier on — after the arithmetic text, a
+   quiet note that wraps with the cell. */
+.op-supplier-reason {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: 11px;
+  color: var(--color-ink-3);
+}
+
+/* A line whose short_of_need is true: the Due cell gets the risk
+   tokens and the quantity's note reads "short of need". */
+.op-row[data-short='true'] .op-cell-due {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+/* The adjustment notes under the fitted quantity, quiet ink; the
+   shortage note stands out in the risk tokens. */
+.op-note {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: 11px;
+  color: var(--color-ink-3);
+}
+
+.op-note--short {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+/* The transfer answer's mark on a plan line (issue #862): the
+   Quantity cell's note, in the accent ink — a transfer could
+   stand in for the order. It wraps like any note, so a long list of
+   suggestions cannot widen the page at narrow widths. */
+.op-note--transfer {
+  color: var(--color-accent-ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* The release control (admin only): the "Release to Acumatica"
+   button, the Odoo note, the preview/confirm panel and its rows.
+   The role probe is zero-size: it only exists so the shell's
+   sign-in gating can land the shared identity's role on it. */
+.op-role-probe {
+  display: none;
+}
+
+.op-release {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+/* The Odoo note: this block's lines release through Odoo. */
+.op-release-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+  flex-shrink: 0;
+}
+
+/* The inline preview/confirm panel: a muted card, the group listing,
+   the outcome lines, the unreleasable lines and the buttons. */
+.op-release-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+.op-release-none {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+}
+
+.op-release-groups,
+.op-release-unreleasable {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.op-release-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.op-release-group-site {
+  font-weight: 600;
+}
+
+.op-release-group-lines,
+.op-release-group-value {
+  font-family: var(--font-figures);
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+/* The confirmed group's outcome: created is the accent ink, exists
+   quiet ink, failed the risk tokens. */
+.op-release-outcome {
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.op-release-outcome--created {
+  color: var(--color-accent-ink);
+  font-weight: 600;
+}
+
+.op-release-outcome--exists {
+  color: var(--color-ink-3);
+}
+
+.op-release-outcome--error {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+/* The unreleasable lines: the item and the reason, in the snooze
+   tokens — they cannot be released, whatever the user does. */
+.op-release-unreleasable-item {
+  font-size: 12px;
+  color: var(--color-snooze-ink);
+  overflow-wrap: anywhere;
+}
+
+.op-release-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* The newest failed release's message, inside the panel. */
+.op-release-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The transfer suggestions section (issue 856): below the last
+   supplier block, for every signed-in user. Its table scrolls inside
+   its own region the way the groups' tables do, so the page never
+   scrolls sideways at narrow widths. */
+.op-transfers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.op-transfers-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* The section's heading: id-scoped so it wins over the shared .view
+   h2 size and margin, dropping the heading to the card's scale. */
+#view-orders .op-transfers-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.op-transfers-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* The answer's one-line summary, in the figures font. */
+.op-transfers-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-3);
+  font-family: var(--font-figures);
+}
+
+.op-transfers-loading,
+.op-transfers-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The newest failed transfers request: the risk tokens, like the
+   plan's own load error. */
+.op-transfers-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The rows' table scrolls within its own region: the region — not
+   the document — takes the horizontal overflow. */
+.op-transfers-region {
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  min-width: 0;
+}
+
+.op-transfers-table {
+  min-width: 640px;
+}
+
+/* The giving and receiving sites never break inside the value. */
+.op-transfers-site {
+  white-space: nowrap;
+}
+
+/* The release column of the transfers table (issue #883, admin
+   only): the row's Release button, an empty cell on the other
+   rows. The table's region takes any overflow, never the document. */
+.op-transfer-release-cell {
+  white-space: nowrap;
+}
+
+.op-transfer-release {
+  flex-shrink: 0;
+}
+
+/* The preview/confirm panel below the table: a muted card like the
+   supplier release's, the group listing, the outcome lines, the
+   unreleasable entries and the buttons. */
+.op-transfer-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  flex-shrink: 0;
+}
+
+.op-transfer-panel-none {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+}
+
+.op-transfer-panel-groups {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.op-transfer-panel-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.op-transfer-panel-sites {
+  font-weight: 600;
+  font-family: var(--font-figures);
+}
+
+.op-transfer-panel-count {
+  font-family: var(--font-figures);
+  font-size: 12px;
+  color: var(--color-ink-3);
+}
+
+/* One line of a group: the item and its quantity, quiet ink. */
+.op-transfer-panel-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-size: 12px;
+  color: var(--color-ink-2);
+}
+
+.op-transfer-panel-line-item {
+  font-weight: 600;
+}
+
+.op-transfer-panel-line-qty {
+  font-family: var(--font-figures);
+  color: var(--color-ink-3);
+}
+
+/* The confirmed group's outcome: created is the accent ink, exists
+   quiet ink, failed the risk tokens. */
+.op-transfer-outcome {
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.op-transfer-outcome--created {
+  color: var(--color-accent-ink);
+  font-weight: 600;
+}
+
+.op-transfer-outcome--exists {
+  color: var(--color-ink-3);
+}
+
+.op-transfer-outcome--error {
+  color: var(--color-risk);
+  font-weight: 600;
+}
+
+/* The unreleasable entries: the item and the reason, in the snooze
+   tokens — they cannot be released, whatever the user does. */
+.op-transfer-panel-unreleasable {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.op-transfer-panel-unreleasable-item {
+  font-size: 12px;
+  color: var(--color-snooze-ink);
+  overflow-wrap: anywhere;
+}
+
+.op-transfer-panel-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* The newest failed transfer release's message, inside the panel. */
+.op-transfer-panel-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+
+/* The supplier minimum line (issue #1167): right after the
+   totals' line, the group's minimum in dollars and cents, quiet
+   figures. */
+.op-supplier-minimum {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-3);
+  font-family: var(--font-figures);
+}
+
+/* The short badge in the block's head (issue #1167): after the risk
+   badge, the amber zone tokens on a pill — below the minimum. */
+.op-supplier-short {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--color-zone-amber-soft);
+  color: var(--color-zone-amber-ink);
+}
+
+/* The suggested top-ups section (issue #1167): below the short
+   block's lines' table — a muted card with the heading, the
+   pending/failed/empty lines, the entry's table and the outcome. */
+.op-top-ups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+/* The section's heading, at the card's scale. */
+#view-orders .op-top-ups-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.op-top-ups-status,
+.op-top-ups-empty,
+.op-top-ups-outcome {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The failed read's line, in the risk tokens. */
+.op-top-ups-error {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-risk);
+  overflow-wrap: anywhere;
+}
+
+/* The entry's table scrolls within its own region, like the
+   lines' table: the page never scrolls sideways. */
+.op-top-ups-region {
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-control);
+  min-width: 0;
+}
+
+.op-top-ups-table {
+  min-width: 480px;
+}
+
+/* The chosen top-ups (issue #1205): the admin's checkbox at the
+   head of the row's first cell — the table's own region taking the
+   overflow, as before — and the running line under the outcome. */
+.op-top-up-choose {
+  width: 16px;
+  height: 16px;
+  margin: 0 6px 0 0;
+  cursor: pointer;
+  vertical-align: middle;
+  accent-color: var(--color-accent);
+}
+
+/* The running line: the outcome's scale, in the primary ink and
+   weight, so it stands out of the card while staying part of the
+   section. */
+.op-top-ups-chosen {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}

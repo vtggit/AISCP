@@ -1,0 +1,64 @@
+scope: AIERP
+area: supplier-risk
+title: "Supplier risk"
+summary: "A planner needs to see which suppliers put stock at risk, from what the suppliers actually did, not from a rating someone typed in."
+items:
+  - key: AIERP-D-196
+    type: design
+    title: "Three signs, from data AIERP already reads"
+    statement: "*Late*: the supplier's on-time rate is below a floor (85 percent). *Variable*: the standard deviation of its lead time over the mean is at or above a ceiling (0.6), judged only when at least three receipts could be used. *Sole source*: for at least one item, every receipt in the last 730 days came from this supplier."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-197
+    type: design
+    title: "The rating"
+    statement: "High when a supplier is late or variable and is also the sole source of an item. Medium when it is late or variable without being a sole source. Low otherwise: depending on one reliable supplier is not a risk sign by itself. The floor and the ceiling are settings; both were calibrated on real receipts, where the first rule rated most suppliers high and told the planner nothing."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-198
+    type: design
+    title: "Shown where the decision is made"
+    statement: "The Suppliers screen lists the rating with its reasons and the items that depend on the supplier. The order plan and the expedite list mark a high-risk supplier. A high-risk supplier is an exception in the inbox."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-199
+    type: design
+    title: "Which lead time safety stock uses is a setting"
+    statement: "Every supplier's receipts for the item (the default), or only those of the supplier the item is received from most."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"
+
+  - key: AIERP-D-200
+    type: design
+    title: "The order plan prefers the safer supplier"
+    statement: "The order plan prefers the safer supplier (operator, 2026-11-08). When an item has purchasing terms from more than one supplier and the default one is rated high or medium, the plan buys from a strictly lower-rated one and says why on the line. It is a setting, on by default. When the rating cannot be read the plan behaves as if the setting were off, and a release goes through the controls of AIERP-D-2 as always."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1172"
+
+  - key: AIERP-D-201
+    type: design
+    title: "Nothing here writes to the ERP"
+    statement: "AIERP does not change a default vendor; it chooses per order line and shows the reason."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1119"

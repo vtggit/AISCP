@@ -1,0 +1,84 @@
+scope: AIERP
+area: guidance-in-the-product
+title: "Guidance in the product"
+summary: "This document steers what AIERP becomes. The people who use and audit AIERP should be able to read it where they work, see how it changed, and trace a decision back to the words it rested on. The guidance is kept as a register of keyed items; this section says what the product does with it."
+items:
+  - key: AIERP-D-215
+    type: design
+    title: "The product shows its own guidance"
+    statement: "The product shows its own guidance (operator, 2026-11-11). There is a place in AIERP's screens where the guidance the product is built under can be read."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-11-11
+      ref: "AIERP#1123"
+
+  - key: AIERP-D-216
+    type: design
+    title: "Changes to guidance can be traced"
+    statement: "Changes to guidance can be traced (operator, 2026-11-11). AIERP keeps the audit information needed to know what changed in the guidance, when, and who decided it."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-11-11
+      ref: "AIERP#1123"
+
+  - key: AIERP-D-217
+    type: design
+    title: "A decision points at its guidance with a stamp"
+    statement: "A decision points at its guidance with a stamp (operator, 2026-11-11). Where a decision rests on guidance, its source is stamped on it and can be traced to the guidance: a key and a short hash of the item's words, not sentences of reasoning."
+    authority: executive
+    decided:
+      by: github:vtggit
+      date: 2026-11-11
+      ref: "AIERP#1123"
+
+  - key: AIERP-D-218
+    type: design
+    title: "What the screen shows"
+    statement: "Every item in force, by type and by area, with its key, its stamp, its statement, who decided it and when. Retired items are listed apart. Anyone signed in can read it."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1123"
+
+  - key: AIERP-D-219
+    type: design
+    title: "Guidance is published into AIERP, never fetched"
+    statement: "An admin, or the deployment acting as one, publishes the register after it changes. AIERP makes no call out to read it, and it says when and from what source the guidance it shows was published."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1123"
+
+  - key: AIERP-D-220
+    type: design
+    title: "AIERP checks what it is given"
+    statement: "A publication is taken whole or not at all. Every item's hash is worked out again from its words, and a publication with a wrong hash, an unknown type or a missing decision record is refused."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1123"
+
+  - key: AIERP-D-221
+    type: design
+    title: "Every version is kept"
+    statement: "Publishing never deletes. An item whose words changed gets a new version, and the old one stays readable with the days it was current. An item that is no longer published stays readable too."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1123"
+
+  - key: AIERP-D-222
+    type: design
+    title: "Guidance is read in the product and changed in the register"
+    statement: "The screen has no editing. An item changes only through a reviewed change to the register, by someone who holds the authority its type asks for."
+    decided:
+      by: model:claude
+      date: 2026-11-11
+      under: delegation
+      ref: "AIERP#1123"

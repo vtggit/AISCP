@@ -1,0 +1,63 @@
+scope: AIERP
+area: dead-and-excess-defaults
+title: "Dead and excess defaults"
+items:
+  - key: AIERP-D-18
+    type: design
+    title: "Window"
+    statement: "One trailing window of `EXCESS_COVER_MONTHS` months (default 12; one month is 30 days) ending at the same as-of date the drift list uses."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#85"
+
+  - key: AIERP-D-19
+    type: design
+    title: "Dead stock"
+    statement: "Stock on hand greater than zero with no demand in the window. It is `never_moved` when the item-site has no demand at all, `stopped` when its last demand is older than the window. All of it is counted as tied up."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#85"
+
+  - key: AIERP-D-20
+    type: design
+    title: "Excess stock"
+    statement: "Stock on hand above what the window justifies: justified units = max(window demand, the recommended reorder point). Excess units = on hand - justified, listed only when positive, with months of cover (on hand / average monthly window demand) shown beside it."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#85"
+
+  - key: AIERP-D-21
+    type: design
+    title: "Money tied up"
+    statement: "Excess units * unit cost. An item-site with no unit cost is still listed, flagged \"unit cost missing\", without a value, and ranked last."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#85"
+
+  - key: AIERP-D-22
+    type: design
+    title: "Ranking"
+    statement: "By money tied up, largest first. Every row carries its inputs and its arithmetic."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#85"
+
+  - key: AIERP-D-23
+    type: design
+    title: "Measured on the reference demo data when decided"
+    statement: "Measured on the reference demo data when decided: 228 item-sites with stock on hand; 95 never demanded and 41 last moving more than 12 months ago; 7 without a unit cost."
+    decided:
+      by: model:claude
+      date: 2026-10-05
+      under: delegation
+      ref: "AIERP#85"

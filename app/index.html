@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AISCP Planner</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/queue.css">
+<link rel="stylesheet" href="css/demand.css">
+<!-- Critical layout for the Scenario view, inlined so the contract
+     "the item-site rows scroll inside their own region and the
+     document never does" holds even before the external sheet applies
+     (or if it is unavailable): a hard, token-derived cap makes the
+     table region a bounded scroll box. css/scenario.css restates the
+     same cap and adds the full styling; being later, its rules win,
+     including the tighter 8-row cap at narrow widths. -->
+<style>
+  .sc-table-region {
+    max-height: calc(var(--row-min) * 12);
+    overflow-y: auto;
+  }
+</style>
+<link rel="stylesheet" href="css/scenario.css">
+<link rel="stylesheet" href="css/aggregate.css">
+<link rel="stylesheet" href="css/sop.css">
+<link rel="stylesheet" href="css/across.css">
+<link rel="stylesheet" href="css/guidance.css">
+<link rel="stylesheet" href="css/buffers.css">
+<link rel="stylesheet" href="css/orders.css">
+<link rel="stylesheet" href="css/exceptions.css">
+</head>
+<body>
+
+<!-- Sign-in screen: the development token card and production error state.
+     No token value is ever written into this markup. -->
+<div id="auth" hidden>
+  <div class="auth-card">
+    <h1 class="auth-title">AISCP Planner</h1>
+    <p class="auth-sub" id="auth-sub">Sign in to open the planner screen.</p>
+    <form id="signin-form" class="signin-form" novalidate>
+      <label for="token-input">Token</label>
+      <input id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" required>
+      <button type="submit" class="btn btn-primary" id="signin-button">Sign in</button>
+    </form>
+    <button type="button" class="btn btn-primary" id="retry-button" hidden>Try again</button>
+    <p id="auth-error" class="auth-error" role="alert" hidden></p>
+  </div>
+</div>
+
+<!-- Application shell: hidden until /api/auth/me confirms a signed-in user. -->
+<div id="app" hidden>
+  <aside id="sidebar" class="sidebar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <span class="brand-name">AISCP</span>
+    </div>
+    <nav class="nav" aria-label="Primary">
+      <button type="button" class="nav-btn" data-view="overview">Overview</button>
+      <button type="button" class="nav-btn" data-view="exceptions">Exceptions</button>
+      <button type="button" class="nav-btn" data-view="queue">Work queue</button>
+      <button type="button" class="nav-btn" data-view="demand">Demand</button>
+      <button type="button" class="nav-btn" data-view="scenario">Scenario</button>
+      <button type="button" class="nav-btn" data-view="aggregate">Aggregate</button>
+      <button type="button" class="nav-btn" data-view="sop">S&amp;OP</button>
+      <button type="button" class="nav-btn" data-view="across">Across ERPs</button>
+      <button type="button" class="nav-btn" data-view="orders">Order plan</button>
+      <button type="button" class="nav-btn" data-view="releases">Releases</button>
+      <button type="button" class="nav-btn" data-view="suppliers">Suppliers</button>
+      <button type="button" class="nav-btn" data-view="expedite">Expedite</button>
+      <button type="button" class="nav-btn" data-view="writeback">Push to ERP</button>
+      <button type="button" class="nav-btn" data-view="buffers">Buffers</button>
+      <button type="button" class="nav-btn" data-view="log">Decision log</button>
+      <button type="button" class="nav-btn" data-view="settings">Settings</button>
+      <button type="button" class="nav-btn" data-view="guidance">Guidance</button>
+    </nav>
+    <div class="sidebar-foot">
+      <p class="feed-status">Checking sync…</p>
+      <div class="user">
+        <span class="user-name" id="user-name"></span>
+        <button type="button" class="btn-signout" id="signout-button">Sign out</button>
+      </div>
+    </div>
+  </aside>
+  <main id="main" class="main">
+    <header class="main-header">
+      <div class="main-header-titles">
+        <h1 id="page-title">Overview</h1>
+        <p class="page-subtitle" id="page-subtitle">What matters across the replenishment lists, at a glance.</p>
+      </div>
+      <p class="as-of" id="as-of">Checking sync…</p>
+    </header>
+    <section id="view-overview" class="view is-active" data-view="overview" role="region" aria-label="Overview">
+      <div class="ov">
+        <section id="ov-region-tiles" aria-label="Value tiles"></section>
+        <div class="ov-cards" aria-label="Decision lists">
+          <article class="card ov-card" id="ov-region-card-drift" aria-label="Reorder points"></article>
+          <article class="card ov-card" id="ov-region-card-excess" aria-label="Excess and dead stock"></article>
+          <article class="card ov-card" id="ov-region-card-stockout" aria-label="Stockout risk"></article>
+        </div>
+        <article class="card ov-releases" id="ov-region-releases"
+          data-testid="ov-releases" aria-label="Released orders"></article>
+        <section class="card ov-attention" aria-label="Needs a decision, largest money first">
+          <header class="ov-attention-head">
+            <h2>Needs a decision, largest money first</h2>
+            <span class="ov-attention-note">Top 5 across all lists</span>
+          </header>
+          <div id="ov-attention-body"></div>
+        </section>
+      </div>
+    </section>
+    <section id="view-exceptions" class="view" data-view="exceptions" role="region" aria-label="Exceptions">
+      <div id="exceptions-root"></div>
+    </section>
+    <section id="view-queue" class="view" data-view="queue" role="region" aria-label="Work queue">
+      <div id="q-root" class="q"></div>
+    </section>
+    <section id="view-demand" class="view" data-view="demand" role="region" aria-label="Demand">
+      <div id="demand-root"></div>
+    </section>
+    <section id="view-scenario" class="view" data-view="scenario" role="region" aria-label="Scenario">
+      <div id="scenario-root"></div>
+    </section>
+    <section id="view-aggregate" class="view" data-view="aggregate" role="region" aria-label="Aggregate">
+      <div id="aggregate-root"></div>
+    </section>
+    <section id="view-sop" class="view" data-view="sop" role="region" aria-label="S&amp;OP review">
+      <div id="sop-root"></div>
+    </section>
+    <section id="view-across" class="view" data-view="across" role="region" aria-label="Across ERPs">
+      <div id="across-root"></div>
+    </section>
+    <section id="view-orders" class="view" data-view="orders" role="region" aria-label="Order plan">
+      <div id="orders-root"></div>
+    </section>
+    <section id="view-releases" class="view" data-view="releases" role="region" aria-label="Releases">
+      <link rel="stylesheet" href="css/releases.css">
+      <div id="releases-root"></div>
+    </section>
+    <section id="view-suppliers" class="view" data-view="suppliers" role="region" aria-label="Suppliers">
+      <link rel="stylesheet" href="css/suppliers.css">
+      <div id="suppliers-root"></div>
+    </section>
+    <section id="view-expedite" class="view" data-view="expedite" role="region" aria-label="Expedite">
+      <link rel="stylesheet" href="css/expedite.css">
+      <div id="expedite-root"></div>
+    </section>
+    <section id="view-writeback" class="view" data-view="writeback" role="region" aria-label="Push to ERP">
+      <link rel="stylesheet" href="css/writeback.css">
+      <div id="writeback-root"></div>
+    </section>
+    <section id="view-buffers" class="view" data-view="buffers" role="region" aria-label="Buffers">
+      <div id="buffers-root"></div>
+    </section>
+    <section id="view-log" class="view" data-view="log" role="region" aria-label="Decision log">
+      <div id="log-root"></div>
+    </section>
+    <section id="view-settings" class="view" data-view="settings" role="region" aria-label="Settings">
+      <div id="settings-root"></div>
+    </section>
+    <section id="view-guidance" class="view" data-view="guidance" role="region" aria-label="Guidance">
+      <div id="guidance-root"></div>
+    </section>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/feedstatus.js"></script>
+<script src="js/overview.js"></script>
+<script src="js/queue.js"></script>
+<script src="js/log.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/demand.js"></script>
+<script src="js/scenario.js"></script>
+<script src="js/aggregate.js"></script>
+<script src="js/releases.js"></script>
+<script src="js/suppliers.js"></script>
+<script src="js/expedite.js"></script>
+<script src="js/writeback.js"></script>
+<script src="js/orders.js"></script>
+<script src="js/buffers.js"></script>
+<script src="js/exceptions.js"></script>
+<script src="js/sop.js"></script>
+<script src="js/across.js"></script>
+<script src="js/guidance.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

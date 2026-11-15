@@ -1,0 +1,84 @@
+scope: AIERP
+area: scenario-planning
+title: "Scenario planning (what-if)"
+summary: "A recommendation answers what to order today; a planner often needs to know what a different assumption would do before changing anything. Scenario planning is a read-only simulation. It re-runs the reorder recommendation under one or more overridden assumptions and reports, for each item-site and for the portfolio, what changes against the live baseline. It writes nothing and makes no decision; it is a planner's \"what if\" before acting."
+items:
+  - key: AIERP-D-79
+    type: design
+    title: "The baseline"
+    statement: "The recommendation each item-site has today, built from the active demand basis (the observed history, or the effective forecast when `replenishment.demand_basis` is `forecast`), the stored service level, and the observed lead-time statistics. A scenario is always measured against this live baseline, never against another scenario."
+    decided:
+      by: model:claude
+      date: 2026-10-16
+      under: delegation
+      ref: "AIERP#428"
+
+  - key: AIERP-D-80
+    type: design
+    title: "The levers"
+    statement: "The levers (all optional; an omitted lever keeps the baseline value)."
+    decided:
+      by: model:claude
+      date: 2026-10-16
+      under: delegation
+      ref: "AIERP#428"
+
+  - key: AIERP-D-81
+    type: design
+    title: "The levers: A target service level"
+    statement: "A target **service level**: a probability strictly between 0 and 1, used as `z = NormalDist().inv_cdf(service_level)`."
+    decided:
+      by: model:claude
+      date: 2026-10-16
+      under: delegation
+      ref: "AIERP#428"
+
+  - key: AIERP-D-82
+    type: design
+    title: "The levers: A demand multiplier"
+    statement: "A **demand multiplier**: a positive number scaling both the mean daily demand and its standard deviation."
+    decided:
+      by: model:claude
+      date: 2026-10-16
+      under: delegation
+      ref: "AIERP#428"
+
+  - key: AIERP-D-83
+    type: design
+    title: "The levers: A lead-time multiplier"
+    statement: "A **lead-time multiplier**: a positive number scaling both the mean lead time and its standard deviation."
+    decided:
+      by: model:claude
+      date: 2026-10-16
+      under: delegation
+      ref: "AIERP#428"
+
+  - key: AIERP-D-84
+    type: design
+    title: "One formula, two inputs"
+    statement: "The same reorder formula is used for baseline and scenario — `safety_stock = z * sqrt(LT * sd_d^2 + d^2 * sd_LT^2)`, `reorder_point = d * LT + safety_stock` — so a scenario differs from the baseline only by the overridden inputs."
+    decided:
+      by: model:claude
+      date: 2026-10-16
+      under: delegation
+      ref: "AIERP#428"
+
+  - key: AIERP-D-85
+    type: design
+    title: "What it reports"
+    statement: "Per item-site: the baseline and scenario `reorder_point`, `safety_stock` and their whole-unit values, and the signed difference. And a portfolio summary: the total change in reorder-point units and safety-stock units, the number of item-sites whose reorder point rises, falls, and is unchanged, and the dollar impact — the sum over item-sites of the reorder-point-unit change times the item-site's `unit_cost`, item-sites without a unit cost contributing zero and counted separately."
+    decided:
+      by: model:claude
+      date: 2026-10-16
+      under: delegation
+      ref: "AIERP#428"
+
+  - key: AIERP-D-86
+    type: design
+    title: "Scope boundaries"
+    statement: "Only recommendable item-sites are simulated (the same intermittent and lumpy exclusions as recommendations). A scenario is never stored and never changes a stored recommendation, decision, or setting; the existing recommendation, drift, excess, stockout and demand behaviours are untouched."
+    decided:
+      by: model:claude
+      date: 2026-10-16
+      under: delegation
+      ref: "AIERP#428"

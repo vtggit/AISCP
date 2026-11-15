@@ -1,0 +1,83 @@
+scope: AIERP
+area: several-erps-one-planner
+title: "Several ERPs, one planner"
+summary: "A company that bought another company, or that runs different ERPs in different regions, plans each one separately today. A vendor's add-on covers only that vendor's ERP. This capability lets one planner see and act on stock held in several ERPs from one place, starting with Acumatica and Odoo."
+items:
+  - key: AIERP-D-169
+    type: design
+    title: "What this proves first"
+    statement: "One screen where every row says which ERP it came from, the same item held in two ERPs is recognised as one item, and a planner can see one ERP running short of an item the other holds too much of. This is a proof over the two connectors AIERP already has, not yet a general connector framework."
+    decided:
+      by: model:claude
+      date: 2026-11-05
+      under: delegation
+      ref: "AIERP#993"
+
+  - key: AIERP-D-170
+    type: design
+    title: "Which ERP a row came from"
+    statement: "Every planning row carries its source ERP, and a planner can filter by it. Totals across ERPs stay available beside the split."
+    decided:
+      by: model:claude
+      date: 2026-11-05
+      under: delegation
+      ref: "AIERP#993"
+
+  - key: AIERP-D-171
+    type: design
+    title: "An item-site belongs to one ERP"
+    statement: "An item-site is still identified by its item and site codes. Today, when two ERPs use the same item and site codes, the later sync silently overwrites the earlier one. That is never acceptable. The first ERP to hold a pair keeps it, the other ERP's rows for that pair are not loaded, and the clash is shown to the planner. A person resolves it, because only a person knows whether the two are really the same stock."
+    decided:
+      by: model:claude
+      date: 2026-11-05
+      under: delegation
+      ref: "AIERP#993"
+
+  - key: AIERP-D-172
+    type: design
+    title: "Matching the same item across ERPs"
+    statement: "A person decides. Codes usually differ between ERPs, so AIERP suggests matches where the codes or descriptions agree exactly after trimming and ignoring case, and an admin confirms each one. A suggestion is never applied on its own, and there is no fuzzy matching for now, because a wrong match would quietly mix two items' figures. A confirmed match is stored in the existing cross-ERP code mappings, which draft purchase orders already read."
+    decided:
+      by: model:claude
+      date: 2026-11-05
+      under: delegation
+      ref: "AIERP#993"
+
+  - key: AIERP-D-173
+    type: design
+    title: "Comparing across ERPs"
+    statement: "For a matched item, the planner sees each ERP's on-hand, demand, cover and recommendation side by side, plus a flag when one side is short and the other holds excess. The two ERPs keep their own recommendations. They are not merged into one plan, because each one still buys and holds its own stock."
+    decided:
+      by: model:claude
+      date: 2026-11-05
+      under: delegation
+      ref: "AIERP#993"
+
+  - key: AIERP-D-174
+    type: design
+    title: "Moving stock between ERPs is not part of this"
+    statement: "AIERP shows the opportunity, but a move between ERPs is two documents in two systems, and no release creates it yet."
+    decided:
+      by: model:claude
+      date: 2026-11-05
+      under: delegation
+      ref: "AIERP#993"
+
+  - key: AIERP-D-175
+    type: design
+    title: "One currency for now"
+    statement: "AIERP does not convert currencies. Money is summed across ERPs on the assumption that they all report in the same currency. That limit is stated on the screen, and AIERP warns when it can see that the ERPs' currencies differ."
+    decided:
+      by: model:claude
+      date: 2026-11-05
+      under: delegation
+      ref: "AIERP#993"
+
+  - key: AIERP-D-176
+    type: design
+    title: "Writing back is unchanged"
+    statement: "Each ERP's writes keep their own switch, and every write still goes through the controls of AIERP-D-2 and the audit. Nothing here adds a write to either ERP."
+    decided:
+      by: github:vtggit
+      date: 2026-11-13
+      ref: "AIERP PR 1172"

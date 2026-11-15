@@ -1,0 +1,44 @@
+scope: AIERP
+area: excess-and-stockout-decisions
+title: "Excess and stockout decisions"
+summary: "Planner decisions on reorder-point drift (above) gave AIERP a memory for one list. The excess and stockout lists need the same memory, with one difference: accepting a drift recommendation means \"set the reorder point to this number\", but accepting an excess or stockout row does not by itself say what the planner will do. So each acceptance names an action. Each kind has its own table and API (`/api/excess/decisions` and `/api/stockout/decisions`), so the live drift decisions, their summary and the OData `Decisions` set do not change."
+items:
+  - key: AIERP-D-50
+    type: design
+    title: "Excess and dead stock"
+    statement: "One decision per item-site listed by the dead-and-excess list. `accepted` names an action: `stop_replenishing`: stop buying it; `reduce`: use it up, transfer it or return it; `dispose`: scrap or sell it. AIERP records the intent only; any write-down belongs to finance, inside the accounting boundary above. `dismissed` requires a reason, for example seasonal stock or strategic spares. `snoozed` lasts at most 90 days. An accepted decision counts as **applied** when the item-site no longer appears in the dead-and-excess list. A dismissal lapses when the row's excess units grow by at least the larger of 1 unit and 10% of the units it was dismissed at."
+    decided:
+      by: model:claude
+      date: 2026-10-08
+      under: delegation
+      ref: "AIERP#197"
+
+  - key: AIERP-D-51
+    type: design
+    title: "Stockout risk"
+    statement: "One decision per item-site listed as at risk. `accepted` names an action: `expedite`: speed up an open order; `raise_order`: place or increase an order; `transfer`: move stock from another site. `dismissed` requires a reason. `snoozed` lasts at most 30 days, because a stockout is urgent. An accepted decision counts as **applied** when the item-site is no longer at risk. A dismissal lapses when the row's stockout probability rises by at least 10 percentage points over the value it was dismissed at."
+    decided:
+      by: model:claude
+      date: 2026-10-08
+      under: delegation
+      ref: "AIERP#197"
+
+  - key: AIERP-D-52
+    type: design
+    title: "Shared rules"
+    statement: "These follow the drift decisions: append-only history, where the latest decision per item-site is the current one; a snapshot of the row the decision was made against; the token subject as the decider; `admin`-only writes for now, and reads by any authenticated user; nothing written to the ERP."
+    decided:
+      by: model:claude
+      date: 2026-10-08
+      under: delegation
+      ref: "AIERP#197"
+
+  - key: AIERP-D-53
+    type: design
+    title: "Order of work"
+    statement: "First the record-and-list API for each kind; then the decision on each list row, with default hiding; then an OData set for each, for Excel."
+    decided:
+      by: model:claude
+      date: 2026-10-08
+      under: delegation
+      ref: "AIERP#197"

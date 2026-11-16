@@ -1000,7 +1000,11 @@
   // The Released cell: the date on its own line, then " by <actor>"
   // on a second line (the secondary ink token). The second line
   // carries a leading space, so the cell's flat text content stays
-  // "DATE by ACTOR".
+  // "DATE by ACTOR". An actor that is exactly "standing-grant:<id>"
+  // with <id> one or more digits reads " by standing grant #<id>"
+  // instead — the grant released the order, not a person — and
+  // every other actor (one that only starts with "standing-grant:"
+  // among them) reads exactly as before.
   function releasedHtml(releasedAt, actor) {
     var datePart = null;
     if (typeof releasedAt === 'string' && releasedAt.length >= 10) {
@@ -1012,6 +1016,10 @@
     var by = nonEmptyString(actor);
     if (by === null) {
       return '<span class="rl-released-date">' + esc(datePart) + '</span>';
+    }
+    var standing = /^standing-grant:([0-9]+)$/.exec(by);
+    if (standing !== null) {
+      by = 'standing grant #' + standing[1];
     }
     return (
       '<span class="rl-released-date">' + esc(datePart) + '</span>' +

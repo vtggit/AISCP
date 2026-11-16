@@ -64,6 +64,11 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Accept, dismiss (with a reason) or snooze each drift, excess and stockout row; decisions
   are append-only history (`backend/app/api/planner_decisions.py`,
   `excess_decisions.py`, `stockout_decisions.py`).
+- Each stockout decision stores the remedy the stockout list proposed for its row when the
+  decision was recorded, when one was proposed, and `GET /api/stockout/proposals` counts the
+  current accepted decisions' stored proposals and chosen actions by remedy kind
+  (`backend/app/api/stockout_decisions.py`,
+  `backend/app/repositories/stockout_decision_proposals_postgres_repository.py`).
 - An accepted decision is shown as applied once the ERP data reflects it, and a summary
   totals accepted, applied and outstanding decisions with their money
   (`backend/app/api/decision_summary.py`).
@@ -327,7 +332,7 @@ any write to an ERP. Personal settings and saved scenarios are open to any signe
 | Read model | `/api/inventory-items`, `/api/item-sites`, `/api/demand-events`, `/api/lead-time-observations`, `/api/on-hand`, `/api/suppliers`, `/api/supplier-terms` |
 | Statistics | `/api/demand-stats`, `/api/lead-time-stats`, `/api/abc` |
 | Recommendations | `/api/recommendations` (also the planning sheet and the intermittent impact), `/api/drift`, `/api/recommendation-changes`, `/api/excess`, `/api/stockout`, `/api/empirical-adoptions`, `/api/service-levels` |
-| Decisions | `/api/drift/decisions`, `/api/excess/decisions`, `/api/stockout/decisions`, `/api/decisions/summary` |
+| Decisions | `/api/drift/decisions`, `/api/excess/decisions`, `/api/stockout/decisions`, `/api/stockout/proposals`, `/api/decisions/summary` |
 | Forecast | `/api/forecast` (forecasts, snapshots, accuracy, overrides), `/api/demand-signals` |
 | Scenarios | `/api/scenarios` |
 | Aggregate | `/api/aggregate` (projection, spend, deferrals, release, release audit, releases) |

@@ -50,6 +50,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Dead and excess stock, ranked by money tied up (`backend/app/recommend/excess.py`).
 - Stockout risk inside the replenishment window, counting open purchase supply
   (`backend/app/recommend/stockout.py`).
+- The stockout list can propose one remedy per row when requested (expedite, transfer or
+  raise an order), tried in the order of the `decisions.remedy_order` setting
+  (`backend/app/api/stockout.py`, `backend/app/settings/registry.py`).
 - CSV exports of the drift, excess, stockout and change lists, and a planning sheet with the
   recommended and current parameters of every item-site (`backend/app/recommend/export.py`).
 

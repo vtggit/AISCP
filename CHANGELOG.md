@@ -197,6 +197,7 @@ code is the authority for details.
   Odoo database name is absent from the backend (#1184).
 - The docs check now reports routes, settings, and environment variables that a changed Markdown
   file names but the code does not define (#1175).
+- The order plan's run holds back an order it cannot value (#1301).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a

@@ -32,6 +32,8 @@ code is the authority for details.
 - A per-class service-level lever on the what-if simulation and the Scenario screen (#676,
   #679).
 - The Releases screen notes when a promised date is only the ERP's default (#644).
+- The stockout list can include one proposed remedy per row, looked for in the order of a new
+  `decisions.remedy_order` setting (#1313).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

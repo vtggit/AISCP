@@ -438,11 +438,11 @@ def proposed_remedy(row: dict) -> dict | None:
     """
     try:
         remedy = _row_remedy(row, _remedy_order(), _remedy_reads(row["as_of"]))
+        if remedy is None:
+            return None
+        return StockoutRemedy.model_validate(remedy).model_dump(mode="json")
     except Exception:
         return None
-    if remedy is None:
-        return None
-    return StockoutRemedy.model_validate(remedy).model_dump(mode="json")
 
 
 @router.get("", response_model=list[StockoutDecisionRow])

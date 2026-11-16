@@ -53,6 +53,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - The stockout list can propose one remedy per row when requested (expedite, transfer or
   raise an order), tried in the order of the `decisions.remedy_order` setting
   (`backend/app/api/stockout.py`, `backend/app/settings/registry.py`).
+- The Work queue's Stockout risk detail shows the selected row's proposed remedy (or that
+  none is proposed) when the row's data carries a remedy key, without changing the decision
+  controls; the Reorder points and Excess tabs do not.
 - CSV exports of the drift, excess, stockout and change lists, and a planning sheet with the
   recommended and current parameters of every item-site (`backend/app/recommend/export.py`).
 

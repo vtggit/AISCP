@@ -4617,7 +4617,7 @@
           "excess"
         ],
         "summary": "List Excess",
-        "description": "List excess and dead stock ranked by money tied up, unknown money last.\n\nEvery row carries its current excess decision (``decision``, or\nnull) and ``decision_lapsed``.  While ``include_decided`` is false,\na row whose current decision is a not-yet-lapsed dismissal, or a\nsnooze whose ``snooze_until`` is after today (the server's UTC\ndate), is left out of the list; accepted, lapsed, undecided and\nexpired-snooze rows stay listed, and with ``include_decided`` true\nevery row is listed.  Every row also carries\n``item_description``, the item's description from the\n``inventory_items`` read model (null when the item is not in\nit), from one read per request.  Rows are left out after the\n``category`` and ``dead_reason`` filters and before ``offset``\nand ``limit`` are applied, and every row keeps the ``rank`` that\n``excess_ranked`` gave it.",
+        "description": "List excess and dead stock ranked by money tied up, unknown money last.\n\nEvery row carries its current excess decision (``decision``, or\nnull) and ``decision_lapsed``.  While ``include_decided`` is false,\na row whose current decision is a not-yet-lapsed dismissal, or a\nsnooze whose ``snooze_until`` is after today (the server's UTC\ndate), is left out of the list; accepted, lapsed, undecided and\nexpired-snooze rows stay listed, and with ``include_decided`` true\nevery row is listed.  Every row also carries\n``item_description``, the item's description from the\n``inventory_items`` read model (null when the item is not in\nit), from one read per request.  Rows are left out after the\n``category`` and ``dead_reason`` filters and before ``offset``\nand ``limit`` are applied, and every row keeps the ``rank`` that\n``excess_ranked`` gave it.\n\nWhile ``include_remedy`` is false (the default) the answer is\nexactly that, key for key: no row carries a ``remedy`` key and\nneither the ``item_sites`` levels nor the open purchase lines are\nread.  While it is true and at least one row is on the page, the\n``item_sites`` levels (every ``item_sites`` row) and the open\npurchase lines (each ERP's newest sync) are read once each, before\nany remedy is worked out; every returned row then carries\n``remedy``, an ``ExcessRemedy`` proposed by the first rule that\napplies \u2014 stop replenishing while units of the item are still on\norder, stop replenishing while the ERP's reorder point or max\nquantity is above the row's justified units (0 for a dead row, so\nany level above zero \u2014 a level equal to the justified units is\nnot above it), dispose a dead row whose demand stopped, or reduce\nan excess row \u2014 or null for a dead row that never moved and no\nstop-replenishing rule caught.  A read that raises is caught and\nleaves every row's ``remedy`` null, because the\nstop-replenishing rules cannot be checked: the route still\nanswers 200 with every row it returns, and with no row on the\npage neither read runs.",
         "operationId": "list_excess_api_excess_get",
         "security": [
           {
@@ -4713,6 +4713,16 @@
               "type": "boolean",
               "default": false,
               "title": "Include Decided"
+            }
+          },
+          {
+            "name": "include_remedy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Remedy"
             }
           },
           {
@@ -15797,6 +15807,16 @@
             "type": "boolean",
             "title": "Decision Lapsed",
             "default": false
+          },
+          "remedy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExcessRemedy"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -15815,6 +15835,57 @@
         ],
         "title": "ExcessDecisionRow",
         "description": "An excess row enriched with the item-site's current decision.\n\n``decision`` is the item-site's current decision from\n``excess_decisions`` (the latest row by ``decided_at``, ``id``\nbreaking ties \u2014 the same row ``GET /api/excess/decisions`` reports\nas current) with every stored column, or null when the item-site\nhas none.  ``decision_lapsed`` is true only for a current\ndismissal that the row has outgrown: the row's ``excess_units``\nexceed the decision's ``excess_units`` by at least the larger of 1\nand 10% of the decision's ``excess_units``.  A snooze never lapses,\nand neither does anything else (accepted decisions, or no decision\nat all)."
+      },
+      "ExcessRemedy": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "stop_replenishing",
+              "reduce",
+              "dispose"
+            ],
+            "title": "Kind"
+          },
+          "on_order_units": {
+            "type": "number",
+            "title": "On Order Units"
+          },
+          "current_reorder_point": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Reorder Point"
+          },
+          "current_max_qty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Max Qty"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "on_order_units",
+          "reason"
+        ],
+        "title": "ExcessRemedy",
+        "description": "The one remedy proposed for an excess row.\n\n``kind`` is the remedy's kind \u2014 one of the excess decision's own\naction values (``stop_replenishing``, ``reduce`` or ``dispose``).\n``on_order_units`` is the sum of the open purchase lines'\n``open_units`` for the row's item-site that are finite numbers\nabove 0 (0 when no line counts, whatever the lines' promised\ndates); ``current_reorder_point`` and ``current_max_qty`` the\nrow's item-site's ``item_sites`` levels (each null when the\nitem-site has no ``item_sites`` row or the value is null or not a\nfinite number); ``reason`` is the one line of text for why the\nremedy fits the row."
       },
       "ExpediteLine": {
         "properties": {

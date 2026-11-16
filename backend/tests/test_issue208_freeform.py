@@ -752,4 +752,5 @@ def test_issue208_freeform(client, admin_token, monkeypatch):
     assert set(properties) == set(StockoutRow.model_fields) | {
         "decision",
         "decision_lapsed",
+        "remedy",
     }

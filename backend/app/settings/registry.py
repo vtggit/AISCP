@@ -281,6 +281,24 @@ register(
 
 register(
     Setting(
+        key="decisions.remedy_order",
+        scope="system",
+        type="enum",
+        default="expedite,transfer,raise_order",
+        description="The order in which a stockout row's remedy is looked for: the first kind that has a candidate is proposed.",
+        allowed=(
+            "expedite,transfer,raise_order",
+            "expedite,raise_order,transfer",
+            "transfer,expedite,raise_order",
+            "transfer,raise_order,expedite",
+            "raise_order,expedite,transfer",
+            "raise_order,transfer,expedite",
+        ),
+    )
+)
+
+register(
+    Setting(
         key="decisions.require_action_choice",
         scope="system",
         type="boolean",

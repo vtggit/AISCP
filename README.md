@@ -142,6 +142,7 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   lead-time spread (`backend/app/recommend/supplier_performance.py`).
 - The expedite list: open purchase lines that are late or due after the item runs out, ranked
   by urgency (`backend/app/recommend/expedite.py`).
+- The expedite screen has a Request column with a Draft request button that opens a read-only panel holding a plain-text request and a Copy button; the draft sends no request (`app/js/expedite.js`).
 - A risk rating per supplier (High, Medium or Low) from late deliveries, variable lead times
   and sole sourcing, with the thresholds as settings
   (`backend/app/recommend/supplier_risk.py`).

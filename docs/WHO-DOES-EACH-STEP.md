@@ -56,7 +56,7 @@ State on 2026-11-14. Update this file when a step changes hands.
 | List the open purchase lines to expedite: late, or arriving after the item runs out | AIERP | — | — |
 | Raise likely and at-risk stockouts and the expedite lines in Exceptions | AIERP | — | — |
 | Decide each row: accept with an action (expedite, raise an order, transfer), dismiss with a reason, or snooze for up to 30 days | planner (admin) | AIERP shows the risk but proposes no remedy. | AIERP proposing the remedy from what it already lists for the item-site (an open line to expedite, a transfer suggestion or an order-plan line), measured against the actions planners choose. |
-| Expedite an order with the supplier | planner, outside AIERP | It is a conversation with the supplier, and AIERP-D-8 allows no outbound call except to the ERP. | AIERP drafting the request (the order line, the date needed, the units at risk) for the planner to send. Not built. |
+| Expedite an order with the supplier | planner, outside AIERP | It is a conversation with the supplier, and AIERP-D-8 allows no outbound call except to the ERP. | AIERP now drafts the request (the order line, the date needed, the units at risk) for the planner to send. |
 | Track: an accepted row reads "applied" once the item-site is no longer at risk; a dismissal lapses when the chance rises by 10 points | AIERP | — | — |
 
 Raising an order or moving stock uses the release steps of the order plan and of transfers below.

@@ -161,7 +161,6 @@ The tokens are in `app/css/tokens.css`; use them, never raw values.
 | Stockout rows | `GET /api/stockout` |
 | Each row's `decision` | read from those lists, which already return it |
 | Value tiles and list cards | `GET /api/decisions/summary` |
-| Stockout proposal counts | `GET /api/stockout/proposals` |
 | Recording a decision | `POST /api/drift/decisions`, `POST /api/excess/decisions`, `POST /api/stockout/decisions` |
 | History | the matching `GET …/decisions?item_code=&site_code=` |
 | Settings | `GET /api/settings`; `PUT` and `DELETE /api/settings/{key}` |

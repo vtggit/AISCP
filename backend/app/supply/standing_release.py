@@ -99,11 +99,12 @@ again.  The value of a document: each group of the plan is one
 document, its value the summed ``value`` of the suggestions its
 lines were matched to, each found by its ``item_code`` and the
 group's ``from_site`` and ``to_site``.  The limits: the plan's
-groups in the plan's order — a group with a suggestion whose
-``value`` is null is left out with the reason ``no_value`` (its
-``left_out`` value the summed value of its suggestions that have
-one), a group whose value is above the grant's
-``max_document_value`` with ``document_limit``, and each remaining
+groups in the plan's order — a group holding a suggestion whose
+``value`` is null or not above 0 is left out with the reason
+``no_value``, before either limit is consulted and reducing no
+allowance (its ``left_out`` value the summed ``value`` of its
+suggestions whose value is above 0), a group whose value is above
+the grant's ``max_document_value`` with ``document_limit``, and each remaining
 group is sent when its value fits what is left of the day's
 allowance — the grant's ``max_daily_value`` minus the summed
 ``value`` of the ``transfer_release`` runs whose ``started_at``
@@ -608,9 +609,13 @@ def run_transfer_grant(now: datetime | None = None) -> dict:
                 for line in group["lines"]
             ]
             entry = {"from_site": group["from_site"], "to_site": group["to_site"]}
-            if any(value is None for value in values):
+            if any(value is None or value <= 0 for value in values):
+                # Left out before either limit is consulted, and
+                # reducing no allowance: its value the summed value
+                # of the suggestions whose value is above 0.
                 total = sum(
-                    (value for value in values if value is not None), Decimal(0)
+                    (value for value in values if value is not None and value > 0),
+                    Decimal(0),
                 )
                 left_out.append({**entry, "value": str(total), "reason": "no_value"})
                 continue

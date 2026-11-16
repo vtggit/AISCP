@@ -37,6 +37,9 @@ code is the authority for details.
 - The Work queue's Stockout risk detail pane now shows a Proposed remedy section for a selected
   Stockout risk row that has remedy data, with the remedy's proposal and reason or "No remedy
   proposed." when the remedy is not usable (#1315).
+- Stockout decisions now store the remedy proposed for their item-site row when one is proposed,
+  and `GET /api/stockout/proposals` counts the accepted decisions that proposed or chose each
+  remedy kind (#1321).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

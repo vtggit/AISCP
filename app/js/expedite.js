@@ -50,6 +50,76 @@
 // the name, the vendor code and the on-time rate of every row are
 // exactly as before. Every value is escaped, and the screen sends
 // no new POST, PUT or DELETE.
+
+// The Request column (issue #1307): the table's twelfth column,
+// after Why. Each row's cell (.ex-cell-request, never wrapping)
+// holds one button ([data-testid="expedite-draft-open"]) reading
+// "Draft request", its accessible name "Draft request for
+// <order>", <order> the row's Order cell text. Every signed-in
+// user gets it; the screen has no admin-only control, and
+// drafting changes nothing. The button opens that row's draft in
+// a panel ([data-testid="expedite-draft"]), the first child of
+// .ex-body, above the table's scrolling region and outside it, so
+// it stays in view however far the table scrolls sideways: a
+// heading (h2, "Expedite request for <order>"), a note ("As of
+// <as_of>. Nothing is sent from here: copy the text into your own
+// email or chat.", <as_of> the answer's as_of, an em dash when
+// missing), a read-only text box (a readonly textarea, labelled
+// "Expedite request text") holding the draft, a Copy button and a
+// Close button, and a status line (role="status"), empty when the
+// panel opens. The draft is plain text the row's own fields build
+// and nothing else — no contact person, no price, no date or
+// figure the row does not carry. Its eleven lines, in order: the
+// greeting ("Hello <supplier_name>," the name when it is a
+// non-empty string, else "Hello,"), an empty line, "Please
+// expedite this order line:", the order ("Order: <order_nbr>,
+// line <line_nbr>", each part as the Order cell shows it, an em
+// dash when missing; an Odoo line — order_type containing a ".",
+// the Odoo model name, whose order_nbr and line_nbr are the
+// database name and record id — reads "Order: [add the order
+// reference]" instead, they mean nothing to a supplier), the item
+// ("Item: <item_code> (<item_description>)", the code alone
+// without a description), the quantity ("Open quantity:
+// <open_units>", en-US separators, up to three decimals, an em
+// dash when the answer carries no usable figure; no unit follows,
+// the answer carries no unit of measure), the date ("Promised
+// for: <promised_on>" when promise_is_default is false, the date
+// is the supplier's own promise; otherwise the ERP's date is only
+// a default, so "Expected by: <expected_on>", the date days_late
+// counts from — either way the line ends with " (<n> days late)"
+// when days_late is above 0, " (1 day late)" for 1; the dates as
+// the answer gives them, YYYY-MM-DD, an em dash when missing), an
+// empty line, the need ("We need it by <projected_stockout_on>."
+// when "after_stockout" is in the reasons and the row carries the
+// date, else "We need it as soon as possible." — a late row's
+// draft never quotes its stockout date, the line is already
+// overdue; it states only the date the line is needed by, never
+// that the item will run out or how much stock is on hand —
+// after one space it goes on: "Please reply with the earliest
+// date you can deliver."), an empty line and "Thank you."; joined
+// by a newline, no trailing newline, no trailing spaces. Opening
+// a draft moves focus to Copy; Close removes the panel and moves
+// focus to that row's Draft request button. One draft at a time:
+// another row's button replaces it. The open draft is kept in
+// state by the row's identity — its index in the answer's lines,
+// its data-row-id today; a re-render, such as the supplier-risk
+// answer landing, keeps it open with the same text. The index
+// holds only within one answer, so the draft closes on every new
+// expedite read (Refresh, Retry, the view activated again), on
+// choosing a chip and on sign-out. Copy writes the text box's
+// value to the clipboard with one navigator.clipboard.writeText
+// call; where the clipboard is absent (a page served over plain
+// http) or the call rejects, the text box is focused, its whole
+// text selected and document.execCommand('copy') called once. The
+// status reads "Copied." on success, "Could not copy
+// automatically. The text is selected, ready to copy." on
+// failure, written into the panel in place without a re-render
+// (focus stays) and kept in state, so a later re-render shows it;
+// closing the panel or opening another draft empties it. Opening,
+// copying and closing a draft send no request of any kind, open
+// no window and navigate nowhere; the expedite read and the
+// supplier-risk read are unchanged, and the screen still sends
+// nothing but GETs. Every value is escaped.
 //
 // With no lines an empty note shows ("Nothing to chase today."); a
 // 422 shows the server's detail inline with a Retry; any other
@@ -83,6 +153,14 @@
     maximumFractionDigits: 0,
   });
 
+  // The draft's open quantity: en-US separators, up to three
+  // decimals (250 -> "250", 1200 -> "1,200", 2.5 -> "2.5"). No
+  // currency style: the answer carries no unit of measure.
+  var OPEN_UNITS_FORMATTER = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  });
+
   // The chips, in display order. ``key`` is the chip's identity and
   // the ``reasons`` entry it matches.
   var CHIPS = [
@@ -103,6 +181,8 @@
     loading: false, // a fetch is out
     error: null, // the newest failed load: { status, message }
     filter: 'all', // the selected chip; "all" is the first-load default
+    draft: null, // the open draft's row: the line's index in the answer's lines
+    draftStatus: '', // the draft's status line; '' when the panel opens
     risk: null, // the newest valid supplier-risk answer
     riskLoading: false, // a risk fetch is out
   };
@@ -157,6 +237,30 @@
 
   function nonEmptyString(value) {
     return typeof value === 'string' && value !== '' ? value : null;
+  }
+
+  // The Order cell's text: order_nbr " / " line_nbr, an em dash for
+  // a missing part. The Order cell, the draft button's accessible
+  // name and the draft's heading all read it the same way.
+  function orderCellText(line) {
+    return (
+      (nonEmptyString(line.order_nbr) || EM_DASH) +
+      ' / ' +
+      (lineNbrText(line.line_nbr) || EM_DASH)
+    );
+  }
+
+  // The draft's open quantity: en-US separators, up to three
+  // decimals (250 -> "250", 1200 -> "1,200", 2.5 -> "2.5"); an em
+  // dash when the answer carries no usable figure.
+  function openUnitsText(value) {
+    if (typeof value === 'string') {
+      value = value === '' ? NaN : Number(value);
+    }
+    if (!isNumber(value)) {
+      return EM_DASH;
+    }
+    return OPEN_UNITS_FORMATTER.format(value);
   }
 
   // "<n> d" for a finite days figure, else an em dash. 2.0 -> "2 d",
@@ -233,6 +337,10 @@
     var mySeq = seq;
     state.loading = true;
     state.error = null;
+    // The draft's index holds only within one answer: a new read is
+    // a new answer, so the open draft closes.
+    state.draft = null;
+    state.draftStatus = '';
     render();
     global.Api.get(LIST_PATH).then(
       function (payload) {
@@ -393,7 +501,23 @@
     if (!rootEl) {
       return;
     }
+    // A re-render (the supplier-risk answer landing) rebuilds the
+    // panel with the same text: focus that was inside it returns to
+    // Copy, where it was before the rebuild.
+    var active = document.activeElement;
+    var focusBackOnCopy = !!(
+      active &&
+      rootEl.contains(active) &&
+      active.closest &&
+      active.closest('[data-testid="expedite-draft"]')
+    );
     rootEl.innerHTML = shellHtml();
+    if (focusBackOnCopy) {
+      var copy = rootEl.querySelector('[data-testid="expedite-draft-copy"]');
+      if (copy) {
+        copy.focus();
+      }
+    }
   }
 
   function shellHtml() {
@@ -425,6 +549,7 @@
       '<div class="ex">' +
       barHtml() +
       '<div class="ex-body">' +
+      draftPanelHtml() +
       body +
       (state.error || state.loading ? '' : staleHtml()) +
       '</div>' +
@@ -512,6 +637,140 @@
     );
   }
 
+  /* ---------------------------- the draft ---------------------------- */
+
+  // The draft's order line: "Order: <order_nbr>, line <line_nbr>",
+  // each part as the Order cell shows it, an em dash when a part is
+  // missing. An Odoo line — an order_type containing a ".", the
+  // Odoo model name (#815) — carries the database name and record
+  // id, which mean nothing to a supplier: a placeholder instead.
+  function draftOrderLine(line) {
+    var orderType = typeof line.order_type === 'string' ? line.order_type : '';
+    if (orderType.indexOf('.') !== -1) {
+      return 'Order: [add the order reference]';
+    }
+    return (
+      'Order: ' +
+      (nonEmptyString(line.order_nbr) || EM_DASH) +
+      ', line ' +
+      (lineNbrText(line.line_nbr) || EM_DASH)
+    );
+  }
+
+  // The draft's item line: the code with the description in
+  // parentheses, the code alone without one, an em dash without a
+  // usable code.
+  function draftItemLine(line) {
+    var code = nonEmptyString(line.item_code) || EM_DASH;
+    var description = nonEmptyString(line.item_description);
+    return description ? 'Item: ' + code + ' (' + description + ')' : 'Item: ' + code;
+  }
+
+  // The draft's date line: "Promised for: <promised_on>" when
+  // promise_is_default is false — the supplier's own promise;
+  // otherwise the ERP's date is only a default (#613), so "Expected
+  // by: <expected_on>", the date days_late counts from. Either way
+  // the line ends with the lateness: " (<n> days late)" above 0,
+  // " (1 day late)" for 1.
+  function draftDateLine(line) {
+    var label;
+    var date;
+    if (line.promise_is_default === false) {
+      label = 'Promised for: ';
+      date = nonEmptyString(line.promised_on) || EM_DASH;
+    } else {
+      label = 'Expected by: ';
+      date = nonEmptyString(line.expected_on) || EM_DASH;
+    }
+    var text = label + date;
+    var daysLate = line.days_late;
+    if (isNumber(daysLate) && daysLate > 0) {
+      text += ' (' + String(daysLate) + (daysLate === 1 ? ' day late' : ' days late') + ')';
+    }
+    return text;
+  }
+
+  // The draft's need line: the date the line is needed by, the
+  // stockout date, when "after_stockout" is in the reasons and the
+  // row carries one — a late row's draft never quotes its stockout
+  // date, the line is already overdue. It states only the date the
+  // line is needed by: never that the item will run out, never how
+  // much stock is on hand. After one space, the reply ask.
+  function draftNeedLine(line) {
+    var base = 'We need it as soon as possible.';
+    if (hasReason(line, 'after_stockout')) {
+      var date = nonEmptyString(line.projected_stockout_on);
+      if (date) {
+        base = 'We need it by ' + date + '.';
+      }
+    }
+    return base + ' Please reply with the earliest date you can deliver.';
+  }
+
+  // The draft: plain text the row's own fields build and nothing
+  // else — no contact person, no price, no date or figure the row
+  // does not carry. Eleven lines joined by a newline, no trailing
+  // newline, no trailing spaces.
+  function draftTextFor(line) {
+    var supplier = nonEmptyString(line.supplier_name);
+    var lines = [
+      supplier ? 'Hello ' + supplier + ',' : 'Hello,',
+      '',
+      'Please expedite this order line:',
+      draftOrderLine(line),
+      draftItemLine(line),
+      'Open quantity: ' + openUnitsText(line.open_units),
+      draftDateLine(line),
+      '',
+      draftNeedLine(line),
+      '',
+      'Thank you.',
+    ];
+    return lines.join('\n');
+  }
+
+  // The draft panel: the first child of .ex-body, above the
+  // table's scrolling region and outside it, so it stays in view
+  // however far the table scrolls sideways. One draft at a time,
+  // kept in state by the row's index in the answer's lines.
+  function draftPanelHtml() {
+    if (state.draft === null || state.loading || state.error || !state.data) {
+      return '';
+    }
+    var lines = linesOf(state.data);
+    var index = state.draft;
+    if (typeof index !== 'number' || index < 0 || index >= lines.length) {
+      return '';
+    }
+    var line = lines[index];
+    if (!line || typeof line !== 'object') {
+      return '';
+    }
+    var asOf = nonEmptyString(state.data.as_of) || EM_DASH;
+    var order = orderCellText(line);
+    return (
+      '<div class="ex-draft" data-testid="expedite-draft">' +
+      '<h2 class="ex-draft-title" data-testid="expedite-draft-title">Expedite request for ' +
+        esc(order) +
+      '</h2>' +
+      '<p class="ex-draft-note" data-testid="expedite-draft-note">As of ' + esc(asOf) +
+        '. Nothing is sent from here: copy the text into your own email or chat.</p>' +
+      '<label class="ex-draft-label" for="expedite-draft-textarea">Expedite request text</label>' +
+      '<textarea id="expedite-draft-textarea" class="ex-draft-text" ' +
+        'data-testid="expedite-draft-text" rows="11" readonly>' +
+        esc(draftTextFor(line)) +
+      '</textarea>' +
+      '<div class="ex-draft-actions">' +
+      '<button type="button" class="btn btn-secondary ex-draft-copy" data-testid="expedite-draft-copy">Copy</button>' +
+      '<button type="button" class="btn btn-secondary ex-draft-close" data-testid="expedite-draft-close">Close</button>' +
+      '</div>' +
+      '<p class="ex-draft-status" role="status" data-testid="expedite-draft-status">' +
+        esc(state.draftStatus) +
+      '</p>' +
+      '</div>'
+    );
+  }
+
   function tableHtml(entries) {
     var rows = [];
     for (var i = 0; i < entries.length; i++) {
@@ -537,6 +796,7 @@
       '<th scope="col">Cover</th>' +
       '<th scope="col">Stockout on</th>' +
       '<th scope="col">Why</th>' +
+      '<th scope="col">Request</th>' +
       '</tr></thead>' +
       '<tbody>' + rows.join('') + '</tbody>' +
       '</table>' +
@@ -574,9 +834,7 @@
     }
     return (
       '<tr class="ex-row" data-row-id="' + id + '" data-testid="expedite-row">' +
-      '<td class="ex-cell-order">' +
-        esc((nonEmptyString(line.order_nbr) || EM_DASH) + ' / ' + (lineNbrText(line.line_nbr) || EM_DASH)) +
-      '</td>' +
+      '<td class="ex-cell-order">' + esc(orderCellText(line)) + '</td>' +
       '<td class="ex-cell-item">' + itemHtml(line) + '</td>' +
       '<td class="ex-cell-site">' + esc(nonEmptyString(line.site_code) || EM_DASH) + '</td>' +
       '<td class="ex-cell-supplier">' + supplierHtml(line) + '</td>' +
@@ -587,6 +845,12 @@
       '<td class="ex-cell-cover">' + esc(daysText(line.days_of_cover)) + '</td>' +
       '<td class="ex-cell-stockout">' + stockoutHtml(line) + '</td>' +
       '<td class="ex-cell-why">' + badges.join('') + '</td>' +
+      '<td class="ex-cell-request">' +
+        '<button type="button" class="btn btn-secondary ex-draft-open" ' +
+        'data-testid="expedite-draft-open" ' +
+        'aria-label="Draft request for ' + esc(orderCellText(line)) + '">' +
+        'Draft request</button>' +
+      '</td>' +
       '</tr>'
     );
   }
@@ -667,6 +931,10 @@
     var chip = event.target.closest ? event.target.closest('.ex-chip') : null;
     if (chip) {
       state.filter = chip.getAttribute('data-state') || 'all';
+      // A chip choice is a new view of the answer's lines: the open
+      // draft closes with it.
+      state.draft = null;
+      state.draftStatus = '';
       render();
       return;
     }
@@ -676,6 +944,106 @@
     }
     if (event.target.closest ? event.target.closest('[data-testid="expedite-retry"]') : null) {
       load();
+      return;
+    }
+    var open = event.target.closest ? event.target.closest('[data-testid="expedite-draft-open"]') : null;
+    if (open) {
+      var row = open.closest('tr.ex-row');
+      var index = row ? Number(row.getAttribute('data-row-id')) : NaN;
+      if (isFinite(index)) {
+        openDraft(index);
+      }
+      return;
+    }
+    if (event.target.closest ? event.target.closest('[data-testid="expedite-draft-copy"]') : null) {
+      copyDraft();
+      return;
+    }
+    if (event.target.closest ? event.target.closest('[data-testid="expedite-draft-close"]') : null) {
+      closeDraft();
+    }
+  }
+
+  // The draft buttons: opening a row's draft replaces whatever is
+  // open (one draft at a time) and moves focus to Copy; Close
+  // removes the panel and moves focus to that row's Draft request
+  // button. Neither sends a request.
+  function openDraft(index) {
+    state.draft = index;
+    state.draftStatus = '';
+    render();
+    var copy = rootEl.querySelector('[data-testid="expedite-draft-copy"]');
+    if (copy) {
+      copy.focus();
+    }
+  }
+
+  function closeDraft() {
+    var index = state.draft;
+    state.draft = null;
+    state.draftStatus = '';
+    render();
+    if (typeof index !== 'number') {
+      return;
+    }
+    var button = rootEl.querySelector(
+      'tr[data-row-id="' + index + '"] [data-testid="expedite-draft-open"]'
+    );
+    if (button) {
+      button.focus();
+    }
+  }
+
+  // Copy: the text box's value to the clipboard with one
+  // navigator.clipboard.writeText call. Where the clipboard is
+  // absent (a page served over plain http) or the call rejects, the
+  // fallback focuses the text box, selects its whole text and calls
+  // document.execCommand('copy') once; the text stays selected. The
+  // status lands in the panel in place — no re-render, so focus
+  // stays where it is — and in state, for the next re-render.
+  function copyDraft() {
+    var box = rootEl.querySelector('[data-testid="expedite-draft-text"]');
+    if (!box) {
+      return;
+    }
+    var finish = function (ok) {
+      setDraftStatus(
+        ok
+          ? 'Copied.'
+          : 'Could not copy automatically. The text is selected, ready to copy.'
+      );
+    };
+    var fallback = function () {
+      box.focus();
+      box.select();
+      var ok = false;
+      try {
+        ok = document.execCommand('copy') === true;
+      } catch (err) {
+        ok = false; // the text stays selected: the user copies it
+      }
+      finish(ok);
+    };
+    var clipboard = global.navigator && global.navigator.clipboard;
+    if (clipboard && typeof clipboard.writeText === 'function') {
+      clipboard.writeText(box.value).then(
+        function () {
+          finish(true);
+        },
+        fallback
+      );
+    } else {
+      fallback();
+    }
+  }
+
+  // The status line, in place: state for the next re-render, text
+  // for now. The panel is not re-rendered, so focus is untouched.
+  function setDraftStatus(message) {
+    state.draftStatus = message;
+    var status = rootEl && rootEl.querySelector('[data-testid="expedite-draft-status"]');
+    if (status) {
+      status.textContent = message;
     }
   }
 
@@ -711,6 +1079,8 @@
     state.loading = false;
     state.error = null;
     state.filter = 'all'; // the "All" default is a first-load one
+    state.draft = null;
+    state.draftStatus = '';
     render();
   }
 

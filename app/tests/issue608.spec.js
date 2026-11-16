@@ -455,6 +455,7 @@ test('issue608 freeform', async ({ page }) => {
     'Cover',
     'Stockout on',
     'Why',
+    'Request',
   ]);
 
   // --- the chips: every reason with its number of lines --------------
@@ -487,6 +488,7 @@ test('issue608 freeform', async ({ page }) => {
     '2 d',
     '2026-10-25',
     'Late',
+    'Draft request',
   ]);
   const healthyRate = rows.nth(0).locator('.ex-supplier-rate');
   await expect(healthyRate).toHaveText('\u00b7 95% on time');
@@ -508,6 +510,7 @@ test('issue608 freeform', async ({ page }) => {
     '7.5 d',
     '\u25bc 2026-10-26',
     'After stockout',
+    'Draft request',
   ]);
   const riskyRate = rows.nth(1).locator('.ex-supplier-rate');
   await expect(riskyRate).toHaveText('\u00b7 60% on time');
@@ -530,6 +533,7 @@ test('issue608 freeform', async ({ page }) => {
     '0 d',
     '\u25bc 2026-10-24',
     'LateAfter stockout',
+    'Draft request',
   ]);
   await expect(rows.nth(2).locator('[data-testid="expedite-badge"]')).toHaveCount(2);
   await expect(rows.nth(2).locator('[data-testid="expedite-badge"]')).toHaveText([

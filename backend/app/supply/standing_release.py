@@ -30,16 +30,25 @@ holds — ``<days>`` the stored ``erp.standing_grants_horizon_days``
 when it is a whole number from 1 to 60, else the default 1 — with no
 top-ups of any kind; a plan with no groups records ``nothing_due``
 and calls nothing.  The limits: the plan's groups in the plan's
-order — a group whose ``value`` is above the grant's
-``max_document_value`` is left out with the reason ``document_limit``,
-and each remaining group is sent when its value fits what is left of
-the day's allowance — the grant's ``max_daily_value`` minus the
-summed ``value`` of the process's runs on the UTC date of ``now`` —
-else it is left out with the reason ``daily_limit``; a group left
-out goes into ``left_out`` as ``{"site_code", "supplier_code",
-"value", "reason"}`` with the value a decimal string, and a run in
-which every group was left out records ``skipped`` with the reason
-"every due document is over a limit".  The send: the chosen groups
+order — a group holding a line whose ``unit_cost`` is not above 0
+(a line the builder gave no unit cost for, which the plan writes as
+``Decimal(0)``, one priced at 0 or at a cost that rounds to 0.00,
+or one priced below 0) is left out with the reason ``no_value`` —
+its ``left_out`` value the summed ``value`` of the lines whose
+``unit_cost`` is above 0 — before either limit is consulted and
+reducing no allowance, a group whose ``value`` is above the grant's
+``max_document_value`` is left out with the reason
+``document_limit``, and each remaining group is sent when its value
+fits what is left of the day's allowance — the grant's
+``max_daily_value`` minus the summed ``value`` of the process's runs
+on the UTC date of ``now`` — else it is left out with the reason
+``daily_limit``; a group left out goes into ``left_out`` as
+``{"site_code", "supplier_code", "value", "reason"}`` with the value
+a decimal string, and a run in which every group was left out
+records ``skipped`` with the reason "every due document is over a
+limit" while no group was left out for ``no_value`` and the reason
+"every due document is over a limit or has no value" when one was.
+The send: the chosen groups
 go out through the very same confirm path a person's release uses —
 ``app.api.aggregate.confirm_release_groups`` with the plan's
 ``month`` and ``unreleasable``, the chosen groups and their summed
@@ -274,9 +283,11 @@ def run_order_plan_grant(now: datetime | None = None) -> dict:
     (``off``) and the grant (``no_grant``), the data's age
     (``skipped``), the plan of ``order_plan_release`` for every
     supplier (``nothing_due`` with no groups), the grant's limits
-    (``document_limit`` and ``daily_limit`` left out, ``skipped``
-    "every due document is over a limit" when every group is) and the
-    send through ``confirm_release_groups`` as
+    (``no_value``, ``document_limit`` and ``daily_limit`` left out,
+    ``skipped`` "every due document is over a limit" when every
+    group is, the reason gaining "or has no value" when one was left
+    out for ``no_value``) and the send through
+    ``confirm_release_groups`` as
     ``standing-grant:<id>`` (``released``, or ``failed`` with the
     refusal's reason — and the re-raise after the row is written when
     the send raised something else).  Every run that found a grant in
@@ -341,8 +352,11 @@ def run_order_plan_grant(now: datetime | None = None) -> dict:
                 [],
             )
 
-        # The limits: the plan's groups in the plan's order, the
-        # per-document ceiling first, then the day's allowance.
+        # The limits: the plan's groups in the plan's order — a
+        # group holding a line whose unit cost is not above 0 (the
+        # builder gave it no cost, or it is at 0, at a cost that
+        # rounds to 0.00, or below 0) first, then the per-document
+        # ceiling, then the day's allowance.
         max_document_value = grant["max_document_value"]
         day = now.date()
         day_start = datetime(day.year, day.month, day.day, tzinfo=UTC)
@@ -353,6 +367,28 @@ def run_order_plan_grant(now: datetime | None = None) -> dict:
         chosen: list[dict] = []
         left_out: list[dict] = []
         for group in plan["groups"]:
+            if any(line["unit_cost"] <= 0 for line in group["lines"]):
+                # Left out before either limit is consulted, and
+                # reducing no allowance: its value the summed value
+                # of the lines that do carry a cost above 0.
+                left_out.append(
+                    {
+                        "site_code": group["site_code"],
+                        "supplier_code": group["supplier_code"],
+                        "value": str(
+                            sum(
+                                (
+                                    line["value"]
+                                    for line in group["lines"]
+                                    if line["unit_cost"] > 0
+                                ),
+                                Decimal(0),
+                            )
+                        ),
+                        "reason": "no_value",
+                    }
+                )
+                continue
             value = group["value"]
             entry = {
                 "site_code": group["site_code"],
@@ -367,12 +403,17 @@ def run_order_plan_grant(now: datetime | None = None) -> dict:
                 chosen.append(group)
                 allowance -= value
         if not chosen:
+            reason = (
+                "every due document is over a limit or has no value"
+                if any(entry["reason"] == "no_value" for entry in left_out)
+                else "every due document is over a limit"
+            )
             return _run_row(
                 _PROCESS,
                 now,
                 grant,
                 "skipped",
-                "every due document is over a limit",
+                reason,
                 0,
                 Decimal(0),
                 left_out,

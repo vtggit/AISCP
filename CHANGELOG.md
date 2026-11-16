@@ -242,6 +242,9 @@ code is the authority for details.
   another's lines (#871).
 - The 0.2.0 entry left out item descriptions on the Expedite and Releases screens (#628) and on
   the drift, excess and stockout lists (#637), both merged before the version change.
+- A clipboard copy on the Expedite screen that settles after the open draft has changed is
+  dropped, so it no longer updates the status, focus, or selection of the draft that is open when
+  it settles (#1322).
 
 ### Security
 - `opentelemetry-api` is pinned to 1.45.2, which fixes CVE-2026-126360 (#1180).

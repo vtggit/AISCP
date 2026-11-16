@@ -34,6 +34,9 @@ code is the authority for details.
 - The Releases screen notes when a promised date is only the ERP's default (#644).
 - The stockout list can include one proposed remedy per row, looked for in the order of a new
   `decisions.remedy_order` setting (#1313).
+- The Work queue's Stockout risk detail pane now shows a Proposed remedy section for a selected
+  Stockout risk row that has remedy data, with the remedy's proposal and reason or "No remedy
+  proposed." when the remedy is not usable (#1315).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

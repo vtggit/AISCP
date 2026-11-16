@@ -226,6 +226,8 @@ code is the authority for details.
   it tried to send, wraps long reason and revoke messages, and keeps the releases table at least
   four rows tall while the Transfer orders and Standing grants sections scroll inside themselves
   (#1233).
+- The Releases screen's Released cell now reads an order released by a standing grant as by
+  standing grant #<id> instead of the actor (#1310).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

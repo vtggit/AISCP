@@ -10035,7 +10035,7 @@
           "stockout"
         ],
         "summary": "List Stockout",
-        "description": "List stockout risk ranked by stockout probability, likely first.\n\nEvery row carries its current stockout decision (``decision``, or\nnull) and ``decision_lapsed``.  While ``include_decided`` is false,\na row whose current decision is a not-yet-lapsed dismissal, or a\nsnooze whose ``snooze_until`` is after today (the server's UTC\ndate), is left out of the list; accepted, lapsed, undecided and\nexpired-snooze rows stay listed, and with ``include_decided`` true\nevery row is listed.  Every row also carries\n``item_description``, the item's description from the\n``inventory_items`` read model (null when the item is not in\nit), from one read per request.  Rows are left out after the\n``category`` filter and before ``offset`` and ``limit`` are\napplied, and every row keeps the ``rank`` that ``stockout_ranked``\ngave it.",
+        "description": "List stockout risk ranked by stockout probability, likely first.\n\nEvery row carries its current stockout decision (``decision``, or\nnull) and ``decision_lapsed``.  While ``include_decided`` is false,\na row whose current decision is a not-yet-lapsed dismissal, or a\nsnooze whose ``snooze_until`` is after today (the server's UTC\ndate), is left out of the list; accepted, lapsed, undecided and\nexpired-snooze rows stay listed, and with ``include_decided`` true\nevery row is listed.  Every row also carries\n``item_description``, the item's description from the\n``inventory_items`` read model (null when the item is not in\nit), from one read per request.  Rows are left out after the\n``category`` filter and before ``offset`` and ``limit`` are\napplied, and every row keeps the ``rank`` that ``stockout_ranked``\ngave it.\n\nWhile ``include_remedy`` is false (the default) the answer is\nexactly that, key for key: no row carries a ``remedy`` key and the\nexpedite list, the transfer suggestions and the order plan are not\nread.  While it is true and at least one row is on the page, the\nexpedite list (with its own default as-of) and the transfer\nsuggestions and the 7-day order plan (both at the rows' as-of) are\nread once each, the ranking and the three reads inside one\n``recommendations_memo`` so the recommendations are computed at\nmost once per as-of; every returned row then carries\n``remedy``, a ``StockoutRemedy`` proposed by the first kind that\nholds a candidate for the row's item-site \u2014 the kinds tried in the\norder the effective ``decisions.remedy_order`` system setting\nnames, expedite, transfer and raise an order by default \u2014 or null\nwhen no kind does.  A kind whose read raised stops the search at\nthat kind, so a remedy later in the order is never proposed\nbecause an earlier one could not be checked, and a read that\nraises never fails the list: the route still answers 200 with\nevery row it returns.  With no row on the page none of the three\nis read.",
         "operationId": "list_stockout_api_stockout_get",
         "security": [
           {
@@ -10111,6 +10111,16 @@
               "type": "boolean",
               "default": false,
               "title": "Include Decided"
+            }
+          },
+          {
+            "name": "include_remedy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Remedy"
             }
           },
           {
@@ -22398,6 +22408,16 @@
             "type": "boolean",
             "title": "Decision Lapsed",
             "default": false
+          },
+          "remedy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StockoutRemedy"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -22418,6 +22438,134 @@
         ],
         "title": "StockoutDecisionRow",
         "description": "A stockout row enriched with the item-site's current decision.\n\n``decision`` is the item-site's current decision from\n``stockout_decisions`` (the latest row by ``decided_at``, ``id``\nbreaking ties \u2014 the same row ``GET /api/stockout/decisions``\nreports as current) with every stored column, or null when the\nitem-site has none.  ``decision_lapsed`` is true only for a current\ndismissal that the row has outgrown: the row's ``p_stockout``\nexceeds the decision's ``p_stockout`` by at least 0.10.  A snooze\nnever lapses, and neither does anything else (accepted decisions,\nor no decision at all)."
+      },
+      "StockoutRemedy": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "expedite",
+              "transfer",
+              "raise_order"
+            ],
+            "title": "Kind"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Type"
+          },
+          "order_nbr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Nbr"
+          },
+          "line_nbr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Nbr"
+          },
+          "expected_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected On"
+          },
+          "from_site": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Site"
+          },
+          "supplier_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Code"
+          },
+          "supplier_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Name"
+          },
+          "order_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order By"
+          },
+          "units": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "reason"
+        ],
+        "title": "StockoutRemedy",
+        "description": "The one remedy proposed for a stockout row.\n\n``kind`` is the remedy's kind \u2014 one of the stockout decision's own\naction values (``expedite``, ``transfer`` or ``raise_order``).\nThe other keys carry that kind's candidate for the row's\nitem-site: the expedite line's ``order_type``, ``order_nbr``,\n``line_nbr``, ``expected_on``, ``supplier_code`` and\n``supplier_name`` (``units`` the line's ``open_units``); the\ntransfer suggestion's ``from_site`` (``units`` its ``quantity``);\nor the order plan line's ``order_by`` and its group's\n``supplier_code`` and ``name`` (``units`` the line's ``quantity``).\nEvery key that does not apply to the kind is null, and ``reason``\nis the one line of text for why the remedy fits the row."
       },
       "SupplierLeadTimeStats": {
         "properties": {

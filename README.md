@@ -198,7 +198,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   the grant, within its limits, and each run is recorded in `standing_grant_runs`
   (`backend/app/api/erp_standing_grants.py`, `backend/app/supply/standing_release.py`,
   `backend/app/settings/registry.py`). Any signed-in user can read the stored runs, newest
-  first, with an optional process filter and limit (`GET /api/standing-grants/runs`).
+  first, with an optional process filter and limit (`GET /api/standing-grants/runs`). The
+  order-plan run leaves out a group holding a line whose unit cost is not above 0, with the
+  reason `no_value`, before its limits.
 - Writes to either ERP are off unless switched on for the instance (`ACUMATICA_ALLOW_WRITES`,
   `ODOO_ALLOW_WRITES`).
 

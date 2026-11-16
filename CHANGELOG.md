@@ -144,6 +144,8 @@ code is the authority for details.
   says why on the line; a setting, on by default (#1076, #1077).
 - A setting to take the lead time behind safety stock from the item's main supplier only
   (#1056).
+- A Request column on the Expedite screen opens a draft of the expedite request for a line, with
+  copy and close controls, and sends nothing (#1307).
 
 **Second sources**
 - For each sole-source item (`GET /api/second-sources`): the other suppliers with terms for

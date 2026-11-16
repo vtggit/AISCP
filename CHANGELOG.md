@@ -96,6 +96,9 @@ code is the authority for details.
 - A standing-grant run of transfer releases sends its due transfer suggestions to Acumatica as
   on-hold transfer orders within the grant's document, daily and data-age limits, and records
   every run (#1243).
+- A standing-grant run of transfer releases now holds back a document when a suggestion has no
+  value or a value of 0 or below, before the document and daily limits, reduces no allowance for
+  it, and reports the document's left-out value as the sum of its suggestions above 0 (#1302).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

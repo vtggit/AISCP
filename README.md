@@ -200,7 +200,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   `backend/app/settings/registry.py`). Any signed-in user can read the stored runs, newest
   first, with an optional process filter and limit (`GET /api/standing-grants/runs`). The
   order-plan run leaves out a group holding a line whose unit cost is not above 0, with the
-  reason `no_value`, before its limits.
+  reason `no_value`, before its limits. The transfer run leaves out a group holding a
+  suggestion whose value is null or not above 0, with the reason `no_value`, before its
+  limits and reducing no allowance, and its left-out value is the summed value of its
+  suggestions above 0.
 - Writes to either ERP are off unless switched on for the instance (`ACUMATICA_ALLOW_WRITES`,
   `ODOO_ALLOW_WRITES`).
 

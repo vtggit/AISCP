@@ -624,4 +624,5 @@ def test_issue207_freeform(client, admin_token, monkeypatch):
     assert set(properties) == set(ExcessRow.model_fields) | {
         "decision",
         "decision_lapsed",
+        "remedy",
     }

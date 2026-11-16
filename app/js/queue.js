@@ -38,8 +38,31 @@
 //     recommended order quantity (the quantity with its days of
 //     cover, the recommended max, the ERP's current order quantity
 //     and max, the basis line and the arithmetic — built from the
-//     row's own data, no extra request), and a Decision block with
-//     the row's decision history, newest first.
+//     row's own data, no extra request), a Proposed remedy section
+//     for a Stockout risk row whose data carries a `remedy` key
+//     (directly after the Why block and before the Decision block —
+//     built from the row's own data, no extra request; see below) and
+//     a Decision block with the row's decision history, newest first.
+//
+// The "Proposed remedy" section of the detail pane (issue #1315):
+// for a selected Stockout risk row whose data carries a `remedy` key,
+// directly after the Why block and before the Decision block — built
+// from the row's own data, no request. The proposal line starts with
+// the label of the matching action button: "Expedite: order
+// <order_nbr> line <line_nbr> from <supplier>, <units> units expected
+// <expected_on>.", "Transfer: <units> units from site <from_site>."
+// or "Raise order: <units> units from <supplier>, order by
+// <order_by>.": <supplier> the supplier_name, else the supplier_code
+// (the " from <supplier>" part left out when both are missing),
+// <units> whole units with thousands separators the way the queue
+// writes units elsewhere; the reason line shows the remedy's reason.
+// A remedy that is null, not an object, or of any other kind shows
+// the section with the single line "No remedy proposed."; a row
+// without the key (an older server) shows no section, and the
+// Reorder points and Excess tabs never show one. Every value from
+// the API is HTML-escaped and a missing code or date reads as an em
+// dash. The section presses or changes no action button — the
+// decision is unchanged.
 //
 // The answer of GET /api/erp-sources — fetched once with each load of
 // the three lists, and the lists never wait for it — adds two things,
@@ -99,7 +122,9 @@
 //
 // Every call goes through app/js/api.js:
 //   * GET /api/drift?limit=1000&include_decided=true — and the matching
-//     /api/excess and /api/stockout — for the three tab lists,
+//     /api/excess and /api/stockout (the stockout list additionally
+//     asks for the remedy: include_remedy=true) — for the three tab
+//     lists,
 //   * GET /api/auth/me for the admin role,
 //   * GET /api/settings for the two queue settings,
 //   * GET /api/erp-sources once with each load of the three lists (the
@@ -174,7 +199,10 @@
       kind: 'stockout',
       title: 'Stockout risk',
       kindLabel: 'Stockout risk',
-      listPath: '/api/stockout?' + LIST_QUERY,
+      // The stockout list additionally asks for the remedy
+      // (issue #1315): the "Proposed remedy" section of the detail
+      // pane is built from the row's own data — no extra request.
+      listPath: '/api/stockout?' + LIST_QUERY + '&include_remedy=true',
       decisionsPath: '/api/stockout/decisions',
       moneyField: 'money_at_risk',
       moneyLabel: 'Money at risk',
@@ -984,6 +1012,7 @@
           basisLines(state.kind, row) +
           '<pre class="q-arithmetic">' + esc(row.arithmetic || '') + '</pre>' +
         '</section>' +
+        remedyHtml(row) +
         serviceLevelHtml(row) +
         orderQuantityHtml(row) +
         renderDecisionBlock(row, badge) +
@@ -1096,6 +1125,136 @@
           ? '<p class="q-oq-basis">' + esc(basisText) + '</p>'
           : '') +
         '<pre class="q-oq-arithmetic">' + esc(oq.arithmetic || '') + '</pre>' +
+      '</section>'
+    );
+  }
+
+  // A remedy's text value, or an em dash when it is missing: a
+  // missing code or date reads as an em dash, the way the queue
+  // writes every other missing figure.
+  function remedyValue(value) {
+    if (value == null) {
+      return '\u2014';
+    }
+    return String(value);
+  }
+
+  // The remedy's supplier reading: the supplier_name when it is a
+  // non-empty string, else the supplier_code; null when both are
+  // missing — the " from <supplier>" part of the line is left out
+  // then.
+  function remedySupplier(remedy) {
+    var name = remedy.supplier_name;
+    if (typeof name === 'string' && name !== '') {
+      return name;
+    }
+    var code = remedy.supplier_code;
+    if (typeof code === 'string' && code !== '') {
+      return code;
+    }
+    return null;
+  }
+
+  // The proposal line's text (issue #1315): it starts with the label
+  // of the matching action button — "Expedite: order <order_nbr> line
+  // <line_nbr> from <supplier>, <units> units expected
+  // <expected_on>.", "Transfer: <units> units from site
+  // <from_site>." or "Raise order: <units> units from <supplier>,
+  // order by <order_by>.". <supplier> is the supplier_name, else the
+  // supplier_code (the " from <supplier>" part left out when both are
+  // missing); <units> is whole units with thousands separators, the
+  // way the queue writes units elsewhere. null for a remedy of any
+  // other kind — the section then shows "No remedy proposed.".
+  function remedyProposalText(remedy) {
+    var meta = kindMeta(state.kind);
+    var label = actionLabelForValue(meta, remedy.kind);
+    if (label === '') {
+      return null;
+    }
+    var supplier = remedySupplier(remedy);
+    var fromSupplier = supplier === null ? '' : ' from ' + supplier;
+    if (remedy.kind === 'expedite') {
+      return (
+        label +
+        ': order ' +
+        remedyValue(remedy.order_nbr) +
+        ' line ' +
+        remedyValue(remedy.line_nbr) +
+        fromSupplier +
+        ', ' +
+        unitCount(remedy.units) +
+        ' units expected ' +
+        remedyValue(remedy.expected_on) +
+        '.'
+      );
+    }
+    if (remedy.kind === 'transfer') {
+      return (
+        label +
+        ': ' +
+        unitCount(remedy.units) +
+        ' units from site ' +
+        remedyValue(remedy.from_site) +
+        '.'
+      );
+    }
+    return (
+      label +
+      ': ' +
+      unitCount(remedy.units) +
+      ' units' +
+      fromSupplier +
+      ', order by ' +
+      remedyValue(remedy.order_by) +
+      '.'
+    );
+  }
+
+  // The "Proposed remedy" section of the detail pane (issue #1315):
+  // for a selected Stockout risk row whose data carries a `remedy`
+  // key, directly after the Why block and before the Decision block.
+  // The heading reads "Proposed remedy" (the section's aria-label for
+  // assistive technology); the proposal line and the remedy's reason
+  // follow, every value from the API HTML-escaped. A `remedy` that is
+  // null, not an object, or of any other kind shows the section with
+  // the single line "No remedy proposed." and no proposal or reason
+  // line; a row without the key (an older server) shows no section,
+  // and the Reorder points and Excess tabs never show one. Built from
+  // the row's own data — the queue makes no request for it — and the
+  // section presses or changes no action button.
+  function remedyHtml(row) {
+    if (
+      state.kind !== 'stockout' ||
+      !row ||
+      typeof row !== 'object' ||
+      Array.isArray(row)
+    ) {
+      return '';
+    }
+    if (!Object.prototype.hasOwnProperty.call(row, 'remedy')) {
+      return '';
+    }
+    var remedy = row.remedy;
+    var proposal =
+      remedy && typeof remedy === 'object' && !Array.isArray(remedy)
+        ? remedyProposalText(remedy)
+        : null;
+    var body =
+      proposal === null
+        ? '<p class="q-remedy-none" data-testid="queue-remedy-none">' +
+          'No remedy proposed.' +
+          '</p>'
+        : '<p class="q-remedy-proposal" data-testid="queue-remedy-proposal">' +
+          esc(proposal) +
+          '</p>' +
+          '<p class="q-remedy-reason" data-testid="queue-remedy-reason">' +
+          esc(remedyValue(remedy.reason)) +
+          '</p>';
+    return (
+      '<section class="q-remedy" aria-label="Proposed remedy" ' +
+      'data-testid="queue-remedy">' +
+      '<h3>Proposed remedy</h3>' +
+      body +
       '</section>'
     );
   }
@@ -1281,8 +1440,23 @@
 
   /* -------------------------------- data -------------------------------- */
 
+  // The list answers (the three kinds' lists and the decision-history
+  // reads): an array of row objects. A list element that is not an
+  // object (a null the server may list, an array or a scalar) is
+  // dropped — the queue renders the rows it has and a null list
+  // element never crashes the render.
   function asRows(value) {
-    return Array.isArray(value) ? value : [];
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    var rows = [];
+    for (var i = 0; i < value.length; i++) {
+      var row = value[i];
+      if (row && typeof row === 'object' && !Array.isArray(row)) {
+        rows.push(row);
+      }
+    }
+    return rows;
   }
 
   // The settings the queue applies on load (GET /api/settings). Only a

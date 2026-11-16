@@ -201,7 +201,11 @@ test('issue273 freeform', async ({ page }) => {
   await expect(page.locator('.q-list-empty')).toBeVisible();
   expect(api.queueGets.map((g) => g.kind).sort()).toEqual(['drift', 'excess', 'stockout']);
   for (const get of api.queueGets) {
-    expect(get.query).toBe('?limit=1000&include_decided=true');
+    expect(get.query).toBe(
+      get.kind === 'stockout'
+        ? '?limit=1000&include_decided=true&include_remedy=true'
+        : '?limit=1000&include_decided=true',
+    );
   }
 
   // --- one decision: the table renders, the empty state is gone ------

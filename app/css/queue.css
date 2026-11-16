@@ -144,3 +144,50 @@
   font-family: var(--font-ui);
   font-size: 13px;
 }
+
+/* ------------------------------------------------------------------ */
+/* The "Proposed remedy" section of the detail pane (issue #1315):    */
+/* the selected Stockout risk row's remedy, between the Why block and */
+/* the Decision block. Colours come from app/css/tokens.css. The      */
+/* lines wrap (overflow-wrap) instead of widening the page, and the   */
+/* section sits in the detail pane's own scroll region, so at         */
+/* 390x844 included the page never scrolls sideways.                  */
+/* ------------------------------------------------------------------ */
+
+.q-remedy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.q-remedy h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.q-remedy-proposal {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.q-remedy-reason {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.q-remedy-none {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}

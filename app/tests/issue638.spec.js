@@ -420,7 +420,15 @@ test('issue638 freeform', async ({ page }) => {
   // The queue loads all three lists on boot.
   await expect.poll(() => api.listGets.length).toBe(3);
   expect(api.listGets.map((g) => g.kind).sort()).toEqual(['drift', 'excess', 'stockout']);
-  expect(api.listGets.every((g) => g.query === '?limit=1000&include_decided=true')).toBe(true);
+  expect(
+    api.listGets.every(
+      (g) =>
+        g.query ===
+        (g.kind === 'stockout'
+          ? '?limit=1000&include_decided=true&include_remedy=true'
+          : '?limit=1000&include_decided=true'),
+    ),
+  ).toBe(true);
 
   // --- the tab bar: three tabs with their undecided counts ------------
   await expect(page.locator('.q-tab[data-kind="drift"]')).toHaveText('Reorder points 4');

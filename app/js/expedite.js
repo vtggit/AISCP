@@ -115,7 +115,11 @@
 // automatically. The text is selected, ready to copy." on
 // failure, written into the panel in place without a re-render
 // (focus stays) and kept in state, so a later re-render shows it;
-// closing the panel or opening another draft empties it. Opening,
+// closing the panel or opening another draft empties it. If the
+// open draft changes while the clipboard call is still out —
+// another row's draft opens, the panel closes, a chip is chosen,
+// a new read, sign-out — the call's result is dropped: no status,
+// no focus move, no selection, no fallback copy. Opening,
 // copying and closing a draft send no request of any kind, open
 // no window and navigate nowhere; the expedite read and the
 // supplier-risk read are unchanged, and the screen still sends
@@ -194,6 +198,12 @@
   // it can neither render into the fresh state nor badge a stale
   // row.
   var riskSeq = 0;
+  // The draft sequence: the number that advances every time the
+  // open draft changes (a row's draft opens, the panel closes, a
+  // chip is chosen, a new read, sign-out) and never on a plain
+  // re-render. Copy notes it when pressed, and a clipboard call
+  // that settles after it has moved on is dropped.
+  var draftSeq = 0;
 
   /* ------------------------------ helpers ------------------------------ */
 
@@ -339,8 +349,7 @@
     state.error = null;
     // The draft's index holds only within one answer: a new read is
     // a new answer, so the open draft closes.
-    state.draft = null;
-    state.draftStatus = '';
+    setDraft(null);
     render();
     global.Api.get(LIST_PATH).then(
       function (payload) {
@@ -933,8 +942,7 @@
       state.filter = chip.getAttribute('data-state') || 'all';
       // A chip choice is a new view of the answer's lines: the open
       // draft closes with it.
-      state.draft = null;
-      state.draftStatus = '';
+      setDraft(null);
       render();
       return;
     }
@@ -964,13 +972,23 @@
     }
   }
 
+  // The one helper every place that opens or closes the draft
+  // goes through: it sets the open draft (or null), empties the
+  // status and advances the draft sequence, so a clipboard call
+  // still out the door for the previous draft is dropped when it
+  // settles. A plain re-render never comes through here.
+  function setDraft(index) {
+    draftSeq += 1;
+    state.draft = index;
+    state.draftStatus = '';
+  }
+
   // The draft buttons: opening a row's draft replaces whatever is
   // open (one draft at a time) and moves focus to Copy; Close
   // removes the panel and moves focus to that row's Draft request
   // button. Neither sends a request.
   function openDraft(index) {
-    state.draft = index;
-    state.draftStatus = '';
+    setDraft(index);
     render();
     var copy = rootEl.querySelector('[data-testid="expedite-draft-copy"]');
     if (copy) {
@@ -980,8 +998,7 @@
 
   function closeDraft() {
     var index = state.draft;
-    state.draft = null;
-    state.draftStatus = '';
+    setDraft(null);
     render();
     if (typeof index !== 'number') {
       return;
@@ -995,18 +1012,29 @@
   }
 
   // Copy: the text box's value to the clipboard with one
-  // navigator.clipboard.writeText call. Where the clipboard is
-  // absent (a page served over plain http) or the call rejects, the
-  // fallback focuses the text box, selects its whole text and calls
-  // document.execCommand('copy') once; the text stays selected. The
-  // status lands in the panel in place — no re-render, so focus
-  // stays where it is — and in state, for the next re-render.
+  // navigator.clipboard.writeText call, noted against the draft
+  // sequence when pressed. Where the clipboard is absent (a page
+  // served over plain http) or the call rejects, the fallback
+  // focuses the text box on the page at that moment — a re-render
+  // may have replaced the one Copy was pressed in — selects its
+  // whole text and calls document.execCommand('copy') once; the
+  // text stays selected. If the open draft changes before the call
+  // settles, the result is dropped — no status, no focus move, no
+  // selection, no fallback. Otherwise the status lands in the panel
+  // in place — no re-render, so focus stays where it is — and in
+  // state, for the next re-render.
   function copyDraft() {
     var box = rootEl.querySelector('[data-testid="expedite-draft-text"]');
     if (!box) {
       return;
     }
+    // The draft's identity when Copy was pressed: a call that
+    // settles after the counter has moved on is dropped.
+    var mySeq = draftSeq;
     var finish = function (ok) {
+      if (mySeq !== draftSeq) {
+        return; // the draft moved on: drop the result
+      }
       setDraftStatus(
         ok
           ? 'Copied.'
@@ -1014,8 +1042,17 @@
       );
     };
     var fallback = function () {
-      box.focus();
-      box.select();
+      if (mySeq !== draftSeq) {
+        return; // the draft moved on: drop the result
+      }
+      // The text box on the page at that moment, not the one Copy
+      // was pressed in: a re-render may have replaced it.
+      var fresh = rootEl.querySelector('[data-testid="expedite-draft-text"]');
+      if (!fresh) {
+        return;
+      }
+      fresh.focus();
+      fresh.select();
       var ok = false;
       try {
         ok = document.execCommand('copy') === true;
@@ -1079,8 +1116,7 @@
     state.loading = false;
     state.error = null;
     state.filter = 'all'; // the "All" default is a first-load one
-    state.draft = null;
-    state.draftStatus = '';
+    setDraft(null);
     render();
   }
 

@@ -134,6 +134,82 @@
   flex-shrink: 0;
 }
 
+/* The draft panel (issue #1307): the first child of the body region,
+   above the table's scrolling region and outside it. It keeps its
+   full height — like the bar — and the table region takes what is
+   left. */
+.ex-draft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 0;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+.ex-draft-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.ex-draft-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.ex-draft-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+}
+
+/* The text box fills the panel's width, wraps its lines and never
+   scrolls sideways. */
+.ex-draft-text {
+  width: 100%;
+  min-height: calc(var(--row-min) * 2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+}
+
+/* The panel's buttons: a row that wraps on a narrow screen rather
+   than overflow. */
+.ex-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The status line: empty when the panel opens, its height reserved
+   so the panel does not shift when the status lands. */
+.ex-draft-status {
+  margin: 0;
+  min-height: var(--space-4);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-accent-ink);
+}
+
 /* The table scrolls within its own region: the page never scrolls,
    and at narrow widths the region — not the document — takes the
    horizontal overflow. */
@@ -185,7 +261,8 @@
 .ex-cell-units,
 .ex-cell-value,
 .ex-cell-cover,
-.ex-cell-stockout {
+.ex-cell-stockout,
+.ex-cell-request {
   white-space: nowrap;
 }
 

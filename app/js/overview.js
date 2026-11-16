@@ -6,7 +6,14 @@
 //   * the three decision lists with decided rows included:
 //     GET /api/drift?limit=1000&include_decided=true,
 //     GET /api/excess?limit=1000&include_decided=true,
-//     GET /api/stockout?limit=1000&include_decided=true.
+//     GET /api/stockout?limit=1000&include_decided=true, and
+//   * GET /api/stockout/proposals, the Stockout risk card's
+//     "proposed remedy" block, the card's own read beside its
+//     summary and list reads; a failed read — any status, a network
+//     error, or a body that is not an object whose total holds the
+//     finite numbers proposed and chosen and whose without_proposal
+//     is a finite number — leaves the block out, the card renders
+//     exactly as before;
 //   * GET /api/aggregate/releases, the Released orders card's answer.
 //   * GET /api/abc, the "Value by class" card's answer.
 //   * GET /api/exceptions, the "Exceptions today" card's answer.
@@ -25,7 +32,12 @@
 //     money + count);
 //   * one region per list card — that kind's summary buckets (accepted
 //     money, applied money, dismissed count) plus the "N to decide"
-//     count of that list;
+//     count of that list; the Stockout risk card carries its
+//     "proposed remedy" block (GET /api/stockout/proposals),
+//     directly after its figures row and directly before its Open
+//     button; a failed read leaves the block out — the card renders
+//     exactly as before, no error text, no Retry, no new
+//     [role="alert"];
 //   * the Released orders card — GET /api/aggregate/releases: the four
 //     state counts (Late, Awaiting approval, Partly received,
 //     Received), the oldest waiting approval order and the link to
@@ -68,6 +80,7 @@
   var ABC_PATH = '/api/abc';
   var EXCEPTIONS_PATH = '/api/exceptions';
   var SUPPLY_PATH = '/api/supply-plan/summary';
+  var STOCKOUT_PROPOSALS_PATH = '/api/stockout/proposals';
 
   var KINDS = [
     {
@@ -426,11 +439,23 @@
       });
     } else {
       var kind = regionId.slice('ov-region-card-'.length);
-      work = Promise.all([
+      var reads = [
         global.Api.get(SUMMARY_PATH),
         global.Api.get(KINDS_BY_KIND[kind].endpoint),
-      ]).then(function (results) {
-        renderCard(KINDS_BY_KIND[kind], results[0], results[1]);
+      ];
+      if (kind === 'stockout') {
+        // The card's "proposed remedy" block: its own read beside
+        // the summary and the list, with its own catch that answers
+        // null so a failed read never fails the card — it only
+        // leaves the block out.
+        reads.push(
+          global.Api.get(STOCKOUT_PROPOSALS_PATH).catch(function () {
+            return null;
+          })
+        );
+      }
+      work = Promise.all(reads).then(function (results) {
+        renderCard(KINDS_BY_KIND[kind], results[0], results[1], results[2]);
       });
     }
     work.catch(function (error) {
@@ -563,7 +588,7 @@
     );
   }
 
-  function renderCard(kindMeta, summary, list) {
+  function renderCard(kindMeta, summary, list, proposals) {
     var kind = kindMeta.kind;
     var buckets =
       summary && typeof summary === 'object' && summary[kind] &&
@@ -596,6 +621,125 @@
     region.querySelector('.ov-open').addEventListener('click', function () {
       global.location.hash = '#/queue?kind=' + kind;
     });
+
+    // The Stockout risk card's "proposed remedy" block: with a
+    // usable answer, directly after the figures row and directly
+    // before the Open button; a failed read or an unusable body
+    // leaves it out and the card renders exactly as before.
+    if (kind === 'stockout' && proposalsAnswerValid(proposals)) {
+      region
+        .querySelector('.ov-card-figures')
+        .insertAdjacentElement('afterend', proposalsBlock(proposals));
+    }
+  }
+
+  /* ------------------------ stockout proposals ------------------------ */
+
+  // The Stockout risk card's "proposed remedy" measurement. The
+  // answer is usable only when it is an object whose total holds the
+  // finite numbers proposed and chosen and whose without_proposal is
+  // a finite number; anything else — the failed read's null, any
+  // status, a network error, a body of another shape — leaves the
+  // block out.
+  function proposalsAnswerValid(answer) {
+    if (!answer || typeof answer !== 'object') {
+      return false;
+    }
+    var total = answer.total;
+    if (!total || typeof total !== 'object') {
+      return false;
+    }
+    return (
+      isMoney(total.proposed) &&
+      isMoney(total.chosen) &&
+      isMoney(answer.without_proposal)
+    );
+  }
+
+  // The per-kind lines, in the fixed order and with the fixed labels
+  // the Work queue and the decision log use: Expedite, Transfer,
+  // Raise order.
+  var PROPOSAL_KINDS = [
+    { key: 'expedite', label: 'Expedite' },
+    { key: 'transfer', label: 'Transfer' },
+    { key: 'raise_order', label: 'Raise order' },
+  ];
+
+  // The block's lines, built node by node with textContent — no API
+  // value goes through innerHTML — in order: the measurement line
+  // ("No proposed remedies measured yet." while total.proposed is
+  // 0), the per-kind line only while total.proposed is above 0 (each
+  // kind whose proposed is a number above 0, "<label> <chosen> of
+  // <proposed>", joined by " \u00b7 "; the line is left out when no
+  // kind is left) and the note only while without_proposal is above
+  // 0. Every number goes through countLabel, whole with thousands
+  // separators, and the words stay the same for a count of 1, like
+  // the value tiles' "accepted decisions" note.
+  function proposalsBlock(answer) {
+    var total = answer.total;
+
+    var block = document.createElement('div');
+    block.className = 'ov-proposals';
+    block.setAttribute('data-testid', 'ov-stockout-proposals');
+
+    var line = document.createElement('p');
+    line.className = 'ov-proposals-line';
+    line.setAttribute('data-testid', 'ov-stockout-proposals-line');
+    if (total.proposed > 0) {
+      var pct = Math.round((100 * total.chosen) / total.proposed);
+      line.textContent =
+        'Proposed remedy taken in ' +
+        countLabel(total.chosen) +
+        ' of ' +
+        countLabel(total.proposed) +
+        ' accepted decisions (' +
+        countLabel(pct) +
+        '%)';
+    } else {
+      line.textContent = 'No proposed remedies measured yet.';
+    }
+    block.appendChild(line);
+
+    if (total.proposed > 0) {
+      var parts = [];
+      PROPOSAL_KINDS.forEach(function (kindMeta) {
+        var kind = answer[kindMeta.key];
+        if (
+          !kind ||
+          typeof kind !== 'object' ||
+          !isMoney(kind.proposed) ||
+          kind.proposed <= 0
+        ) {
+          return;
+        }
+        parts.push(
+          kindMeta.label +
+            ' ' +
+            countLabel(kind.chosen) +
+            ' of ' +
+            countLabel(kind.proposed)
+        );
+      });
+      if (parts.length) {
+        var kinds = document.createElement('p');
+        kinds.className = 'ov-proposals-kinds';
+        kinds.setAttribute('data-testid', 'ov-stockout-proposals-kinds');
+        kinds.textContent = parts.join(' \u00b7 ');
+        block.appendChild(kinds);
+      }
+    }
+
+    if (answer.without_proposal > 0) {
+      var note = document.createElement('p');
+      note.className = 'ov-proposals-note';
+      note.setAttribute('data-testid', 'ov-stockout-proposals-note');
+      note.textContent =
+        countLabel(answer.without_proposal) +
+        ' accepted before proposals were kept';
+      block.appendChild(note);
+    }
+
+    return block;
   }
 
   function renderAttention(lists) {

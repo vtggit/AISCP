@@ -516,6 +516,31 @@ input {
   align-self: flex-start;
 }
 
+/* Stockout risk card: the "proposed remedy" block, directly after
+   the card's figures row and before its Open button. */
+.ov-proposals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ov-proposals-line,
+.ov-proposals-kinds,
+.ov-proposals-note {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.ov-proposals-line {
+  color: var(--color-ink-2);
+}
+
+.ov-proposals-kinds,
+.ov-proposals-note {
+  color: var(--color-ink-3);
+}
+
 /* Needs a decision, largest money first */
 
 .ov-attention {

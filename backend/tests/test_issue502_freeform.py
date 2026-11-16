@@ -371,6 +371,7 @@ def test_issue502_freeform(client):
         "ddmrp.variability_factor_high",
         "ddmrp.variability_factor_low",
         "ddmrp.variability_factor_medium",
+        "decisions.remedy_order",
         "decisions.require_action_choice",
         "erp.reporting_currency",
         "erp.standing_grants_enabled",

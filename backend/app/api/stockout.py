@@ -421,6 +421,30 @@ def _row_remedy(row: dict, order: tuple[str, ...], reads: dict) -> dict | None:
     return None
 
 
+def proposed_remedy(row: dict) -> dict | None:
+    """The remedy one ranked stockout row is proposed, as JSON.
+
+    The exact remedy ``GET /api/stockout`` answers for the row while
+    ``include_remedy`` is true: the three reads through
+    ``_remedy_reads`` at the row's as-of, the kinds in the order
+    ``_remedy_order()`` gives and ``_row_remedy`` — answered as the
+    ``StockoutRemedy`` object in JSON, with every key and the dates
+    as ``YYYY-MM-DD`` strings.  Or ``None`` when no remedy is
+    proposed, and ``None`` when anything in the work raises: the
+    remedy is a side note of the decision, never a reason to fail it.
+    The helper opens no recommendations memo of its own — the caller
+    runs it inside one, so the ranked read and the three reads share
+    it.
+    """
+    try:
+        remedy = _row_remedy(row, _remedy_order(), _remedy_reads(row["as_of"]))
+    except Exception:
+        return None
+    if remedy is None:
+        return None
+    return StockoutRemedy.model_validate(remedy).model_dump(mode="json")
+
+
 @router.get("", response_model=list[StockoutDecisionRow])
 def list_stockout(
     limit: int = Query(default=20, ge=1, le=1000),

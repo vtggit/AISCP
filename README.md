@@ -69,6 +69,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   current accepted decisions' stored proposals and chosen actions by remedy kind
   (`backend/app/api/stockout_decisions.py`,
   `backend/app/repositories/stockout_decision_proposals_postgres_repository.py`).
+- The Overview's Stockout risk card shows that measure when the read succeeds: the chosen
+  remedies among accepted decisions, by remedy kind, and accepted decisions before proposals
+  were kept (`app/js/overview.js`).
 - An accepted decision is shown as applied once the ERP data reflects it, and a summary
   totals accepted, applied and outstanding decisions with their money
   (`backend/app/api/decision_summary.py`).

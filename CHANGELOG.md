@@ -40,6 +40,9 @@ code is the authority for details.
 - Stockout decisions now store the remedy proposed for their item-site row when one is proposed,
   and `GET /api/stockout/proposals` counts the accepted decisions that proposed or chose each
   remedy kind (#1321).
+- The Overview's Stockout risk card now shows how proposed remedies fared, with the accepted
+  decisions that took a remedy, by remedy kind, and accepted decisions before proposals were kept
+  (#1323).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

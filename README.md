@@ -179,6 +179,8 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Release tracking: where each released order stands in the ERP (open, late, awaiting
   approval, partly received, received, cancelled, missing), with lateness judged by the
   expected date (`backend/app/aggregate/tracking.py`).
+- The Released cell on the Releases screen reads an order released by `standing-grant:<id>`
+  (with `<id>` one or more digits) as `by standing grant #<id>` (`app/js/releases.js`).
 - Release chosen transfer suggestions to Acumatica as transfer orders on hold, with the same
   preview, confirm and audit; their status is read back from Acumatica
   (`backend/app/supply/transfer_release.py`).

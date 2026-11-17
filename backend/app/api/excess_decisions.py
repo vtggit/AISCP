@@ -9,6 +9,7 @@ decisions are never changed or deleted, and duplicates are accepted as
 separate append-only entries.
 """
 
+import contextlib
 from datetime import date, datetime, timedelta
 from typing import Literal, Self
 from uuid import uuid4
@@ -21,6 +22,9 @@ from app.auth.authorization import require_role
 from app.auth.display_name import display_name
 from app.auth.models import AuthUser
 from app.recommend.excess import excess_ranked
+from app.repositories.excess_decision_proposals_postgres_repository import (
+    ExcessDecisionProposalPostgresRepository,
+)
 from app.repositories.excess_decisions_postgres_repository import (
     ExcessDecisionPostgresRepository,
 )
@@ -28,6 +32,7 @@ from app.repositories.excess_decisions_postgres_repository import (
 router = APIRouter(prefix="/api/excess", tags=["excess-decisions"])
 
 _repo = ExcessDecisionPostgresRepository()
+_proposal_repo = ExcessDecisionProposalPostgresRepository()
 
 _NUL = chr(0)
 _MAX_REASON_LENGTH = 1000
@@ -176,6 +181,11 @@ def create_excess_decision(
     accepted as separate append-only duplicates.
     """
     _require_storable_decided_by(user)
+    # Imported here, never at module level: app.api.excess imports
+    # this module at module level (for ExcessDecision), so a
+    # module-level import back would be a cycle.
+    from app.api.excess import proposed_remedy
+
     try:
         rows = excess_ranked()
     except ValueError as exc:
@@ -193,7 +203,12 @@ def create_excess_decision(
         raise HTTPException(
             status_code=404, detail="no current excess row for item site"
         )
-    return _repo.insert(
+    # The remedy the excess screen proposes for exactly this ranked
+    # row — the row the decision snapshots — the two reads each
+    # running once, once every check above has passed: a request this
+    # route refuses never runs them.
+    remedy = proposed_remedy(row)
+    stored = _repo.insert(
         id=str(uuid4()),
         item_code=row["item_code"],
         site_code=row["site_code"],
@@ -210,6 +225,13 @@ def create_excess_decision(
         decided_by=user.sub,
         decided_by_name=display_name(user),
     )
+    # The proposal is a side note of the stored decision: while no
+    # remedy was proposed, or working out or storing one failed, the
+    # decision is answered as usual with no proposal row.
+    if remedy is not None:
+        with contextlib.suppress(Exception):
+            _proposal_repo.insert(stored["id"], remedy)
+    return stored
 
 
 @router.get("/decisions", response_model=list[ExcessDecision])
@@ -230,3 +252,76 @@ def list_excess_decisions(
     if item_code is not None:
         return _repo.history(item_code, site_code, limit, offset)
     return _repo.current(limit, offset)
+
+
+class ExcessProposalBucket(BaseModel):
+    """One remedy kind's two counts among the current accepted
+    excess decisions: the decisions proposed the kind and the
+    decisions that chose it."""
+
+    proposed: int
+    chosen: int
+
+
+class ExcessProposalCounts(BaseModel):
+    """The stored remedy proposals of the current accepted excess
+    decisions."""
+
+    accepted: int
+    stop_replenishing: ExcessProposalBucket
+    reduce: ExcessProposalBucket
+    dispose: ExcessProposalBucket
+    total: ExcessProposalBucket
+    without_proposal: int
+
+
+@router.get("/proposals", response_model=ExcessProposalCounts)
+def excess_proposal_counts() -> dict:
+    """Count the stored remedy proposals of the current accepted excess decisions.
+
+    Over the current excess decisions (the latest per item-site,
+    ``decided_at`` with id breaking ties) whose decision is accepted:
+    ``accepted`` is their number.  Under each remedy kind, ``proposed``
+    counts those decisions whose stored proposal is of that kind and
+    ``chosen`` counts those that also chose the kind — their action is
+    it — and ``total`` is the sum of the three kinds.
+    ``without_proposal`` counts the accepted decisions with no stored
+    proposal (every decision recorded before the proposals were
+    stored, among them), so ``total.proposed`` plus
+    ``without_proposal`` equals ``accepted``.  Open to any
+    authenticated user; the route writes nothing.
+    """
+    accepted = [
+        decision
+        for decision in _repo.current_all()
+        if decision["decision"] == "accepted"
+    ]
+    proposals = _proposal_repo.for_decisions([decision["id"] for decision in accepted])
+    buckets = {
+        kind: {"proposed": 0, "chosen": 0}
+        for kind in ("stop_replenishing", "reduce", "dispose")
+    }
+    without_proposal = 0
+    for decision in accepted:
+        proposal = proposals.get(decision["id"])
+        if proposal is None:
+            without_proposal += 1
+            continue
+        kind = proposal.get("kind")
+        if kind not in buckets:
+            without_proposal += 1
+            continue
+        buckets[kind]["proposed"] += 1
+        if decision["action"] == kind:
+            buckets[kind]["chosen"] += 1
+    return {
+        "accepted": len(accepted),
+        "stop_replenishing": buckets["stop_replenishing"],
+        "reduce": buckets["reduce"],
+        "dispose": buckets["dispose"],
+        "total": {
+            "proposed": sum(bucket["proposed"] for bucket in buckets.values()),
+            "chosen": sum(bucket["chosen"] for bucket in buckets.values()),
+        },
+        "without_proposal": without_proposal,
+    }

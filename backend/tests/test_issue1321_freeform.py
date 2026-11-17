@@ -854,7 +854,7 @@ def test_issue1321_freeform(client, monkeypatch):
         if script.down_revision == "0044_standing_grant_runs"
     ]
     assert len(successors) == 1
-    assert successors[0].revision == head
+    assert successors[0].revision == "0045_stockout_decision_proposals"
     # The constraint: a remedy kind the decision's actions do not carry
     # is a check violation, and nothing is stored.  P6 is a stored
     # decision that has no proposal.

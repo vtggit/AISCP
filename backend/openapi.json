@@ -5062,6 +5062,61 @@
         }
       }
     },
+    "/api/excess/proposals": {
+      "get": {
+        "tags": [
+          "excess-decisions"
+        ],
+        "summary": "Excess Proposal Counts",
+        "description": "Count the stored remedy proposals of the current accepted excess decisions.\n\nOver the current excess decisions (the latest per item-site,\n``decided_at`` with id breaking ties) whose decision is accepted:\n``accepted`` is their number.  Under each remedy kind, ``proposed``\ncounts those decisions whose stored proposal is of that kind and\n``chosen`` counts those that also chose the kind \u2014 their action is\nit \u2014 and ``total`` is the sum of the three kinds.\n``without_proposal`` counts the accepted decisions with no stored\nproposal (every decision recorded before the proposals were\nstored, among them), so ``total.proposed`` plus\n``without_proposal`` equals ``accepted``.  Open to any\nauthenticated user; the route writes nothing.",
+        "operationId": "excess_proposal_counts_api_excess_proposals_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExcessProposalCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/empirical-adoptions": {
       "get": {
         "tags": [
@@ -15835,6 +15890,60 @@
         ],
         "title": "ExcessDecisionRow",
         "description": "An excess row enriched with the item-site's current decision.\n\n``decision`` is the item-site's current decision from\n``excess_decisions`` (the latest row by ``decided_at``, ``id``\nbreaking ties \u2014 the same row ``GET /api/excess/decisions`` reports\nas current) with every stored column, or null when the item-site\nhas none.  ``decision_lapsed`` is true only for a current\ndismissal that the row has outgrown: the row's ``excess_units``\nexceed the decision's ``excess_units`` by at least the larger of 1\nand 10% of the decision's ``excess_units``.  A snooze never lapses,\nand neither does anything else (accepted decisions, or no decision\nat all)."
+      },
+      "ExcessProposalBucket": {
+        "properties": {
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed"
+          },
+          "chosen": {
+            "type": "integer",
+            "title": "Chosen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposed",
+          "chosen"
+        ],
+        "title": "ExcessProposalBucket",
+        "description": "One remedy kind's two counts among the current accepted\nexcess decisions: the decisions proposed the kind and the\ndecisions that chose it."
+      },
+      "ExcessProposalCounts": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "stop_replenishing": {
+            "$ref": "#/components/schemas/ExcessProposalBucket"
+          },
+          "reduce": {
+            "$ref": "#/components/schemas/ExcessProposalBucket"
+          },
+          "dispose": {
+            "$ref": "#/components/schemas/ExcessProposalBucket"
+          },
+          "total": {
+            "$ref": "#/components/schemas/ExcessProposalBucket"
+          },
+          "without_proposal": {
+            "type": "integer",
+            "title": "Without Proposal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "stop_replenishing",
+          "reduce",
+          "dispose",
+          "total",
+          "without_proposal"
+        ],
+        "title": "ExcessProposalCounts",
+        "description": "The stored remedy proposals of the current accepted excess\ndecisions."
       },
       "ExcessRemedy": {
         "properties": {

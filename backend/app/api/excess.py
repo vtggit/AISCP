@@ -376,6 +376,27 @@ def _row_remedy(row: dict, levels: dict | None, on_order: dict | None) -> dict |
     }
 
 
+def proposed_remedy(row: dict) -> dict | None:
+    """The remedy one ranked excess row is proposed, as JSON.
+
+    The exact remedy ``GET /api/excess`` answers for the row while
+    ``include_remedy`` is true: the two reads through
+    ``_remedy_reads`` and ``_row_remedy`` — answered as the
+    ``ExcessRemedy`` object in JSON, with every key.  Or ``None``
+    when no remedy is proposed, and ``None`` when anything in the
+    work raises: the remedy is a side note of the decision, never a
+    reason to fail it.
+    """
+    try:
+        levels, on_order = _remedy_reads()
+        remedy = _row_remedy(row, levels, on_order)
+        if remedy is None:
+            return None
+        return ExcessRemedy.model_validate(remedy).model_dump(mode="json")
+    except Exception:
+        return None
+
+
 @router.get("", response_model=list[ExcessDecisionRow])
 def list_excess(
     limit: int = Query(default=20, ge=1, le=1000),

@@ -64,18 +64,51 @@ counted signal ever changes.  The overrides are applied by their
 stored dates whatever ``as_of`` is asked for [rule: OVR-11], and
 the method, the backtest, the arithmetic, ``total_forecast`` and
 the order of the list stay the statistical forecast's.
+
+Both read routes take ``include_correction``, a boolean query
+parameter, false by default.  While it is false each answers
+exactly as without the parameter, key for key: no row carries a
+``correction`` key and neither of the two correction reads — the
+stored system settings and the bias exception's measure — runs.
+While it is true and at least one row is answered, those two reads
+run once each, before any correction is worked out: the stored
+system settings (the one read the exceptions list makes) and, on
+them, the bias exception's measure (the very read the exceptions
+list makes for its forecast bias rows, over the window its setting
+names, with no as-of of its own).  Every answered row then carries
+``correction``, a ``ForecastCorrection`` or null: the item-site's
+measured bias (the exception's detected date, the measure's
+compared buckets, totals and bias, and the factor the measured
+actual total over the effective one) and one
+``ForecastCorrectionPeriod`` — a proposed quantity — per forecast
+bucket without an override day and without a demand signal.  Null
+covers an item-site whose bias does not persist as a forecast-bias
+exception, one the measure has no entry or no finite totals above 0
+for, and one with no such bucket left.  With no row answered
+neither read runs, a read that raises never fails the answer
+(every row's ``correction`` is then null, still 200 with the rows)
+and the routes write nothing.
 """
 
 from __future__ import annotations
 
+import math
 from datetime import date, datetime
 from typing import Literal, Self
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, PrivateAttr, model_serializer, model_validator
 
+from app.api.exceptions import (
+    FORECAST_BIAS_MIN_PERIODS_KEY,
+    FORECAST_BIAS_THRESHOLD_KEY,
+    _forecast_bias_accuracy,
+    _forecast_rows,
+    _stored_system_settings,
+)
 from app.auth.authorization import require_role
 from app.auth.models import AuthUser
+from app.ddmrp.zones import setting_value
 from app.forecast.accuracy import realised_accuracy, signal_accuracy
 from app.forecast.history import history_for_pair
 from app.forecast.listing import build_forecast_row, forecast_rows
@@ -144,6 +177,48 @@ class ForecastBacktest(BaseModel):
     bias: float | None
 
 
+class ForecastCorrectionPeriod(BaseModel):
+    """One forecast bucket the correction proposes a quantity for.
+
+    ``period_start`` and ``period_end`` are the bucket's own
+    boundaries, ``quantity`` its statistical forecast and
+    ``proposed_quantity`` the correction's proposal for it —
+    ``max(0, round(quantity x factor, 2))``, the factor of its
+    row's ``ForecastCorrection``.
+    """
+
+    period_start: date
+    period_end: date
+    quantity: float
+    proposed_quantity: float
+
+
+class ForecastCorrection(BaseModel):
+    """The correction proposed for one forecast row.
+
+    ``measured_on`` is the forecast-bias exception's detected date
+    (the measure's as-of), ``compared_buckets`` how many of the
+    item-site's latest forecast periods the measure compared,
+    ``effective_total`` and ``actual_total`` the measure's totals
+    over them, ``effective_bias`` the measure's bias over them and
+    ``factor`` the actual total over the effective total,
+    unrounded — the factor every period is proposed at.  ``periods``
+    carries one ``ForecastCorrectionPeriod`` per forecast bucket
+    without an override day and without a demand signal, in the
+    forecast's order, and ``reason`` the one line of text for the
+    proposal.
+    """
+
+    measured_on: date
+    compared_buckets: int
+    effective_total: float
+    actual_total: float
+    effective_bias: float
+    factor: float
+    periods: list[ForecastCorrectionPeriod]
+    reason: str
+
+
 class ForecastRow(BaseModel):
     """One item-site's forecast: the method, the 12 buckets, the backtest.
 
@@ -168,6 +243,37 @@ class ForecastRow(BaseModel):
     overridden_buckets: int
     backtest: ForecastBacktest | None
     arithmetic: str
+    correction: ForecastCorrection | None = None
+    # The route's include_correction parameter for this row: read
+    # off the answered row's dict (a key the validation ignores) by
+    # the validator below and kept as private state, so it is part
+    # of neither the model's fields nor its schema, let alone the
+    # answer.
+    _include_correction: bool = PrivateAttr(default=False)
+
+    @model_validator(mode="wrap")
+    def _remember_include_correction(cls, value, handler):
+        """Remember the route's include_correction parameter from
+        the answered row's dict, so the serializer can drop the
+        correction key while it is false."""
+        if isinstance(value, dict):
+            include_correction = value.get("include_correction", False)
+        else:
+            include_correction = getattr(value, "_include_correction", False)
+        row = handler(value)
+        row._include_correction = bool(include_correction)
+        return row
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        """The row's fields, without ``correction`` while the
+        route's ``include_correction`` parameter is false (the key
+        stays out of the answer, exactly as before the correction
+        existed)."""
+        data = handler(self)
+        if not self._include_correction:
+            data.pop("correction", None)
+        return data
 
 
 class ForecastRowDetail(ForecastRow):
@@ -182,6 +288,146 @@ def _not_found() -> HTTPException:
     )
 
 
+def _positive_finite(value: object) -> bool:
+    """Whether the value is a finite number above 0 (a bool is not
+    a number here, and neither is a nan or an infinity)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value) and value > 0
+
+
+def _percent(value: float) -> str:
+    """The factor's percent as the reason spells it: 55.6, 333.3
+    and 200 — one decimal place, trailing zeros dropped."""
+    return f"{value:.1f}".rstrip("0").rstrip(".")
+
+
+def _measure_entries(measure: object) -> dict[tuple[object, object], dict]:
+    """The measure's item-site entries by (item_code, site_code).
+
+    A measure with no item_sites list, or entries that are not
+    dicts, contributes nothing — never a failed answer."""
+    entries: dict[tuple[object, object], dict] = {}
+    if isinstance(measure, dict):
+        item_sites = measure.get("item_sites")
+        if isinstance(item_sites, list):
+            for entry in item_sites:
+                if isinstance(entry, dict):
+                    entries[(entry.get("item_code"), entry.get("site_code"))] = entry
+    return entries
+
+
+def _row_correction(
+    row: dict,
+    exception_by_pair: dict[tuple[object, object], object],
+    entry_by_pair: dict[tuple[object, object], dict],
+) -> dict | None:
+    """One answered row's correction, or null.
+
+    Only the item-sites the exceptions list's forecast-bias rule
+    answers a row for carry one, and its figures come from the
+    measure's item-site entry with the same codes: ``factor`` the
+    entry's actual total over its effective total — null when either
+    is not a finite number above 0, there is nothing to scale — and
+    one period per forecast bucket with no override day and no
+    demand signal, in the forecast's order, its proposed quantity
+    ``max(0, round(quantity x factor, 2))``; null again when no
+    bucket is left.  ``reason`` is the exception's own detail, first
+    letter upper-cased, and the percent of its forecast each such
+    period is proposed at.  The rule reads no acknowledgement or
+    snooze of the exception, and writes nothing.
+    """
+    key = (row.get("item_code"), row.get("site_code"))
+    exception_row = exception_by_pair.get(key)
+    if exception_row is None:
+        return None
+    entry = entry_by_pair.get(key)
+    if entry is None:
+        return None
+    effective_total = entry.get("effective_total")
+    actual_total = entry.get("actual_total")
+    if not _positive_finite(effective_total) or not _positive_finite(actual_total):
+        return None
+    factor = float(actual_total) / float(effective_total)
+    if not math.isfinite(factor):
+        return None
+    periods: list[dict] = []
+    forecast = row.get("forecast")
+    if isinstance(forecast, list):
+        for bucket in forecast:
+            if not isinstance(bucket, dict):
+                continue
+            if bucket.get("override_days") != 0 or bucket.get("signal_quantity") != 0:
+                continue
+            quantity = bucket.get("quantity")
+            if isinstance(quantity, bool) or not isinstance(quantity, (int, float)):
+                continue
+            quantity = float(quantity)
+            proposed = max(0.0, round(quantity * factor, 2))
+            if not math.isfinite(quantity) or not math.isfinite(proposed):
+                return None
+            periods.append(
+                {
+                    "period_start": bucket.get("bucket_start"),
+                    "period_end": bucket.get("bucket_end"),
+                    "quantity": quantity,
+                    "proposed_quantity": proposed,
+                }
+            )
+    if not periods:
+        return None
+    detail = exception_row.detail
+    reason = (
+        f"{detail[:1].upper()}{detail[1:]}, so each period without an "
+        "override or a demand signal is proposed at "
+        f"{_percent(factor * 100)}% of its forecast."
+    )
+    return {
+        "measured_on": exception_row.detected_on,
+        "compared_buckets": entry.get("compared_buckets"),
+        "effective_total": float(effective_total),
+        "actual_total": float(actual_total),
+        "effective_bias": entry.get("effective_bias"),
+        "factor": factor,
+        "periods": periods,
+        "reason": reason,
+    }
+
+
+def _corrections_for(answered: list[dict]) -> None:
+    """The two correction reads, once each, and the corrections in place.
+
+    The stored system settings (the one read the exceptions list
+    makes) are read first; the two bounds then come from them
+    through ``setting_value`` (a missing or out-of-range stored
+    value the registry default), and the bias exception's measure on
+    the stored settings — the very read the exceptions list makes
+    for its forecast bias rows — once, before any correction is
+    worked out.  The item-sites whose bias persists are the ones the
+    exceptions list's own ``_forecast_rows`` answers a row for at
+    the two bounds.  Anything raised while the reads run or the
+    corrections are worked out is caught: every answered row's
+    ``correction`` is then null and the route still answers 200.
+    """
+    try:
+        stored = _stored_system_settings()
+        threshold = setting_value(stored, FORECAST_BIAS_THRESHOLD_KEY)
+        min_periods = setting_value(stored, FORECAST_BIAS_MIN_PERIODS_KEY)
+        measure = _forecast_bias_accuracy(stored)
+        exception_by_pair = {
+            (exception_row.item_code, exception_row.site_code): exception_row
+            for exception_row in _forecast_rows(measure, threshold, min_periods)
+        }
+        entry_by_pair = _measure_entries(measure)
+        corrections = [
+            _row_correction(row, exception_by_pair, entry_by_pair) for row in answered
+        ]
+    except Exception:
+        corrections = [None] * len(answered)
+    for row, correction in zip(answered, corrections):
+        row["correction"] = correction
+
+
 @router.get("", response_model=list[ForecastRow])
 def list_forecasts(
     limit: int = Query(default=100, ge=1, le=1000),
@@ -190,6 +436,7 @@ def list_forecasts(
         Literal["no_demand", "smooth", "erratic", "intermittent", "lumpy"] | None
     ) = Query(default=None),
     as_of: date | None = Query(default=None),
+    include_correction: bool = Query(default=False),
 ) -> list[dict]:
     """List one row per item-site that has a forecast, for any signed-in user.
 
@@ -198,13 +445,56 @@ def list_forecasts(
     left out. ``demand_class`` filters the list, ``as_of`` sets the date
     (the shared ``app.stats.demand`` default when absent), and
     ``limit`` / ``offset`` page it.
+
+    While ``include_correction`` is false (the default) the answer
+    is exactly that, key for key: no row carries a ``correction``
+    key and neither the stored system settings nor the bias
+    exception's measure is read.  While it is true and at least one
+    row is answered, those two reads run once each, before any
+    correction is worked out: the stored system settings (the one
+    read the exceptions list makes) and, on them, the bias
+    exception's measure (the very read the exceptions list makes for
+    its forecast bias rows, over the window its setting names, with
+    no as-of of its own).  The two bounds come from the stored
+    settings through ``setting_value`` (a missing or out-of-range
+    stored value the registry default), and the item-sites whose
+    bias persists are the ones the exceptions list's own
+    forecast-bias rule answers a row for.  Every answered row then
+    carries ``correction``, a ``ForecastCorrection`` or null:
+    ``measured_on`` the exception's detected date,
+    ``compared_buckets``, ``effective_total``, ``actual_total`` and
+    ``effective_bias`` the measure's item-site entry's own,
+    ``factor`` the entry's actual total over its effective total
+    (unrounded), ``periods`` one ``ForecastCorrectionPeriod`` per
+    forecast bucket without an override day and without a demand
+    signal, in order, its proposed quantity ``max(0, round(quantity
+    x factor, 2))``, and ``reason`` the exception's own detail,
+    first letter upper-cased, and the percent of its forecast each
+    such period is proposed at.  Null covers an item-site whose
+    bias does not persist, one the measure has no entry or no
+    finite totals above 0 for, and one with no such bucket left.
+    A read that raises never fails the list: every answered row's
+    ``correction`` is then null and the route still answers 200
+    with the rows it answers without the parameter; the rule reads
+    no acknowledgement or snooze of the exception, and nothing is
+    written.
     """
     _reject_nul_bytes(demand_class)
     # The list on a fixed query budget, whatever the number of
     # item-sites: the effective forecast beside the statistical one
     # [rule: OVR-3] [rule: OVR-4].
     rows = forecast_rows(as_of=as_of, demand_class=demand_class)
-    return rows[offset : offset + limit]
+    # The parameter rides on every answered row as private state
+    # the row's serializer reads: a fresh dict per row, so a row
+    # built anywhere else keeps the parameter false and dumps
+    # today's keys.
+    answered = [
+        {**row, "include_correction": include_correction}
+        for row in rows[offset : offset + limit]
+    ]
+    if include_correction and answered:
+        _corrections_for(answered)
+    return answered
 
 
 @router.get("/by-key", response_model=ForecastRowDetail)
@@ -212,11 +502,30 @@ def get_forecast_by_key(
     item_code: str = Query(..., max_length=64),
     site_code: str = Query(..., max_length=64),
     as_of: date | None = Query(default=None),
+    include_correction: bool = Query(default=False),
 ) -> dict:
     """One item-site's forecast row plus the ``history`` it was built from.
 
     Answers 404 when the item-site has no demand events, or when its
-    demand class is ``no_demand``.
+    demand class is ``no_demand`` — before either correction read
+    runs.
+
+    ``include_correction`` (false by default) carries the list's
+    ``correction`` over to this row.  While it is false the answer
+    is exactly today's, key for key: no ``correction`` key and
+    neither the stored system settings nor the bias exception's
+    measure is read.  While it is true, those two reads run once
+    each, before the correction is worked out, and the row carries
+    ``correction``, a ``ForecastCorrection`` (the row's item-site's
+    measured bias — the exception's detected date, the measure's
+    compared buckets, totals and bias and the factor the measured
+    actual total over the effective one — and one
+    ``ForecastCorrectionPeriod`` per forecast bucket without an
+    override day and without a demand signal, its proposed quantity
+    ``max(0, round(quantity x factor, 2))``) or null exactly as the
+    list decides it; a read that raises never fails the answer —
+    the route still answers 200 with the row, ``correction`` null.
+    Nothing is written.
     """
     _reject_nul_bytes(item_code, site_code)
     stats = demand_stats_for_pair(item_code, site_code, as_of)
@@ -235,7 +544,9 @@ def get_forecast_by_key(
     # The same effective forecast as the list, one query for this
     # item-site [rule: OVR-3] [rule: OVR-4].
     row = effective_for_all([row])[0]
-    row["history"] = history
+    row = {**row, "history": history, "include_correction": include_correction}
+    if include_correction:
+        _corrections_for([row])
     return row
 
 

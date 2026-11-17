@@ -94,6 +94,8 @@ code is the authority for details.
 - Exception acknowledgements now keep the proposal the exceptions list would have shown for the
   row at that moment, and `GET /api/exceptions/proposals` counts the stored acknowledgement
   events by kind and whether they had a proposal or a snooze (#1350).
+- The Overview's "Exceptions today" card now shows how many of the stored acknowledgements had a
+  proposed answer, as a count and a percentage, or that none are measured yet (#1353).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the

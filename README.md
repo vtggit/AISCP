@@ -166,7 +166,12 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   with the proposal the list answered for the row at that moment, and
   `GET /api/exceptions/proposals` counts the stored events by kind, snooze and proposal
   (`backend/app/api/exceptions.py`,
-  `backend/app/repositories/exception_ack_events_postgres_repository.py`).
+  `backend/app/repositories/exception_ack_events_postgres_repository.py`). Storing the event is
+  best effort: a failed write logs a warning and never fails or undoes the acknowledgement, so
+  the counts can fall short. A failed read of the history answers the standard 500 error.
+- The Overview's Exceptions today card shows for how many of those acknowledgements AISCP had
+  proposed the answer, as a count and a percentage, or that none are measured yet. A failed
+  read leaves that line out (`app/js/overview.js`).
 
 **Suppliers**
 

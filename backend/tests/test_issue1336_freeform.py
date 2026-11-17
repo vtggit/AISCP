@@ -611,7 +611,7 @@ def test_issue1336_freeform(client, monkeypatch):
         if script.down_revision == "0045_stockout_decision_proposals"
     ]
     assert len(successors) == 1
-    assert successors[0].revision == head
+    assert successors[0].revision == "0046_excess_decision_proposals"
     # The constraint: a remedy kind the decision's actions do not carry
     # is a check violation, and nothing is stored.  S6 is a stored
     # decision that has no proposal.

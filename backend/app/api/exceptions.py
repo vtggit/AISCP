@@ -398,10 +398,48 @@ when the key is not in the current exceptions list.
 ``DELETE /api/exceptions/ack?key=…`` (admin only) removes the stored
 acknowledgement: 204, or 404 when no acknowledgement is stored for
 the key.  A non-admin write answers 403 and no token 401.
+
+Every accepted PUT also appends one row to the append-only
+``exception_ack_events`` table (one row per stored acknowledgement,
+never updated or deleted — a cleared acknowledgement keeps its
+rows): the stored acknowledgement's key, subject, name, time and
+snooze, the acknowledged row's kind, item and site, and the proposal
+``GET /api/exceptions?include_snoozed=true&include_proposal=true``
+answers for that row at that moment — the first-seen dates read once
+through ``_first_seen_rows()``, the current stockout decisions read
+once through ``_current_stockout_decisions()`` and mapped by
+``(item_code, site_code)`` exactly as the list maps them, and
+``_row_proposal``, the very rule the list runs — stored as jsonb,
+null when the rule answers None or a read fails.  Building or
+storing the event never fails the acknowledgement: an exception
+raised there is swallowed (a failed insert logs a warning with the
+key, so the under-counting is visible in the logs) and the route
+answers the stored row as today, and a request the route refuses
+stores no event and reads neither the first-seen dates nor the
+decisions.
+
+``GET /api/exceptions/proposals`` (any signed-in user through the
+router's gate, the route takes no dependency of its own) counts the
+stored acknowledgement events and answers
+``ExceptionProposalCounts``: ``acknowledged`` their number (every
+event counts once, a snooze and a second acknowledgement of a key
+included — acknowledgements stored before the events existed stored
+no row and are not counted), ``proposed`` and ``without_proposal``
+those whose proposal is set and those whose is null, ``snoozed`` and
+``snoozed_proposed`` those whose snooze is set and those of them
+whose proposal is set too, and ``by_kind`` one
+``ExceptionProposalBucket`` — ``acknowledged`` that kind's events
+and ``proposed`` those of them whose proposal is set — per kind that
+has at least one stored event.  The route reads the store once,
+through ``_exception_ack_events_repo.counts()`` (one SELECT, grouped
+by kind, by the snooze and by the proposal); it writes nothing and
+calls no ERP.
 """
 
 from __future__ import annotations
 
+import contextlib
+import logging
 import math
 import numbers
 from datetime import UTC, date, datetime, timedelta
@@ -438,6 +476,9 @@ from app.repositories.erp_source_currencies_postgres_repository import (
 from app.repositories.erp_standing_grants_postgres_repository import (
     ErpStandingGrantPostgresRepository,
 )
+from app.repositories.exception_ack_events_postgres_repository import (
+    ExceptionAckEventPostgresRepository,
+)
 from app.repositories.exception_acks_postgres_repository import (
     ExceptionAcksPostgresRepository,
 )
@@ -470,6 +511,8 @@ from app.repositories.transfer_releases_postgres_repository import (
 )
 from app.settings.registry import get_setting
 from app.stats.demand import default_as_of
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/exceptions", tags=["exceptions"])
 
@@ -511,6 +554,7 @@ _transfer_releases_repo = TransferReleasePostgresRepository()
 _supplier_order_minimum_repo = SupplierOrderMinimumPostgresRepository()
 _sop_signoffs_repo = SopSignoffsPostgresRepository()
 _exception_acks_repo = ExceptionAcksPostgresRepository()
+_exception_ack_events_repo = ExceptionAckEventPostgresRepository()
 _exception_first_seen_repo = ExceptionFirstSeenPostgresRepository()
 _stockout_decisions_repo = StockoutDecisionPostgresRepository()
 _erp_code_clashes_repo = ErpCodeClashPostgresRepository()
@@ -2339,6 +2383,43 @@ def _row_proposal(
     )
 
 
+def _ack_proposal(row: ExceptionRow) -> dict | None:
+    """The proposal the list answers for the row at this moment, in JSON.
+
+    The very rule the list runs, on the row with its first-seen date
+    from the store: the first-seen dates read once through
+    ``_first_seen_rows()`` and the row's ``first_seen_on`` set from
+    them, the current stockout decisions read once through
+    ``_current_stockout_decisions()`` and mapped by ``(item_code,
+    site_code)`` exactly as ``list_exceptions`` maps them (None when
+    the read answers None), and ``_row_proposal`` the very rule the
+    list runs.  ``proposal.model_dump(mode="json")`` when the rule
+    answers a proposal, None when it answers None or an exception is
+    raised anywhere: a failed read gives an event whose proposal is
+    null, and the event never fails the acknowledgement.
+    """
+    try:
+        first_seen = _first_seen_rows()
+        with_first_seen = row.model_copy(
+            update={"first_seen_on": first_seen.get(row.key)}
+        )
+        decisions = _current_stockout_decisions()
+        by_item_site = (
+            None
+            if decisions is None
+            else {
+                (decision.get("item_code"), decision.get("site_code")): decision
+                for decision in decisions
+            }
+        )
+        proposal = _row_proposal(with_first_seen, by_item_site)
+        if proposal is None:
+            return None
+        return proposal.model_dump(mode="json")
+    except Exception:
+        return None
+
+
 @router.get("", response_model=ExceptionResponse)
 def list_exceptions(
     include_snoozed: bool = False, include_proposal: bool = False
@@ -2597,6 +2678,12 @@ def acknowledge_exception(
             status_code=404,
             detail="key is not in the current exceptions list",
         )
+    list_row = next(row for row in current_rows if row.key == body.key)
+    # The proposal the list answers for the row at this moment — the
+    # first-seen read and the decisions read each running once, the
+    # very rule the list runs: the event's snapshot of the
+    # acknowledgement, worked out before the row is stored.
+    proposal = _ack_proposal(list_row)
     stored = _exception_acks_repo.upsert(
         key=body.key,
         acknowledged_by=user.sub,
@@ -2604,6 +2691,30 @@ def acknowledge_exception(
         snooze_until=body.snooze_until,
         note=body.note,
     )
+    # The append-only history of the stored acknowledgement: storing
+    # it never fails the acknowledgement — an exception is swallowed
+    # (a failed insert logs a warning with the key, so the
+    # under-counting is visible in the logs) and the route answers
+    # the stored row as today.
+    with contextlib.suppress(Exception):
+        try:
+            _exception_ack_events_repo.insert(
+                key=stored["key"],
+                kind=list_row.kind,
+                item_code=list_row.item_code,
+                site_code=list_row.site_code,
+                acknowledged_by=stored["acknowledged_by"],
+                acknowledged_by_name=stored["acknowledged_by_name"],
+                acknowledged_at=stored["acknowledged_at"],
+                snooze_until=stored["snooze_until"],
+                proposal=proposal,
+            )
+        except Exception as exc:
+            logger.warning(
+                "the acknowledgement event of %s was not stored: %s",
+                stored["key"],
+                exc,
+            )
     return stored
 
 
@@ -2631,3 +2742,79 @@ def remove_acknowledgement(
             detail="no acknowledgement stored for this key",
         )
     return Response(status_code=204)
+
+
+class ExceptionProposalBucket(BaseModel):
+    """One exception kind's stored acknowledgement events: their
+    number and the number of them whose proposal is set."""
+
+    acknowledged: int
+    proposed: int
+
+
+class ExceptionProposalCounts(BaseModel):
+    """The stored acknowledgement events of the exceptions list,
+    counted: every event counts once, a snooze and a second
+    acknowledgement of a key included; ``proposed`` plus
+    ``without_proposal`` equals ``acknowledged``, and the buckets of
+    ``by_kind`` add up to ``acknowledged`` and ``proposed``."""
+
+    acknowledged: int
+    proposed: int
+    without_proposal: int
+    snoozed: int
+    snoozed_proposed: int
+    by_kind: dict[str, ExceptionProposalBucket]
+
+
+@router.get("/proposals", response_model=ExceptionProposalCounts)
+def exception_proposal_counts() -> dict:
+    """Count the stored acknowledgement events of the exceptions list.
+
+    Open to any signed-in user (the router is mounted behind the
+    app's authentication gate; the route takes no dependency of its
+    own).  Over every row of the append-only ``exception_ack_events``
+    table — one per stored acknowledgement, a snooze and a second
+    acknowledgement of a key among them, acknowledgements stored
+    before the events existed absent — read once through
+    ``_exception_ack_events_repo.counts()`` (one SELECT, grouped by
+    kind, by the snooze and by the proposal): ``acknowledged`` is
+    their number, ``proposed`` and ``without_proposal`` those whose
+    proposal is set and those whose is null, ``snoozed`` and
+    ``snoozed_proposed`` those whose snooze is set and those of them
+    whose proposal is set too, and ``by_kind`` one
+    ``ExceptionProposalBucket`` per kind that has at least one stored
+    event — ``acknowledged`` that kind's events and ``proposed``
+    those of them whose proposal is set.  The route writes nothing
+    and calls no ERP.
+    """
+    acknowledged = 0
+    proposed = 0
+    snoozed = 0
+    snoozed_proposed = 0
+    buckets: dict[str, dict[str, int]] = {}
+    for group in _exception_ack_events_repo.counts():
+        count = int(group["acknowledged"])
+        group_proposed = bool(group["proposed"])
+        group_snoozed = bool(group["snoozed"])
+        acknowledged += count
+        if group_proposed:
+            proposed += count
+        if group_snoozed:
+            snoozed += count
+            if group_proposed:
+                snoozed_proposed += count
+        bucket = buckets.setdefault(group["kind"], {"acknowledged": 0, "proposed": 0})
+        bucket["acknowledged"] += count
+        if group_proposed:
+            bucket["proposed"] += count
+    return {
+        "acknowledged": acknowledged,
+        "proposed": proposed,
+        "without_proposal": acknowledged - proposed,
+        "snoozed": snoozed,
+        "snoozed_proposed": snoozed_proposed,
+        "by_kind": {
+            kind: ExceptionProposalBucket(**bucket) for kind, bucket in buckets.items()
+        },
+    }

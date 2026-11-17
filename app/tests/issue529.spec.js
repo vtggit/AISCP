@@ -723,6 +723,7 @@ test('issue529 freeform', async ({ page }) => {
     '/api/supply-plan/summary',
     '/api/stockout/proposals',
     '/api/excess/proposals',
+    '/api/exceptions/proposals',
   ]);
   for (const url of allRequests) {
     if (url.indexOf('/api/') !== -1) {

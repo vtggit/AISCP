@@ -24,6 +24,12 @@
 //   * GET /api/aggregate/releases, the Released orders card's answer.
 //   * GET /api/abc, the "Value by class" card's answer.
 //   * GET /api/exceptions, the "Exceptions today" card's answer.
+//   * GET /api/exceptions/proposals, the "Exceptions today" card's
+//     measure line, the card's own read beside its list read; a
+//     failed read — any status, a network error, or a body that is
+//     not an object whose acknowledged and proposed hold the finite
+//     numbers with proposed no greater than acknowledged — leaves
+//     the line out, the card renders exactly as before;
 //   * GET /api/supply-plan/summary, the "Supply this week" card's answer.
 //
 // The figures load the first time the view becomes the active view. A
@@ -59,10 +65,16 @@
 //   * the "Exceptions today" card — GET /api/exceptions, the counts
 //     line, the "<n> new today" line when the answer's counts.new is
 //     a number above 0, up to three of the unacknowledged rows (the
-//     answer's order), the link to #/exceptions and the partial-
-//     failure note;
-//     a failed read removes the card — no error text, no Retry, no
-//     skeleton survives;
+//     answer's order), the measure line from GET
+//     /api/exceptions/proposals — "AISCP had proposed the answer for
+//     <proposed> of <acknowledged> acknowledgements (<pct>%)" when
+//     acknowledged is above 0, "No acknowledgements measured yet."
+//     when it is 0 — directly before the link, the link to
+//     #/exceptions and the partial-failure note; a failed measure
+//     read leaves the line out — the card renders exactly as
+//     before, no error text, no Retry, no skeleton survives;
+//     a failed list read removes the card — no error text, no
+//     Retry, no skeleton survives;
 //   * the "Supply this week" card — GET /api/supply-plan/summary:
 //     the orders line (the lines, the whole-dollar value and the
 //     suppliers), the transfers line ("No transfers suggested"
@@ -87,6 +99,7 @@
   var RELEASES_PATH = '/api/aggregate/releases';
   var ABC_PATH = '/api/abc';
   var EXCEPTIONS_PATH = '/api/exceptions';
+  var EXCEPTIONS_PROPOSALS_PATH = '/api/exceptions/proposals';
   var SUPPLY_PATH = '/api/supply-plan/summary';
   var STOCKOUT_PROPOSALS_PATH = '/api/stockout/proposals';
   var EXCESS_PROPOSALS_PATH = '/api/excess/proposals';
@@ -427,8 +440,17 @@
         renderAbc(answer);
       });
     } else if (regionId === EXCEPTIONS_REGION_ID) {
-      work = global.Api.get(EXCEPTIONS_PATH).then(function (answer) {
-        renderExceptions(answer);
+      // The card's measure line: its own read beside the list,
+      // joined in one Promise.all with its own catch that answers
+      // null, so a failed read never fails the card — it only
+      // leaves the line out.
+      work = Promise.all([
+        global.Api.get(EXCEPTIONS_PATH),
+        global.Api.get(EXCEPTIONS_PROPOSALS_PATH).catch(function () {
+          return null;
+        }),
+      ]).then(function (results) {
+        renderExceptions(results[0], results[1]);
       });
     } else if (regionId === SUPPLY_REGION_ID) {
       work = global.Api.get(SUPPLY_PATH).then(function (answer) {
@@ -1113,7 +1135,16 @@
   // to the inbox; every API value is inserted as text. When the
   // answer's counts.new is a number above 0, the card shows the
   // "<n> new today" line directly after the counts line; otherwise
-  // there is no such element.
+  // there is no such element. The measure line comes from the
+  // card's own read (GET /api/exceptions/proposals) and stands
+  // directly before the link: "AISCP had proposed the answer for
+  // <proposed> of <acknowledged> acknowledgements (<pct>%)" when
+  // acknowledged is above 0, "No acknowledgements measured yet."
+  // when it is 0. A failed measure read — any status, a network
+  // error, or a body that is not an object whose acknowledged and
+  // proposed are finite numbers with proposed no greater than
+  // acknowledged — leaves the line out; the card renders exactly
+  // as without the line.
 
   var EXCEPTIONS_REGION_ID = 'ov-region-exceptions';
   var EXCEPTIONS_TOP_LIMIT = 3;
@@ -1197,7 +1228,41 @@
     );
   }
 
-  function renderExceptions(answer) {
+  // The measure is usable only with an object whose acknowledged and
+  // proposed entries are finite numbers, proposed no greater than
+  // acknowledged; anything else leaves the line out.
+  function exceptionsMeasureValid(measure) {
+    if (!measure || typeof measure !== 'object' || Array.isArray(measure)) {
+      return false;
+    }
+    return (
+      isMoney(measure.acknowledged) &&
+      isMoney(measure.proposed) &&
+      measure.proposed <= measure.acknowledged
+    );
+  }
+
+  // "AISCP had proposed the answer for <proposed> of
+  // <acknowledged> acknowledgements (<pct>%)" — every number through
+  // countLabel, the words the same for a count of 1 — or "No
+  // acknowledgements measured yet." when acknowledged is 0.
+  function exceptionsMeasureText(measure) {
+    if (measure.acknowledged <= 0) {
+      return 'No acknowledgements measured yet.';
+    }
+    var pct = Math.round(100 * measure.proposed / measure.acknowledged);
+    return (
+      'AISCP had proposed the answer for ' +
+      countLabel(measure.proposed) +
+      ' of ' +
+      countLabel(measure.acknowledged) +
+      ' acknowledgements (' +
+      countLabel(pct) +
+      '%)'
+    );
+  }
+
+  function renderExceptions(answer, measure) {
     if (!exceptionsAnswerValid(answer)) {
       removeExceptionsSection();
       return;
@@ -1258,6 +1323,18 @@
       none.className = 'ov-exceptions-none';
       none.textContent = 'Nothing waiting.';
       section.appendChild(none);
+    }
+
+    // The measure line, directly before the link: the card's own
+    // read's answer, set as text like the rest of the card. A
+    // failed read — a null catch or a not-usable body — leaves
+    // the line out; the card renders exactly as without it.
+    if (exceptionsMeasureValid(measure)) {
+      var measureLine = document.createElement('p');
+      measureLine.className = 'ov-exceptions-measure';
+      measureLine.setAttribute('data-testid', 'ov-exceptions-measure');
+      measureLine.textContent = exceptionsMeasureText(measure);
+      section.appendChild(measureLine);
     }
 
     var open = document.createElement('a');

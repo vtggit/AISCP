@@ -89,6 +89,8 @@ code is the authority for details.
 - `GET /api/exceptions` can include a `proposal` on each row, from the item-site's current
   stockout decision when it already answers the exception, behind an `include_proposal` query
   parameter that is off by default (#1344).
+- The Exceptions screen asks for those proposals and shows, under a row's detail, the recorded
+  decision that already answers the exception; acknowledging stays an admin's click (#1347).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the

@@ -94,6 +94,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Forecast accuracy: backtest error with every forecast, and realised accuracy against stored
   forecast snapshots, with the effect of overrides and of demand signals measured separately
   (`backend/app/forecast/accuracy.py`, `snapshots.py`).
+- With `include_correction=true`, the forecast list and by-key reads give a row a correction
+  where the forecast bias exception finds its bias persists: a proposed quantity for each forecast
+  period without an override or a demand signal, the forecast scaled by the measured actual over
+  forecast, with the figures it rests on and a one-line reason (`backend/app/api/forecast.py`).
 - Planner overrides of a forecast period, with a required reason, and withdrawals
   (`backend/app/forecast/overrides.py`).
 - Demand signals: known extra demand (a promotion, deal or event) for one item-site and date

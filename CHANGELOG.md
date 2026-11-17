@@ -89,6 +89,8 @@ code is the authority for details.
 - `GET /api/exceptions` can include a `proposal` on each row, from the item-site's current
   stockout decision when it already answers the exception, behind an `include_proposal` query
   parameter that is off by default (#1344).
+- The Exceptions screen asks for those proposals and shows, under a row's detail, the recorded
+  decision that already answers the exception; acknowledging stays an admin's click (#1347).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the
@@ -226,8 +228,6 @@ code is the authority for details.
 - The docs check now reports routes, settings, and environment variables that a changed Markdown
   file names but the code does not define (#1175).
 - The order plan's run holds back an order it cannot value (#1301).
-- Exception acknowledgements B: the Exceptions screen shows what already answers each exception
-  (#1347).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a

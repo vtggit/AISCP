@@ -160,6 +160,8 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   each exception was first seen, and an admin can acknowledge or snooze one; with
   `include_proposal=true`, a row can carry a `proposal` naming the current stockout decision
   that already answers it, or null when nothing answers it (`backend/app/api/exceptions.py`).
+- The Exceptions screen asks for the proposal in its list fetches and shows the answer under
+  the row's detail when the proposal has a reason.
 
 **Suppliers**
 
@@ -286,8 +288,9 @@ views are:
 - **Overview**: value tiles, the three decision lists, released orders, value by ABC class,
   today's exceptions, this week's supply plan, and the decisions that need attention, largest
   money first.
-- **Exceptions**: the triage list across every planning signal, with acknowledge and snooze
-  for an admin.
+- **Exceptions**: the triage list across every planning signal, with the answer under each
+  row's detail when the item-site has already answered it, and acknowledge and snooze for an
+  admin.
 - **Work queue**: the reorder-point, excess and stockout lists with a detail pane to record
   a decision, each row's ERP and an ERP filter when there is more than one ERP, CSV
   downloads, and the Odoo draft purchase order action.

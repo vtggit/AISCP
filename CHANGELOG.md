@@ -226,6 +226,8 @@ code is the authority for details.
 - The docs check now reports routes, settings, and environment variables that a changed Markdown
   file names but the code does not define (#1175).
 - The order plan's run holds back an order it cannot value (#1301).
+- Exception acknowledgements B: the Exceptions screen shows what already answers each exception
+  (#1347).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a

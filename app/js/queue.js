@@ -39,10 +39,12 @@
 //     cover, the recommended max, the ERP's current order quantity
 //     and max, the basis line and the arithmetic — built from the
 //     row's own data, no extra request), a Proposed remedy section
-//     for a Stockout risk row whose data carries a `remedy` key
-//     (directly after the Why block and before the Decision block —
-//     built from the row's own data, no extra request; see below) and
-//     a Decision block with the row's decision history, newest first.
+//     for a Stockout risk row whose data carries a `remedy` key and a
+//     Proposed action section for an Excess and dead stock row whose
+//     data carries a `remedy` key (each directly after the Why block
+//     and before the Decision block — built from the row's own data,
+//     no extra request; see below) and a Decision block with the
+//     row's decision history, newest first.
 //
 // The "Proposed remedy" section of the detail pane (issue #1315):
 // for a selected Stockout risk row whose data carries a `remedy` key,
@@ -63,6 +65,23 @@
 // the API is HTML-escaped and a missing code or date reads as an em
 // dash. The section presses or changes no action button — the
 // decision is unchanged.
+//
+// The "Proposed action" section of the detail pane (issue #1335):
+// for a selected Excess and dead stock row whose data carries a
+// `remedy` key, directly after the Why block and before the Decision
+// block — built from the row's own data, no request. The proposal
+// line reads the label of the matching action button, followed by a
+// full stop: "Stop replenishing.", "Reduce." or "Dispose."; the
+// reason line shows the remedy's reason. A remedy that is null, not
+// an object, or of a kind other than the three excess actions shows
+// the section with the single line "No action proposed."; a row
+// without the key (an older server) shows no section, and the
+// Reorder points and Stockout risk tabs never show one (the
+// stockout "Proposed remedy" section is exactly as today). Every
+// value from the API is HTML-escaped. The section reuses the
+// stockout section's classes (q-remedy and friends), so
+// app/css/queue.css needs no change, and it presses or changes no
+// action button — the decision is unchanged.
 //
 // The answer of GET /api/erp-sources — fetched once with each load of
 // the three lists, and the lists never wait for it — adds two things,
@@ -122,9 +141,9 @@
 //
 // Every call goes through app/js/api.js:
 //   * GET /api/drift?limit=1000&include_decided=true — and the matching
-//     /api/excess and /api/stockout (the stockout list additionally
-//     asks for the remedy: include_remedy=true) — for the three tab
-//     lists,
+//     /api/excess and /api/stockout (the excess and stockout lists
+//     additionally ask for the remedy: include_remedy=true) — for the
+//     three tab lists,
 //   * GET /api/auth/me for the admin role,
 //   * GET /api/settings for the two queue settings,
 //   * GET /api/erp-sources once with each load of the three lists (the
@@ -183,7 +202,10 @@
       kind: 'excess',
       title: 'Excess and dead stock',
       kindLabel: 'Excess and dead stock',
-      listPath: '/api/excess?' + LIST_QUERY,
+      // The excess list additionally asks for the remedy
+      // (issue #1335): the "Proposed action" section of the detail
+      // pane is built from the row's own data — no extra request.
+      listPath: '/api/excess?' + LIST_QUERY + '&include_remedy=true',
       decisionsPath: '/api/excess/decisions',
       moneyField: 'money_tied_up',
       moneyLabel: 'Money tied up',
@@ -1013,6 +1035,7 @@
           '<pre class="q-arithmetic">' + esc(row.arithmetic || '') + '</pre>' +
         '</section>' +
         remedyHtml(row) +
+        excessRemedyHtml(row) +
         serviceLevelHtml(row) +
         orderQuantityHtml(row) +
         renderDecisionBlock(row, badge) +
@@ -1254,6 +1277,74 @@
       '<section class="q-remedy" aria-label="Proposed remedy" ' +
       'data-testid="queue-remedy">' +
       '<h3>Proposed remedy</h3>' +
+      body +
+      '</section>'
+    );
+  }
+
+  // The excess "Proposed action" section's proposal line (issue
+  // #1335): the label of the matching action button — "Stop
+  // replenishing", "Reduce" or "Dispose" — followed by a full stop.
+  // null for a remedy of any other kind — the section then shows
+  // "No action proposed.".
+  function excessRemedyProposalText(remedy) {
+    var meta = kindMeta(state.kind);
+    var label = actionLabelForValue(meta, remedy.kind);
+    if (label === '') {
+      return null;
+    }
+    return label + '.';
+  }
+
+  // The "Proposed action" section of the detail pane (issue #1335):
+  // for a selected Excess and dead stock row whose data carries a
+  // `remedy` key, directly after the Why block and before the
+  // Decision block. The heading reads "Proposed action" (the
+  // section's aria-label for assistive technology); the proposal
+  // line reads the label of the matching action button, followed by
+  // a full stop — "Stop replenishing.", "Reduce." or "Dispose." —
+  // and the remedy's reason follows, every value from the API
+  // HTML-escaped. A `remedy` that is null, not an object, or of a
+  // kind other than the three excess actions shows the section with
+  // the single line "No action proposed." and no proposal or reason
+  // line; a row without the key (an older server) shows no section,
+  // and the Reorder points and Stockout risk tabs never show one.
+  // It reuses the stockout "Proposed remedy" section's classes
+  // (q-remedy and friends), so app/css/queue.css needs no change.
+  // Built from the row's own data — the queue makes no request for
+  // it — and the section presses or changes no action button.
+  function excessRemedyHtml(row) {
+    if (
+      state.kind !== 'excess' ||
+      !row ||
+      typeof row !== 'object' ||
+      Array.isArray(row)
+    ) {
+      return '';
+    }
+    if (!Object.prototype.hasOwnProperty.call(row, 'remedy')) {
+      return '';
+    }
+    var remedy = row.remedy;
+    var proposal =
+      remedy && typeof remedy === 'object' && !Array.isArray(remedy)
+        ? excessRemedyProposalText(remedy)
+        : null;
+    var body =
+      proposal === null
+        ? '<p class="q-remedy-none" data-testid="queue-excess-remedy-none">' +
+          'No action proposed.' +
+          '</p>'
+        : '<p class="q-remedy-proposal" data-testid="queue-excess-remedy-proposal">' +
+          esc(proposal) +
+          '</p>' +
+          '<p class="q-remedy-reason" data-testid="queue-excess-remedy-reason">' +
+          esc(remedyValue(remedy.reason)) +
+          '</p>';
+    return (
+      '<section class="q-remedy" aria-label="Proposed action" ' +
+      'data-testid="queue-excess-remedy">' +
+      '<h3>Proposed action</h3>' +
       body +
       '</section>'
     );

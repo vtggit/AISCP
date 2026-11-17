@@ -166,5 +166,7 @@ The tokens are in `app/css/tokens.css`; use them, never raw values.
 | History | the matching `GET …/decisions?item_code=&site_code=` |
 | Settings | `GET /api/settings`; `PUT` and `DELETE /api/settings/{key}` |
 
+The Excess and dead stock detail's proposed action block is read from the excess list's `remedy` field; the excess list is requested with `include_remedy=true`.
+
 Every call carries the signed-in user's bearer token. Only an `admin` user may record a
 decision; the UI hides the decision controls for anyone else and shows the row read-only.

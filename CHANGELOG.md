@@ -43,6 +43,9 @@ code is the authority for details.
 - The Overview's Stockout risk card now shows how proposed remedies fared, with the accepted
   decisions that took a remedy, by remedy kind, and accepted decisions before proposals were kept
   (#1323).
+- The Work queue's Excess and dead stock detail pane now shows a Proposed action section for a
+  selected Excess and dead stock row that has remedy data, with the proposed action and reason or
+  "No action proposed." when the remedy is not usable (#1335).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

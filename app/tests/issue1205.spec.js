@@ -325,6 +325,7 @@ const KNOWN_GET_PATHS = [
   '/api/feed/status',
   '/api/stockout',
   '/api/stockout/proposals',
+  '/api/excess/proposals',
   '/api/supplier-risk',
   '/api/supply-plan',
   '/api/supply-plan/summary',

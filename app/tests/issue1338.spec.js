@@ -1,0 +1,842 @@
+// Proving spec for AIERP issue #1338 — the measure on the Overview's
+// Excess and dead stock card: the card's load region
+// (#ov-region-card-excess) gains GET /api/excess/proposals, its own
+// read beside the summary and the list it sends today (no query
+// string, out with them: first activation, each activation after
+// Overview.invalidate(), the card's own Retry), and with a usable
+// answer the card gains the "proposed action" block
+// (data-testid="ov-excess-proposals") directly after its figures
+// row and directly before its "Open Excess and dead stock list"
+// button.
+//
+// The gate serves the static app with no backend, so every /api/*
+// call is mocked with page.route — the same mocks and sign-in as
+// app/tests/issue1323.spec.js: /api/auth/config answers authMode
+// development and the pass signs in through the development token
+// card at 1440x900 on #/overview, as the admin planner1. issue1323's
+// handler gains one branch: /api/excess/proposals counts each
+// request in ctrl.excessProposalsGets, records its query string and
+// answers ctrl.excessProposalsAnswer with the status
+// ctrl.excessProposalsStatus (200 by default; any other status
+// answers {"detail": "Internal Server Error"}). The stockout
+// proposals branch stays as it is, answering its FIRST answer
+// throughout. Every request's method and path also land in
+// ctrl.requests, and a pageerror listener collects page errors.
+//
+// The pass proves, in order:
+//   * The read and the block: with the FIRST answer, one
+//     /api/excess/proposals request, that request with no query
+//     string, and the block's lines — "Proposed action taken in 3 of
+//     5 accepted decisions (60%)", "Stop replenishing 1 of 2 · Reduce
+//     1 of 2 · Dispose 1 of 1" and "2 accepted before proposals were
+//     kept" — exactly one block on the page, inside the Excess and
+//     dead stock card, its previous element sibling the card's
+//     .ov-card-figures and its next the card's .ov-open button; the
+//     Reorder points and Stockout risk cards hold none, the Stockout
+//     risk card still shows its own block, and the card still reads
+//     "0 to decide" with its three figures "$800", "$0" and "0".
+//   * No re-read unless stale: switching to #/queue and back to
+//     #/overview without Overview.invalidate() leaves the block in
+//     place, with no skeleton, and the proposals read at 1.
+//   * The re-read: with the SECOND answer, reactivateOverview (it
+//     calls window.Overview.invalidate(), then switches to #/queue
+//     and back) raises the count by exactly 1; the lines read
+//     "Proposed action taken in 4 of 6 accepted decisions (67%)",
+//     "Stop replenishing 3 of 4 · Dispose 1 of 2" and "1 accepted
+//     before proposals were kept" — the kinds line does not contain
+//     "Reduce".
+//   * Nothing measured yet: with the ZERO answer the line reads
+//     "No proposed actions measured yet.", there is no kinds line
+//     and the note reads "2 accepted before proposals were kept";
+//     with the NONE answer the line reads the same, and there is no
+//     kinds line and no note.
+//   * A failed read: with the status 500, and again with the status
+//     200 and the body {}, the card renders exactly as today — no
+//     block, no error text, no Retry, no skeleton, no new
+//     [role="alert"] — with its title, three figures and button.
+//   * A small screen: with the FIRST answer again, after
+//     reactivateOverview, at 390x844 the block is visible and the
+//     page does not scroll sideways.
+//
+// The pass ends as a NON-ADMIN (role 'user') after a full reload,
+// the way app/tests/issue1323.spec.js's viewer pass does: the token
+// arrives in the URL hash as #access_token=..., /api/auth/config and
+// /api/auth/me are mocked for that user, the IdP's auth and token
+// endpoints carry the PKCE round-trip, the shell renders for the
+// viewer with the same three lines the admin saw, and the admin-only
+// control — the Order plan's Release buttons — is absent while the
+// page still renders.
+//
+// Throughout: after each case the Excess and dead stock card holds
+// no skeleton element, no page error was raised, and every request
+// in ctrl.requests is a GET.
+//
+// The test is TOP-LEVEL and its title is the full proof name
+// ("issue1338 freeform"): the merge gate builds its junit nodeids
+// from the Playwright test title, and a describe() block would join
+// the titles with a "›" the contract nodeid does not carry, so the
+// proof would read as "not collected".
+
+const { test, expect } = require('@playwright/test');
+
+// CodeAgent terminal-state hook (frontend_recipe.build_terminal_state_hook)
+// CodeAgent#750: once this proof's own assertions pass, nothing on the page may still
+// show a loading placeholder. A render path that never reaches its terminal state
+// (data, an empty note, an error) is a defect the proof did not ask about. Elements
+// under [data-loading-ok] are exempt. Generated by the engine at write time -- edit
+// the generator, not this block.
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus || page.isClosed()) return;
+  const stuck = await page.evaluate((markers) => Array.from(document.querySelectorAll('body *')).filter((el) => {
+    if (el.children.length || el.closest('[data-loading-ok]')) return false;
+    const t = (el.textContent || '').trim();
+    if (!t || !markers.some((m) => t === m || t.startsWith(m))) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }).map((el) => {
+    const p = el.closest('[data-panel]');
+    const cls = (el.getAttribute('class') || '').trim().split(/\s+/)[0];
+    return (p && p.getAttribute('data-panel')) || (el.tagName.toLowerCase() + (cls ? '.' + cls : ''));
+  }), ["Loading data\u2026", "Loading data...", "Loading\u2026", "Loading..."]).catch(() => []);
+  test.expect(stuck, `element(s) still showing a loading placeholder after the proof: ${stuck.join(', ')} -- every render path must reach a terminal state (data, an empty note or an error), or declare data-loading-ok`).toEqual([]);
+});
+
+
+// The freeform pass runs several sub-scenarios in one test; give slow
+// CI runners room without weakening the assertions.
+test.setTimeout(90000);
+
+const DEV_CONFIG = {
+  authEnabled: true,
+  authMode: 'development',
+  issuer: 'http://idp.test/realms/r',
+  clientId: 'aierp-app',
+  audience: 'aierp-app',
+  jwksUrl: 'http://idp.test/realms/r/protocol/openid-connect/certs',
+  algorithms: ['RS256'],
+};
+
+const PROD_CONFIG = {
+  authEnabled: true,
+  authMode: 'production',
+  issuer: 'http://idp.test/realms/r',
+  clientId: 'aierp-app',
+  audience: 'aierp-app',
+  jwksUrl: 'http://idp.test/realms/r/protocol/openid-connect/certs',
+  algorithms: ['RS256'],
+};
+
+// The planner pass signs in through the development token card, the
+// way the existing Overview specs do.
+const PLANNER_ME = {
+  authenticated: true,
+  user: { sub: 'u1', username: 'planner1', roles: ['admin'], groups: [] },
+};
+
+// The viewer pass: a NON-ADMIN (role 'user').
+const VIEWER_ME = {
+  authenticated: true,
+  user: { sub: 'v1', username: 'viewer1', roles: ['user'], groups: [] },
+};
+
+// The four answers the card's read is steered through.
+const FIRST = {
+  accepted: 7,
+  stop_replenishing: { proposed: 2, chosen: 1 },
+  reduce: { proposed: 2, chosen: 1 },
+  dispose: { proposed: 1, chosen: 1 },
+  total: { proposed: 5, chosen: 3 },
+  without_proposal: 2,
+};
+
+const SECOND = {
+  accepted: 7,
+  stop_replenishing: { proposed: 4, chosen: 3 },
+  reduce: { proposed: 0, chosen: 0 },
+  dispose: { proposed: 2, chosen: 1 },
+  total: { proposed: 6, chosen: 4 },
+  without_proposal: 1,
+};
+
+const ZERO = {
+  accepted: 2,
+  stop_replenishing: { proposed: 0, chosen: 0 },
+  reduce: { proposed: 0, chosen: 0 },
+  dispose: { proposed: 0, chosen: 0 },
+  total: { proposed: 0, chosen: 0 },
+  without_proposal: 2,
+};
+
+// ZERO with accepted 0 and without_proposal 0.
+const NONE = {
+  accepted: 0,
+  stop_replenishing: { proposed: 0, chosen: 0 },
+  reduce: { proposed: 0, chosen: 0 },
+  dispose: { proposed: 0, chosen: 0 },
+  total: { proposed: 0, chosen: 0 },
+  without_proposal: 0,
+};
+
+// A small known summary so the value tiles render real figures:
+// accepted 3400 = 1200 + 800 + 1400; applied 1000 (29% of accepted);
+// outstanding 2400 = 1200 + 800 + 400.
+const SUMMARY = {
+  drift: {
+    accepted: { money: 1200, count: 1 },
+    applied: { money: 0, count: 0 },
+    outstanding: { money: 1200, count: 1 },
+    dismissed: { count: 0 },
+  },
+  excess: {
+    accepted: { money: 800, count: 1 },
+    applied: { money: 0, count: 0 },
+    outstanding: { money: 800, count: 0 },
+    dismissed: { count: 0 },
+  },
+  stockout: {
+    accepted: { money: 1400, count: 1 },
+    applied: { money: 1000, count: 1 },
+    outstanding: { money: 400, count: 0 },
+    dismissed: { count: 0 },
+  },
+  total: {
+    accepted: { money: 3400, count: 3 },
+    applied: { money: 1000, count: 1 },
+    outstanding: { money: 2400, count: 2 },
+    dismissed: { count: 0 },
+  },
+};
+
+// The Settings answers for the shell: one system setting (read-only)
+// and one personal one, the way the existing Overview specs mock it.
+const SETTINGS_ENTRIES = [
+  {
+    key: 'decisions.require_action_choice',
+    scope: 'system',
+    type: 'boolean',
+    allowed: null,
+    default: true,
+    description: 'Accept on an excess or stockout row stays disabled until an action is chosen.',
+    value: true,
+    source: 'default',
+    editable: false,
+    updated_by: null,
+    updated_by_name: null,
+    updated_at: null,
+  },
+  {
+    key: 'queue.default_filter',
+    scope: 'user',
+    type: 'enum',
+    allowed: ['to_decide', 'decided', 'all'],
+    default: 'to_decide',
+    description: 'The filter the Work queue opens with.',
+    value: 'to_decide',
+    source: 'default',
+    editable: true,
+    updated_by: null,
+    updated_by_name: null,
+    updated_at: null,
+  },
+];
+
+// The releases answer: PO003077 late (1 d), PO003068 awaiting
+// approval (20 d waiting), PO003070 awaiting approval (3 d waiting).
+function releasesPayload() {
+  return {
+    as_of: '2026-10-22',
+    orders: [
+      {
+        order_nbr: 'PO003077',
+        state: 'late',
+        month: '2026-10',
+        site_code: 'WHOLESALE',
+        supplier_code: 'CONGOODT00',
+        warehouse_code: 'WHOLESALE',
+        vendor_code: 'CONGOODT00',
+        released_at: '2026-10-20T06:12:41Z',
+        actor: 'jason',
+        value: '118240.55',
+        status: 'On hold',
+        hold: true,
+        promised_on: '2026-10-21',
+        days_waiting: null,
+        days_late: 1,
+        lines: [],
+      },
+      {
+        order_nbr: 'PO003068',
+        state: 'awaiting_approval',
+        month: '2026-10',
+        site_code: 'WHOLESALE',
+        supplier_code: 'CONGOODT01',
+        warehouse_code: 'WHOLESALE',
+        vendor_code: 'CONGOODT01',
+        released_at: '2026-10-02T09:30:00Z',
+        actor: 'jason',
+        value: '797380.24',
+        status: 'Open',
+        hold: false,
+        promised_on: '2026-11-05',
+        days_waiting: 20,
+        days_late: null,
+        lines: [],
+      },
+      {
+        order_nbr: 'PO003070',
+        state: 'awaiting_approval',
+        month: '2026-10',
+        site_code: 'WHOLESALE',
+        supplier_code: 'CONGOODT02',
+        warehouse_code: 'WHOLESALE',
+        vendor_code: 'CONGOODT02',
+        released_at: '2026-10-19T14:02:11Z',
+        actor: 'planner1',
+        value: '41250.00',
+        status: 'Open',
+        hold: false,
+        promised_on: '2026-10-30',
+        days_waiting: 3,
+        days_late: null,
+        lines: [],
+      },
+    ],
+    counts: { awaiting_approval: 2, late: 1, partly_received: 0, received: 0 },
+  };
+}
+
+// The "Value by class" answer: total_annual_value 1000, counts A 2,
+// B 1, C 1, unclassified 3 — the card renders, so the Exceptions
+// today card (and the Supply this week card) have their neighbours to
+// follow.
+function abcPayload() {
+  return {
+    as_of: '2026-10-22',
+    total_annual_value: 1000,
+    counts: { A: 2, B: 1, C: 1, unclassified: 3 },
+    rows: [
+      { item_code: 'IT0001', site_code: 'WHOLESALE', annual_value: 500, rank: 1, share_before: 0, abc_class: 'A' },
+      { item_code: 'IT0002', site_code: 'WHOLESALE', annual_value: 300, rank: 2, share_before: 0.5, abc_class: 'A' },
+      { item_code: 'IT0003', site_code: 'WHOLESALE', annual_value: 100, rank: 3, share_before: 0.8, abc_class: 'B' },
+      { item_code: 'IT0004', site_code: 'WHOLESALE', annual_value: 100, rank: 4, share_before: 0.9, abc_class: 'C' },
+      { item_code: 'IT0005', site_code: 'WHOLESALE', annual_value: null, rank: null, share_before: null, abc_class: null },
+      { item_code: 'IT0006', site_code: 'WHOLESALE', annual_value: null, rank: null, share_before: null, abc_class: null },
+      { item_code: 'IT0007', site_code: 'WHOLESALE', annual_value: null, rank: null, share_before: null, abc_class: null },
+    ],
+  };
+}
+
+// The "Exceptions today" answer: counts high 1, medium 3,
+// acknowledged 1 and three unacknowledged rows.
+function exceptionsPayload() {
+  return {
+    as_of: '2026-10-30',
+    counts: { high: 1, medium: 3, acknowledged: 1 },
+    rows: [
+      {
+        kind: 'stockout_likely',
+        severity: 'high',
+        key: 'stockout_likely:IT-001/WHOLESALE',
+        item_code: 'IT-001',
+        site_code: 'WHOLESALE',
+        title: 'Stockout likely',
+        detail: 'projected stockout 2026-11-04, 82% chance',
+        view: '#/queue?kind=stockout',
+        detected_on: '2026-10-30',
+        acknowledged: false,
+        acknowledged_by_name: null,
+        acknowledged_at: null,
+        snooze_until: null,
+      },
+      {
+        kind: 'expedite_late',
+        severity: 'medium',
+        key: 'expedite_late:PO00987/2',
+        item_code: null,
+        site_code: null,
+        title: 'Expedite late',
+        detail: '40 units, 6 days late',
+        view: '#/expedite',
+        detected_on: '2026-10-30',
+        acknowledged: false,
+        acknowledged_by_name: null,
+        acknowledged_at: null,
+        snooze_until: null,
+      },
+      {
+        kind: 'buffer_critical',
+        severity: 'medium',
+        key: 'buffer_critical:IT-003/SOUTH',
+        item_code: 'IT-003',
+        site_code: 'SOUTH',
+        title: 'Buffer critical',
+        detail: 'on hand 3 (22% of top of red)',
+        view: '#/buffers',
+        detected_on: '2026-10-30',
+        acknowledged: false,
+        acknowledged_by_name: null,
+        acknowledged_at: null,
+        snooze_until: null,
+      },
+    ],
+    sources_failed: [],
+  };
+}
+
+// The Order plan's answer: one acumatica supplier group with one
+// line — the Order plan view renders for the link check and, for an
+// admin, would carry its Release button the viewer must not see.
+function planPayload() {
+  return {
+    as_of: '2026-11-02',
+    horizon_days: 7,
+    line_count: 1,
+    total_value: '114.00',
+    suppliers: [
+      {
+        supplier_code: 'SUP-A',
+        source_system: 'acumatica',
+        vendor_code: 'V-100',
+        name: 'Acme Fasteners',
+        line_count: 1,
+        total_value: '114.00',
+        lines: [
+          {
+            item_code: 'ITEM-A',
+            site_code: 'MAIN',
+            position_units: 4,
+            reorder_point_units: 20,
+            daily_demand: 3,
+            due_in_days: 0,
+            order_by: '2026-11-02',
+            lead_time_days: 5,
+            arrives_on: '2026-11-07',
+            raw_quantity: 10,
+            quantity: 12,
+            adjustments: ['raised_to_minimum', 'rounded_to_lot'],
+            short_of_need: false,
+            terms: { min_order_qty: 10, lot_size: 6, max_order_qty: null },
+            unit_cost: 9.5,
+            value: 114,
+            arithmetic: 'raw 10, raised to the minimum of 10, rounded up to the lot of 12',
+            supplier_code: 'SUP-A',
+            source_system: 'acumatica',
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// The Supply this week card's answer.
+function summaryPayload() {
+  return {
+    as_of: '2026-11-02',
+    horizon_days: 7,
+    line_count: 18,
+    total_value: '344142.85',
+    supplier_count: 9,
+    transfer_count: 2,
+    transfer_value: '5109.21',
+    transfers_in_flight: 1,
+    transfers_awaiting_release: 0,
+  };
+}
+
+// Mock every /api/* call the app makes — issue1323's handler with its
+// one new branch: /api/excess/proposals counts each request in
+// ctrl.excessProposalsGets, records its query string in
+// ctrl.excessProposalsQueries and answers ctrl.excessProposalsAnswer
+// with the status ctrl.excessProposalsStatus (200 by default; any
+// other status answers {"detail": "Internal Server Error"}). The
+// stockout proposals branch stays as it is, answering its FIRST
+// answer throughout. Every request's method and path also land in
+// ctrl.requests, and the handler reads ctrl on every request, so the
+// test can steer the answers and the sign-in (ctrl.config / ctrl.me)
+// when the pass switches from the admin planner to the non-admin
+// viewer.
+async function mockApi(page) {
+  const ctrl = {
+    config: DEV_CONFIG,
+    me: PLANNER_ME,
+    abcAnswer: abcPayload(),
+    exceptionsAnswer: exceptionsPayload(),
+    summaryAnswer: summaryPayload(),
+    summaryStatus: 200,
+    summaryGets: 0,
+    proposalsAnswer: FIRST,
+    proposalsStatus: 200,
+    proposalsGets: 0,
+    proposalQueries: [],
+    excessProposalsAnswer: FIRST,
+    excessProposalsStatus: 200,
+    excessProposalsGets: 0,
+    excessProposalsQueries: [],
+    meRequests: [],
+    requests: [],
+  };
+  const appOrigin = { value: null };
+
+  const handler = (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (appOrigin.value === null) {
+      appOrigin.value = url.origin;
+    }
+    ctrl.requests.push({ method: request.method(), path: url.pathname });
+    const path = url.pathname;
+    if (path === '/api/auth/config') {
+      return route.fulfill({ status: 200, json: ctrl.config });
+    }
+    if (path === '/api/auth/me') {
+      ctrl.meRequests.push(request);
+      return route.fulfill({ status: 200, json: ctrl.me });
+    }
+    if (path === '/api/stockout/proposals') {
+      ctrl.proposalsGets += 1;
+      ctrl.proposalQueries.push(url.search);
+      if (ctrl.proposalsStatus !== 200) {
+        return route.fulfill({
+          status: ctrl.proposalsStatus,
+          json: { detail: 'Internal Server Error' },
+        });
+      }
+      return route.fulfill({ status: 200, json: ctrl.proposalsAnswer });
+    }
+    if (path === '/api/excess/proposals') {
+      ctrl.excessProposalsGets += 1;
+      ctrl.excessProposalsQueries.push(url.search);
+      if (ctrl.excessProposalsStatus !== 200) {
+        return route.fulfill({
+          status: ctrl.excessProposalsStatus,
+          json: { detail: 'Internal Server Error' },
+        });
+      }
+      return route.fulfill({ status: 200, json: ctrl.excessProposalsAnswer });
+    }
+    if (path === '/api/abc') {
+      return route.fulfill({ status: 200, json: ctrl.abcAnswer });
+    }
+    if (path === '/api/aggregate/releases') {
+      return route.fulfill({ status: 200, json: releasesPayload() });
+    }
+    if (path === '/api/exceptions') {
+      return route.fulfill({ status: 200, json: ctrl.exceptionsAnswer });
+    }
+    if (path === '/api/supply-plan/summary') {
+      ctrl.summaryGets += 1;
+      if (ctrl.summaryStatus !== 200) {
+        return route.fulfill({
+          status: ctrl.summaryStatus,
+          json: { detail: 'Internal Server Error' },
+        });
+      }
+      return route.fulfill({ status: 200, json: ctrl.summaryAnswer });
+    }
+    if (path === '/api/supply-plan') {
+      return route.fulfill({ status: 200, json: planPayload() });
+    }
+    if (path === '/api/supply-plan/transfers') {
+      return route.fulfill({ status: 200, json: { suggestions: [] } });
+    }
+    if (path === '/api/decisions/summary') {
+      return route.fulfill({ status: 200, json: SUMMARY });
+    }
+    if (path === '/api/drift' || path === '/api/excess' || path === '/api/stockout') {
+      return route.fulfill({ status: 200, json: [] });
+    }
+    if (path === '/api/settings') {
+      return route.fulfill({ status: 200, json: SETTINGS_ENTRIES });
+    }
+    return route.fulfill({ status: 404, json: { detail: 'Not Found' } });
+  };
+
+  await page.route('**/api/**', handler);
+  return { ctrl, appOrigin, handler };
+}
+
+// Mark the figures stale and take the Overview off and on again: the
+// next activation re-requests every region, /api/excess/proposals
+// included.
+async function reactivateOverview(page) {
+  await page.evaluate(() => {
+    window.Overview.invalidate();
+  });
+  await page.evaluate(() => {
+    window.location.hash = '#/queue';
+  });
+  await expect(page.locator('#view-queue')).toBeVisible();
+  await page.evaluate(() => {
+    window.location.hash = '#/overview';
+  });
+  await expect(page.locator('#view-overview')).toBeVisible();
+}
+
+test('issue1338 freeform', async ({ page }) => {
+  const pageErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  /* ---------------- planner pass: development sign-in ------------------ */
+  page.setViewportSize({ width: 1440, height: 900 });
+  const { ctrl, appOrigin, handler } = await mockApi(page);
+
+  const excessRegion = page.locator('#ov-region-card-excess');
+  const stockoutBlock = page.locator('[data-testid="ov-stockout-proposals"]');
+  const block = page.locator('[data-testid="ov-excess-proposals"]');
+  const blockLine = page.locator('[data-testid="ov-excess-proposals-line"]');
+  const blockKinds = page.locator('[data-testid="ov-excess-proposals-kinds"]');
+  const blockNote = page.locator('[data-testid="ov-excess-proposals-note"]');
+
+  // The "throughout" check: after each case the Excess and dead
+  // stock card holds no skeleton, no page error was raised, and
+  // every request in ctrl.requests is a GET.
+  async function assertSettled() {
+    expect(await excessRegion.locator('.skel').count()).toBe(0);
+    expect(pageErrors).toEqual([]);
+    expect(ctrl.requests.length).toBeGreaterThan(0);
+    expect(ctrl.requests.every((request) => request.method === 'GET')).toBe(true);
+  }
+
+  await page.goto('/');
+
+  // Sign in through the development token card as the admin planner,
+  // the way the existing Overview specs do. The Overview is the
+  // default view, so the Excess and dead stock card's region — its
+  // summary, its list and its proposals read — loads the first time
+  // the view becomes active.
+  await expect(page.locator('#signin-form')).toBeVisible();
+  await page.fill('#token-input', 'issue1338-dev-token');
+  await page.click('#signin-button');
+  await expect(page.locator('#app')).toBeVisible();
+  await expect(page.locator('#user-name')).toHaveText('planner1');
+
+  // --- Case 1: the read and the block, with the FIRST answer ----------
+  await expect.poll(() => ctrl.excessProposalsGets).toBe(1);
+  expect(ctrl.excessProposalsQueries[0]).toBe('');
+
+  await expect(block).toBeVisible();
+  await expect(blockLine).toHaveText(
+    'Proposed action taken in 3 of 5 accepted decisions (60%)',
+  );
+  await expect(blockKinds).toHaveText(
+    'Stop replenishing 1 of 2 \u00b7 Reduce 1 of 2 \u00b7 Dispose 1 of 1',
+  );
+  await expect(blockNote).toHaveText('2 accepted before proposals were kept');
+
+  // Exactly one block on the page, inside the Excess and dead stock
+  // card, its previous element sibling the card's .ov-card-figures
+  // and its next the card's .ov-open button; the other list cards
+  // hold none.
+  expect(await block.count()).toBe(1);
+  const placement = await page.evaluate(() => {
+    const region = document.getElementById('ov-region-card-excess');
+    const el = document.querySelector('#ov-region-card-excess [data-testid="ov-excess-proposals"]');
+    return {
+      insideRegion: !!el,
+      prevIsFigures: !!(
+        el &&
+        region &&
+        el.previousElementSibling === region.querySelector('.ov-card-figures')
+      ),
+      nextIsOpen: !!(
+        el &&
+        region &&
+        el.nextElementSibling === region.querySelector('.ov-open')
+      ),
+      driftHas: !!document.querySelector(
+        '#ov-region-card-drift [data-testid="ov-excess-proposals"]',
+      ),
+      stockoutHas: !!document.querySelector(
+        '#ov-region-card-stockout [data-testid="ov-excess-proposals"]',
+      ),
+    };
+  });
+  expect(placement.insideRegion).toBe(true);
+  expect(placement.prevIsFigures).toBe(true);
+  expect(placement.nextIsOpen).toBe(true);
+  expect(placement.driftHas).toBe(false);
+  expect(placement.stockoutHas).toBe(false);
+
+  // The Stockout risk card still shows its own block, and the card's
+  // own content is unchanged by the new block: its title, its "N to
+  // decide" count, its three figures and its button.
+  await expect(stockoutBlock).toBeVisible();
+  await expect(excessRegion.locator('.ov-card-title')).toHaveText('Excess and dead stock');
+  await expect(excessRegion.locator('.ov-card-to-decide')).toHaveText('0 to decide');
+  await expect(excessRegion.locator('.ov-figure-value').nth(0)).toHaveText('$800');
+  await expect(excessRegion.locator('.ov-figure-value').nth(1)).toHaveText('$0');
+  await expect(excessRegion.locator('.ov-figure-value').nth(2)).toHaveText('0');
+  await expect(excessRegion.locator('.ov-open')).toHaveText('Open Excess and dead stock list');
+  await assertSettled();
+
+  // --- Case 2: no re-read unless stale --------------------------------
+  await page.evaluate(() => {
+    window.location.hash = '#/queue';
+  });
+  await expect(page.locator('#view-queue')).toBeVisible();
+  await page.evaluate(() => {
+    window.location.hash = '#/overview';
+  });
+  await expect(page.locator('#view-overview')).toBeVisible();
+  await expect(block).toBeVisible();
+  expect(ctrl.excessProposalsGets).toBe(1);
+  await assertSettled();
+
+  // --- Case 3: the re-read, with the SECOND answer --------------------
+  ctrl.excessProposalsAnswer = SECOND;
+  const getsBeforeSecond = ctrl.excessProposalsGets;
+  await reactivateOverview(page);
+  await expect.poll(() => ctrl.excessProposalsGets).toBe(getsBeforeSecond + 1);
+  await expect(blockLine).toHaveText(
+    'Proposed action taken in 4 of 6 accepted decisions (67%)',
+  );
+  await expect(blockKinds).toHaveText('Stop replenishing 3 of 4 \u00b7 Dispose 1 of 2');
+  expect(await blockKinds.textContent()).not.toContain('Reduce');
+  await expect(blockNote).toHaveText('1 accepted before proposals were kept');
+  await assertSettled();
+
+  // --- Case 4: nothing measured yet — the ZERO answer -----------------
+  ctrl.excessProposalsAnswer = ZERO;
+  const getsBeforeZero = ctrl.excessProposalsGets;
+  await reactivateOverview(page);
+  await expect.poll(() => ctrl.excessProposalsGets).toBe(getsBeforeZero + 1);
+  await expect(blockLine).toHaveText('No proposed actions measured yet.');
+  await expect(blockKinds).toHaveCount(0);
+  await expect(blockNote).toHaveText('2 accepted before proposals were kept');
+  await assertSettled();
+
+  // --- Case 5: nothing at all — the NONE answer -----------------------
+  ctrl.excessProposalsAnswer = NONE;
+  const getsBeforeNone = ctrl.excessProposalsGets;
+  await reactivateOverview(page);
+  await expect.poll(() => ctrl.excessProposalsGets).toBe(getsBeforeNone + 1);
+  await expect(blockLine).toHaveText('No proposed actions measured yet.');
+  await expect(blockKinds).toHaveCount(0);
+  await expect(blockNote).toHaveCount(0);
+  await assertSettled();
+
+  // --- Case 6: a failed read leaves the block out ---------------------
+  const alertsBefore = await page.locator('[role="alert"]').count();
+
+  ctrl.excessProposalsStatus = 500;
+  const getsBefore500 = ctrl.excessProposalsGets;
+  await reactivateOverview(page);
+  await expect.poll(() => ctrl.excessProposalsGets).toBe(getsBefore500 + 1);
+  await expect(excessRegion.locator('.ov-card-to-decide')).toHaveText('0 to decide');
+  expect(await block.count()).toBe(0);
+  await expect(excessRegion.locator('.ov-card-title')).toHaveText('Excess and dead stock');
+  await expect(excessRegion.locator('.ov-figure-value').nth(0)).toHaveText('$800');
+  await expect(excessRegion.locator('.ov-figure-value').nth(1)).toHaveText('$0');
+  await expect(excessRegion.locator('.ov-figure-value').nth(2)).toHaveText('0');
+  await expect(excessRegion.locator('.ov-open')).toHaveText('Open Excess and dead stock list');
+  expect(await excessRegion.locator('.ov-error').count()).toBe(0);
+  expect(await excessRegion.locator('.ov-retry').count()).toBe(0);
+  expect(await excessRegion.locator('.skel').count()).toBe(0);
+  expect(await page.locator('[role="alert"]').count()).toBe(alertsBefore);
+  await expect(stockoutBlock).toBeVisible();
+  await assertSettled();
+
+  ctrl.excessProposalsStatus = 200;
+  ctrl.excessProposalsAnswer = {};
+  const getsBeforeEmpty = ctrl.excessProposalsGets;
+  await reactivateOverview(page);
+  await expect.poll(() => ctrl.excessProposalsGets).toBe(getsBeforeEmpty + 1);
+  await expect(excessRegion.locator('.ov-card-to-decide')).toHaveText('0 to decide');
+  expect(await block.count()).toBe(0);
+  await expect(excessRegion.locator('.ov-card-title')).toHaveText('Excess and dead stock');
+  await expect(excessRegion.locator('.ov-figure-value').nth(0)).toHaveText('$800');
+  await expect(excessRegion.locator('.ov-figure-value').nth(1)).toHaveText('$0');
+  await expect(excessRegion.locator('.ov-figure-value').nth(2)).toHaveText('0');
+  await expect(excessRegion.locator('.ov-open')).toHaveText('Open Excess and dead stock list');
+  expect(await excessRegion.locator('.ov-error').count()).toBe(0);
+  expect(await excessRegion.locator('.ov-retry').count()).toBe(0);
+  expect(await excessRegion.locator('.skel').count()).toBe(0);
+  expect(await page.locator('[role="alert"]').count()).toBe(alertsBefore);
+  await expect(stockoutBlock).toBeVisible();
+  await assertSettled();
+
+  // --- Case 7: phone width — the block, no sideways scroll ------------
+  ctrl.excessProposalsAnswer = FIRST;
+  const getsBeforePhone = ctrl.excessProposalsGets;
+  await reactivateOverview(page);
+  await expect.poll(() => ctrl.excessProposalsGets).toBe(getsBeforePhone + 1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(block).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await assertSettled();
+
+  /* ---------- viewer pass: NON-ADMIN, production boot, full reload ---- */
+  // The token arrives in the URL hash the way the identity requirement
+  // describes; since the hash is no longer a token delivery path the
+  // production boot completes through the PKCE round-trip, so the IdP's
+  // auth and token endpoints carry the viewer through it.
+  page.setViewportSize({ width: 1440, height: 900 });
+  const meCountBeforeViewer = ctrl.meRequests.length;
+  await page.evaluate(() => {
+    window.sessionStorage.clear();
+  });
+  await page.unroute('**/api/**');
+  ctrl.config = PROD_CONFIG;
+  ctrl.me = VIEWER_ME;
+  ctrl.excessProposalsStatus = 200;
+  ctrl.excessProposalsAnswer = FIRST;
+  await page.route('**/api/**', handler);
+  await page.route(/protocol\/openid-connect\/token/, (route) => {
+    return route.fulfill({
+      status: 200,
+      json: { access_token: 'pkce-viewer-token', token_type: 'Bearer' },
+    });
+  });
+  await page.route(/protocol\/openid-connect\/auth/, (route) => {
+    const state = new URL(route.request().url()).searchParams.get('state') || '';
+    const backToApp =
+      appOrigin.value + '/?code=fake-pkce-code&state=' + encodeURIComponent(state);
+    return route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body:
+        '<!doctype html><html><body><script>window.location.replace(' +
+        JSON.stringify(backToApp) +
+        ');</script></body></html>',
+    });
+  });
+
+  // A full reload through a distinct path carrying the token hash, as
+  // the identity requirement calls for.
+  await page.goto('/index.html#access_token=viewer-token-1338');
+
+  // The PKCE round-trip completes and the shell renders for the
+  // non-admin user, signed in through /api/auth/me ...
+  await expect(page.locator('#app')).toBeVisible();
+  await expect(page.locator('#user-name')).toHaveText('viewer1');
+  expect(page.url()).not.toContain('access_token');
+  expect(await page.evaluate(() => window.sessionStorage.getItem('aierp_token'))).toBe(
+    'pkce-viewer-token',
+  );
+  await expect.poll(() => ctrl.meRequests.length).toBeGreaterThan(meCountBeforeViewer);
+  const viewerMe = ctrl.meRequests[ctrl.meRequests.length - 1];
+  expect(viewerMe.headers()['authorization']).toBe('Bearer pkce-viewer-token');
+  // ... and the Excess and dead stock card's block loaded for the
+  // viewer with the same three lines the admin saw.
+  await expect(block).toBeVisible();
+  await expect(blockLine).toHaveText(
+    'Proposed action taken in 3 of 5 accepted decisions (60%)',
+  );
+  await expect(blockKinds).toHaveText(
+    'Stop replenishing 1 of 2 \u00b7 Reduce 1 of 2 \u00b7 Dispose 1 of 1',
+  );
+  await expect(blockNote).toHaveText('2 accepted before proposals were kept');
+  await assertSettled();
+
+  // The admin-only controls are absent while the page still renders:
+  // the Order plan shows its summary for the viewer, but the Release
+  // controls do not render at all.
+  await page.click('.nav-btn[data-view="orders"]');
+  await expect(page).toHaveURL(/#\/orders$/);
+  await expect(page.locator('#view-orders')).toBeVisible();
+  await expect(page.locator('[data-testid="orders-summary"]')).toBeVisible();
+  await expect(page.locator('[data-testid="orders-release"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="orders-transfer-release"]')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+  expect(ctrl.requests.every((request) => request.method === 'GET')).toBe(true);
+});

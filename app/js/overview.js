@@ -14,6 +14,13 @@
 //     finite numbers proposed and chosen and whose without_proposal
 //     is a finite number — leaves the block out, the card renders
 //     exactly as before;
+//   * GET /api/excess/proposals, the Excess and dead stock card's
+//     "proposed action" block, the card's own read beside its
+//     summary and list reads; a failed read — any status, a network
+//     error, or a body that is not an object whose total holds the
+//     finite numbers proposed and chosen and whose without_proposal
+//     is a finite number — leaves the block out, the card renders
+//     exactly as before;
 //   * GET /api/aggregate/releases, the Released orders card's answer.
 //   * GET /api/abc, the "Value by class" card's answer.
 //   * GET /api/exceptions, the "Exceptions today" card's answer.
@@ -33,11 +40,12 @@
 //   * one region per list card — that kind's summary buckets (accepted
 //     money, applied money, dismissed count) plus the "N to decide"
 //     count of that list; the Stockout risk card carries its
-//     "proposed remedy" block (GET /api/stockout/proposals),
-//     directly after its figures row and directly before its Open
-//     button; a failed read leaves the block out — the card renders
-//     exactly as before, no error text, no Retry, no new
-//     [role="alert"];
+//     "proposed remedy" block (GET /api/stockout/proposals) and the
+//     Excess and dead stock card its "proposed action" block (GET
+//     /api/excess/proposals), each directly after its figures row and
+//     directly before its Open button; a failed read leaves the block
+//     out — the card renders exactly as before, no error text, no
+//     Retry, no new [role="alert"];
 //   * the Released orders card — GET /api/aggregate/releases: the four
 //     state counts (Late, Awaiting approval, Partly received,
 //     Received), the oldest waiting approval order and the link to
@@ -81,6 +89,7 @@
   var EXCEPTIONS_PATH = '/api/exceptions';
   var SUPPLY_PATH = '/api/supply-plan/summary';
   var STOCKOUT_PROPOSALS_PATH = '/api/stockout/proposals';
+  var EXCESS_PROPOSALS_PATH = '/api/excess/proposals';
 
   var KINDS = [
     {
@@ -454,6 +463,17 @@
           })
         );
       }
+      if (kind === 'excess') {
+        // The card's "proposed action" block: its own read beside
+        // the summary and the list, with its own catch that answers
+        // null so a failed read never fails the card — it only
+        // leaves the block out.
+        reads.push(
+          global.Api.get(EXCESS_PROPOSALS_PATH).catch(function () {
+            return null;
+          })
+        );
+      }
       work = Promise.all(reads).then(function (results) {
         renderCard(KINDS_BY_KIND[kind], results[0], results[1], results[2]);
       });
@@ -631,6 +651,15 @@
         .querySelector('.ov-card-figures')
         .insertAdjacentElement('afterend', proposalsBlock(proposals));
     }
+    // The Excess and dead stock card's "proposed action" block:
+    // the same answer shape as the Stockout risk card's read, the
+    // same placement; a failed read or an unusable body leaves it
+    // out and the card renders exactly as before.
+    if (kind === 'excess' && proposalsAnswerValid(proposals)) {
+      region
+        .querySelector('.ov-card-figures')
+        .insertAdjacentElement('afterend', excessProposalsBlock(proposals));
+    }
   }
 
   /* ------------------------ stockout proposals ------------------------ */
@@ -733,6 +762,103 @@
       var note = document.createElement('p');
       note.className = 'ov-proposals-note';
       note.setAttribute('data-testid', 'ov-stockout-proposals-note');
+      note.textContent =
+        countLabel(answer.without_proposal) +
+        ' accepted before proposals were kept';
+      block.appendChild(note);
+    }
+
+    return block;
+  }
+
+  /* ------------------------ excess proposals ------------------------ */
+
+  // The Excess and dead stock card's "proposed action" measurement.
+  // The answer is usable under the same rule as the Stockout risk
+  // card's read (proposalsAnswerValid): an object whose total holds
+  // the finite numbers proposed and chosen and whose without_proposal
+  // is a finite number; anything else — the failed read's null, any
+  // status, a network error, a body of another shape — leaves the
+  // block out.
+  // The per-kind lines, in the fixed order and with the fixed labels
+  // the Work queue's excess action buttons use: Stop replenishing,
+  // Reduce, Dispose.
+  var EXCESS_PROPOSAL_KINDS = [
+    { key: 'stop_replenishing', label: 'Stop replenishing' },
+    { key: 'reduce', label: 'Reduce' },
+    { key: 'dispose', label: 'Dispose' },
+  ];
+
+  // The block's lines, built node by node with textContent — no API
+  // value goes through innerHTML — in order: the measurement line
+  // ("No proposed actions measured yet." while total.proposed is
+  // 0), the per-kind line only while total.proposed is above 0 (each
+  // kind whose proposed is a number above 0, "<label> <chosen> of
+  // <proposed>", joined by " · "; the line is left out when no
+  // kind is left) and the note only while without_proposal is above
+  // 0. Every number goes through countLabel, whole with thousands
+  // separators, and the words stay the same for a count of 1, like
+  // the value tiles' "accepted decisions" note. The block reuses the
+  // Stockout risk block's classes, so the styles come from the same
+  // rules.
+  function excessProposalsBlock(answer) {
+    var total = answer.total;
+
+    var block = document.createElement('div');
+    block.className = 'ov-proposals';
+    block.setAttribute('data-testid', 'ov-excess-proposals');
+
+    var line = document.createElement('p');
+    line.className = 'ov-proposals-line';
+    line.setAttribute('data-testid', 'ov-excess-proposals-line');
+    if (total.proposed > 0) {
+      var pct = Math.round((100 * total.chosen) / total.proposed);
+      line.textContent =
+        'Proposed action taken in ' +
+        countLabel(total.chosen) +
+        ' of ' +
+        countLabel(total.proposed) +
+        ' accepted decisions (' +
+        countLabel(pct) +
+        '%)';
+    } else {
+      line.textContent = 'No proposed actions measured yet.';
+    }
+    block.appendChild(line);
+
+    if (total.proposed > 0) {
+      var parts = [];
+      EXCESS_PROPOSAL_KINDS.forEach(function (kindMeta) {
+        var kind = answer[kindMeta.key];
+        if (
+          !kind ||
+          typeof kind !== 'object' ||
+          !isMoney(kind.proposed) ||
+          kind.proposed <= 0
+        ) {
+          return;
+        }
+        parts.push(
+          kindMeta.label +
+            ' ' +
+            countLabel(kind.chosen) +
+            ' of ' +
+            countLabel(kind.proposed)
+        );
+      });
+      if (parts.length) {
+        var kinds = document.createElement('p');
+        kinds.className = 'ov-proposals-kinds';
+        kinds.setAttribute('data-testid', 'ov-excess-proposals-kinds');
+        kinds.textContent = parts.join(' \u00b7 ');
+        block.appendChild(kinds);
+      }
+    }
+
+    if (answer.without_proposal > 0) {
+      var note = document.createElement('p');
+      note.className = 'ov-proposals-note';
+      note.setAttribute('data-testid', 'ov-excess-proposals-note');
       note.textContent =
         countLabel(answer.without_proposal) +
         ' accepted before proposals were kept';

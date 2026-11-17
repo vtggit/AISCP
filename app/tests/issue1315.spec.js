@@ -460,7 +460,7 @@ test('issue1315 freeform', async ({ page }) => {
     '?limit=1000&include_decided=true',
   );
   expect(loadGets.find((get) => get.kind === 'excess').query).toBe(
-    '?limit=1000&include_decided=true',
+    '?limit=1000&include_decided=true&include_remedy=true',
   );
   // ... and the queue sent no request the queue does not send today:
   // no new endpoint, no new call, no new parameter on the other two
@@ -686,11 +686,21 @@ test('issue1315 freeform', async ({ page }) => {
   expect(
     plannerStockoutGets.filter((get) => get.query === '?limit=1000&include_decided=true'),
   ).toHaveLength(2); // the Overview's own reads, exactly as today
-  const plannerOtherGets = ctrl.listGets.filter((get) => get.kind !== 'stockout');
-  expect(plannerOtherGets).toHaveLength(8);
+  const plannerDriftGets = ctrl.listGets.filter((get) => get.kind === 'drift');
+  expect(plannerDriftGets).toHaveLength(4);
   expect(
-    plannerOtherGets.every((get) => get.query === '?limit=1000&include_decided=true'),
+    plannerDriftGets.every((get) => get.query === '?limit=1000&include_decided=true'),
   ).toBe(true);
+  const plannerExcessGets = ctrl.listGets.filter((get) => get.kind === 'excess');
+  expect(plannerExcessGets).toHaveLength(4);
+  expect(
+    plannerExcessGets.filter(
+      (get) => get.query === '?limit=1000&include_decided=true&include_remedy=true',
+    ),
+  ).toHaveLength(2); // the two queue loads: the admin's and the planner's
+  expect(
+    plannerExcessGets.filter((get) => get.query === '?limit=1000&include_decided=true'),
+  ).toHaveLength(2); // the Overview's own reads, exactly as today
 
   await page.click('.q-tab[data-kind="stockout"]');
   await expect(page.locator('.q-row')).toHaveCount(6);

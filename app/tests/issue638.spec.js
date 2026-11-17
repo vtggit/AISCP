@@ -424,9 +424,9 @@ test('issue638 freeform', async ({ page }) => {
     api.listGets.every(
       (g) =>
         g.query ===
-        (g.kind === 'stockout'
-          ? '?limit=1000&include_decided=true&include_remedy=true'
-          : '?limit=1000&include_decided=true'),
+        (g.kind === 'drift'
+          ? '?limit=1000&include_decided=true'
+          : '?limit=1000&include_decided=true&include_remedy=true'),
     ),
   ).toBe(true);
 

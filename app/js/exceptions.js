@@ -3,15 +3,22 @@
 // #/exceptions is the triage list of what needs attention today,
 // across every planning signal: GET /api/exceptions through
 // app/js/api.js, fetched on view activation and on the Refresh
-// button ([data-testid="exceptions-refresh"]). The "Show snoozed"
-// checkbox ([data-testid="exceptions-show-snoozed"]) refetches with
-// include_snoozed=true when ticked, and without it again when
-// unticked. A request-sequence guard renders only the newest answer,
-// and a skeleton shows while a fetch is out. Whether the viewer is an
-// admin is read from GET /api/auth/me's roles, exactly as the Push to
-// ERP view does: an unknown or failed read fails closed — the Actions
-// column and its buttons render only once /api/auth/me positively
-// says the user's roles include "admin".
+// button ([data-testid="exceptions-refresh"]). Every list fetch
+// carries the query string include_proposal=true — with
+// include_snoozed=true first while the "Show snoozed" checkbox
+// ([data-testid="exceptions-show-snoozed"]) is ticked — and the
+// checkbox refetches with that query when ticked, and with
+// include_proposal=true again when unticked; every other list fetch
+// (after a successful action, on each change of "Show snoozed")
+// uses the same path. A server from before the proposal read
+// ignores the parameter and answers rows without a proposal key,
+// and the screen then renders exactly as before. A request-sequence
+// guard renders only the newest answer, and a skeleton shows while
+// a fetch is out. Whether the viewer is an admin is read from
+// GET /api/auth/me's roles, exactly as the Push to ERP view does:
+// an unknown or failed read fails closed — the Actions column and
+// its buttons render only once /api/auth/me positively says the
+// user's roles include "admin".
 //
 // The summary ([data-testid="exceptions-summary"]) reads
 // "<high> high · <medium> medium · <acknowledged> acknowledged" from
@@ -54,6 +61,27 @@
 // ([data-testid="exceptions-open"]) whose href is the row's view,
 // rendered only when the view starts with "#/"; any other value
 // renders no link.
+//
+// A row whose proposal is an object — not an array — with a
+// non-empty string reason shows the answer line under the detail:
+// a div.ex-proposal ([data-testid="exceptions-proposal"]) inside
+// the row's Detail cell (td.ex-detail), after the detail text — the
+// detail (or its em dash) stays the cell's first child, a text
+// node, and the line is the cell's only element. The line reads
+// "Answered by: <reason>" followed, when recorded_at is a string
+// whose start matches "YYYY-MM-DD[T ]HH:MM", by " Recorded by
+// <name> at <date> <time> UTC.", <name> the recorded_by_name — "
+// Recorded at <date> <time> UTC." when recorded_by_name is null,
+// empty or not text; any other recorded_at leaves the sentence out,
+// so a null or missing proposal and an unparseable recorded_at
+// render nothing new and no invalid date. The line reads no other
+// field of the proposal (not record_kind), so a later kind of
+// answering record needs no change here, and it is built with the
+// module's el helper: reason and name reach the page as text
+// (textContent), never through innerHTML. An acknowledged row and a
+// snoozed row shown with "Show snoozed" ticked show the line like
+// any other row; a row without a line keeps its Detail cell exactly
+// as before, the detail its only content.
 //
 // The Actions column is admin only. An unacknowledged row has
 // "Acknowledge" ([data-testid="exceptions-ack"]), which sends
@@ -293,6 +321,57 @@
     return text;
   }
 
+  // The recorded_at sentence's parts: the date and the time groups
+  // of a recorded_at string whose start matches
+  // "YYYY-MM-DD[T ]HH:MM" — null for any other value (missing, not
+  // a string, or the start not matching), so no sentence and never
+  // an invalid date.
+  function recordedAtParts(recordedAt) {
+    if (typeof recordedAt !== 'string') {
+      return null;
+    }
+    var match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(recordedAt);
+    if (!match) {
+      return null;
+    }
+    return { date: match[1], time: match[2] };
+  }
+
+  // The proposal line: the answer under the row's detail, only for
+  // a row whose proposal is an object — not an array — with a
+  // non-empty string reason. A null or missing proposal (a server
+  // from before the proposal read), a non-object proposal, a
+  // missing, empty or non-string reason shows nothing new. The line
+  // reads no other field of the proposal (not record_kind), so a
+  // later kind of answering record needs no change here; it is
+  // built with the el helper, so reason and name reach the page as
+  // text (textContent), never through innerHTML.
+  function proposalLine(row) {
+    var proposal = row.proposal;
+    if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
+      return null;
+    }
+    var reason = nonEmptyString(proposal.reason);
+    if (!reason) {
+      return null;
+    }
+    var text = 'Answered by: ' + reason;
+    var recorded = recordedAtParts(proposal.recorded_at);
+    if (recorded) {
+      var name = nonEmptyString(proposal.recorded_by_name);
+      text +=
+        ' ' +
+        (name ? 'Recorded by ' + name + ' at ' : 'Recorded at ') +
+        recorded.date + ' ' + recorded.time + ' UTC.';
+    }
+    return el(
+      'div',
+      'ex-proposal',
+      text,
+      { 'data-testid': 'exceptions-proposal' }
+    );
+  }
+
   // The answer's as_of (an ISO date) plus 7 days, as an ISO date; the
   // current UTC date plus 7 days when the answer carries no usable
   // as-of, so the button always sends a valid future date.
@@ -363,8 +442,14 @@
     );
   }
 
+  // Every list fetch asks for the proposal line: include_proposal
+  // rides on the query string of every request, include_snoozed
+  // first while the "Show snoozed" checkbox is ticked.
   function listPath() {
-    return state.showSnoozed ? LIST_PATH + '?include_snoozed=true' : LIST_PATH;
+    if (state.showSnoozed) {
+      return LIST_PATH + '?include_snoozed=true&include_proposal=true';
+    }
+    return LIST_PATH + '?include_proposal=true';
   }
 
   function loadList() {
@@ -815,9 +900,15 @@
     }
     tr.appendChild(signalCell);
     tr.appendChild(el('td', 'ex-pair', itemSiteText(row)));
-    tr.appendChild(
-      el('td', 'ex-detail', nonEmptyString(row.detail) || EM_DASH)
-    );
+    // The Detail cell keeps the detail (or its em dash) as its
+    // first child, a text node; a row with an answering proposal
+    // gains the proposal line after it, the cell's only element.
+    var detailCell = el('td', 'ex-detail', nonEmptyString(row.detail) || EM_DASH);
+    var line = proposalLine(row);
+    if (line) {
+      detailCell.appendChild(line);
+    }
+    tr.appendChild(detailCell);
     tr.appendChild(
       el(
         'td',

@@ -270,3 +270,15 @@
   height: calc(var(--row-min) * 3);
   width: 100%;
 }
+
+/* The proposal line: the answer under the row's detail, the Detail
+   cell's only element after its text node. Design tokens only — a
+   long reason wraps inside the cell, so the table (and the page)
+   never grows sideways. */
+.ex-proposal {
+  margin-top: var(--space-1);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}

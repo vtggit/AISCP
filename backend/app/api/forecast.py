@@ -92,6 +92,7 @@ and the routes write nothing.
 
 from __future__ import annotations
 
+import contextlib
 import math
 from datetime import date, datetime
 from typing import Literal, Self
@@ -108,20 +109,30 @@ from app.api.exceptions import (
 )
 from app.auth.authorization import require_role
 from app.auth.models import AuthUser
+from app.db.connection import get_cursor
 from app.ddmrp.zones import setting_value
 from app.forecast.accuracy import realised_accuracy, signal_accuracy
 from app.forecast.history import history_for_pair
 from app.forecast.listing import build_forecast_row, forecast_rows
 from app.forecast.overrides import (
+    _CURRENT_OVERRIDE_SELECT,
     create_override,
     effective_for_all,
     list_overrides,
     withdraw_override,
 )
 from app.forecast.snapshots import capture_snapshot, list_snapshots
+from app.repositories.forecast_override_proposals_postgres_repository import (
+    ForecastOverrideProposalPostgresRepository,
+)
 from app.stats.demand import demand_stats_for_pair
 
 router = APIRouter(prefix="/api/forecast", tags=["forecast"])
+
+# The corrections proposed with the overrides stored through the
+# override route below (issue #1365), the way the excess decision
+# proposals ride on their module-level repository.
+_override_proposal_repo = ForecastOverrideProposalPostgresRepository()
 
 _NUL = chr(0)
 
@@ -868,6 +879,39 @@ class OverrideRow(BaseModel):
     applies: bool
 
 
+def proposed_correction(
+    item_code: str, site_code: str, period_start: date
+) -> dict | None:
+    """The correction proposed for the item-site's ``period_start``.
+
+    The ``correction`` the by-key route answers for the item-site
+    (``include_correction`` true, its shared default as-of date), when
+    one of its periods starts on ``period_start``: the
+    ``ForecastCorrection`` in JSON, with every key.  None when there
+    is no correction, when no period starts on the date, or when
+    working it out fails anywhere, the by-key answer's 404 among
+    them: the override is then stored as usual, with no proposal row.
+    """
+    try:
+        row = get_forecast_by_key(
+            item_code=item_code,
+            site_code=site_code,
+            as_of=None,
+            include_correction=True,
+        )
+        correction = row.get("correction")
+        if correction is None:
+            return None
+        for period in correction.get("periods", []):
+            if isinstance(period, dict) and period.get("period_start") == period_start:
+                return ForecastCorrection.model_validate(correction).model_dump(
+                    mode="json"
+                )
+        return None
+    except Exception:
+        return None
+
+
 @router.post(
     "/overrides",
     status_code=status.HTTP_201_CREATED,
@@ -890,7 +934,11 @@ def create_forecast_override(
     A new override for the same item-site and period is a new row:
     overrides are append-only and the highest ``id`` applies.
     """
-    return create_override(
+    # The proposal is worked out before the override is stored: the
+    # correction the admin was shown, while the new override's period
+    # is still in it.
+    proposal = proposed_correction(body.item_code, body.site_code, body.period_start)
+    stored = create_override(
         body.item_code,
         body.site_code,
         body.period_start,
@@ -898,6 +946,10 @@ def create_forecast_override(
         body.reason,
         user,
     )
+    if proposal is not None:
+        with contextlib.suppress(Exception):
+            _override_proposal_repo.insert(stored["id"], proposal)
+    return stored
 
 
 @router.post(
@@ -951,3 +1003,128 @@ def list_forecast_overrides(
     return list_overrides(
         item_code=item_code, site_code=site_code, limit=limit, offset=offset
     )
+
+
+def _as_date(value: object) -> date | None:
+    """The date behind a stored period start, or None.
+
+    The proposals store their dates as ISO text (the correction's
+    JSON form); an out-of-band row may hold anything, and anything
+    that is not a date stays uncounted, never a failed read.
+    """
+    if isinstance(value, datetime):
+        value = value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _finite(value: object) -> float | None:
+    """The finite number behind a stored quantity, or None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _proposed_period(proposal: object, period_start: date) -> dict | None:
+    """The override's own period in its stored proposal, or None."""
+    if not isinstance(proposal, dict):
+        return None
+    periods = proposal.get("periods")
+    if not isinstance(periods, list):
+        return None
+    for period in periods:
+        if (
+            isinstance(period, dict)
+            and _as_date(period.get("period_start")) == period_start
+        ):
+            return period
+    return None
+
+
+class ForecastOverrideProposalCounts(BaseModel):
+    """The current overrides' proposals, counted.
+
+    ``overrides`` the number of current overrides — each period's
+    highest-``id`` stored row, when it is an ``override`` [rule:
+    OVR-2] [rule: OVR-9] [rule: OVR-13]; ``proposed`` those whose
+    stored proposal carries a period for the override's own
+    ``period_start`` (the override's proposed period); ``taken``
+    those of them whose ``quantity``, rounded to 2 decimals, equals
+    that period's ``proposed_quantity``; ``same_direction`` those of
+    them for which the override's ``quantity`` minus the period's
+    ``quantity`` and the period's ``proposed_quantity`` minus its
+    ``quantity`` are both above 0 or both below 0; and
+    ``without_proposal`` the current overrides with no stored
+    proposal, or none for their period — every override stored before
+    the proposals existed among them.  ``proposed`` plus
+    ``without_proposal`` equals ``overrides``.
+    """
+
+    overrides: int
+    proposed: int
+    taken: int
+    same_direction: int
+    without_proposal: int
+
+
+@router.get("/overrides/proposals", response_model=ForecastOverrideProposalCounts)
+def forecast_override_proposal_counts() -> dict:
+    """The proposals counted over the current forecast overrides.
+
+    Any signed-in user may read the counts [rule: OVR-10].  The
+    current overrides are the very rows the effective forecast
+    counts: each period's highest-``id`` stored row, when it is an
+    ``override`` [rule: OVR-2] [rule: OVR-9] [rule: OVR-13], read in
+    one query; ``overrides`` their number.  Of them, ``proposed``
+    carry a stored proposal with a period for the override's own
+    ``period_start`` (the override's proposed period); ``taken``
+    those of them whose ``quantity``, rounded to 2 decimals, equals
+    that period's ``proposed_quantity``; ``same_direction`` those of
+    them for which the override's ``quantity`` minus the period's
+    ``quantity`` and the period's ``proposed_quantity`` minus its
+    ``quantity`` are both above 0 or both below 0; and
+    ``without_proposal`` the current overrides with no stored
+    proposal, or none for their period — every override stored before
+    the proposals existed among them, so ``proposed`` plus
+    ``without_proposal`` equals ``overrides``.  Their stored
+    proposals come from one read of the proposal store.  The route
+    writes nothing.
+    """
+    with get_cursor() as cur:
+        cur.execute(_CURRENT_OVERRIDE_SELECT.format(scope=""), ())
+        overrides = cur.fetchall()
+    stored = _override_proposal_repo.for_overrides([row["id"] for row in overrides])
+    counts = {
+        "overrides": len(overrides),
+        "proposed": 0,
+        "taken": 0,
+        "same_direction": 0,
+        "without_proposal": 0,
+    }
+    for row in overrides:
+        period = _proposed_period(stored.get(row["id"]), row["period_start"])
+        if period is None:
+            counts["without_proposal"] += 1
+            continue
+        counts["proposed"] += 1
+        quantity = _finite(row.get("quantity"))
+        period_quantity = _finite(period.get("quantity"))
+        proposed_quantity = _finite(period.get("proposed_quantity"))
+        if quantity is None or period_quantity is None or proposed_quantity is None:
+            continue
+        if round(quantity, 2) == proposed_quantity:
+            counts["taken"] += 1
+        override_delta = quantity - period_quantity
+        proposal_delta = proposed_quantity - period_quantity
+        if (override_delta > 0 and proposal_delta > 0) or (
+            override_delta < 0 and proposal_delta < 0
+        ):
+            counts["same_direction"] += 1
+    return counts

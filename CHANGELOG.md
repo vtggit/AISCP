@@ -152,9 +152,11 @@ code is the authority for details.
 - Forecast accuracy measures the effect of overrides and of signals separately
   (`GET /api/forecast/accuracy/signals`), shown on the Demand screen and in the S&OP review
   (#979, #980, #984, #985).
-- The forecast list and by-key reads take an `include_correction` query parameter, off by default,
-  that adds a `correction` to each row with a proposed quantity for each forecast period without an
-  override or a demand signal for item-sites whose forecast bias persists (#1358).
+- The forecast list and by-key reads take `include_correction`, off by default. With it every row
+  carries a `correction`: where the forecast bias exception finds the item-site's bias persists, a
+  proposed quantity for each forecast period without an override or a demand signal (the forecast
+  scaled by the measured actual over forecast), with the figures it rests on and a one-line reason;
+  otherwise null (#1358).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

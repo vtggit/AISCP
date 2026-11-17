@@ -852,6 +852,17 @@ input {
   color: var(--color-ink-3);
 }
 
+/* The measure line (the card's own read, GET
+   /api/exceptions/proposals), directly before the link: the same
+   tokens the card's other lines use. */
+.ov-exceptions-measure {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
 .ov-exceptions-open {
   display: inline-block;
   padding: var(--space-2) var(--space-5) var(--space-4);

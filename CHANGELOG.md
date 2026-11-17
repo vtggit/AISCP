@@ -96,6 +96,8 @@ code is the authority for details.
   events by kind and whether they had a proposal or a snooze (#1350).
 - The Overview's "Exceptions today" card now shows how many of the stored acknowledgements had a
   proposed answer, as a count and a percentage, or that none are measured yet (#1353).
+- The forecast bias exception now measures the bias one period ahead over each item-site's latest
+  forecast periods, with the number of periods set by a new system setting (default 6) (#1357).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the

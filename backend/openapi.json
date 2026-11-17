@@ -6261,6 +6261,61 @@
         }
       }
     },
+    "/api/exceptions/proposals": {
+      "get": {
+        "tags": [
+          "exceptions"
+        ],
+        "summary": "Exception Proposal Counts",
+        "description": "Count the stored acknowledgement events of the exceptions list.\n\nOpen to any signed-in user (the router is mounted behind the\napp's authentication gate; the route takes no dependency of its\nown).  Over every row of the append-only ``exception_ack_events``\ntable \u2014 one per stored acknowledgement, a snooze and a second\nacknowledgement of a key among them, acknowledgements stored\nbefore the events existed absent \u2014 read once through\n``_exception_ack_events_repo.counts()`` (one SELECT, grouped by\nkind, by the snooze and by the proposal): ``acknowledged`` is\ntheir number, ``proposed`` and ``without_proposal`` those whose\nproposal is set and those whose is null, ``snoozed`` and\n``snoozed_proposed`` those whose snooze is set and those of them\nwhose proposal is set too, and ``by_kind`` one\n``ExceptionProposalBucket`` per kind that has at least one stored\nevent \u2014 ``acknowledged`` that kind's events and ``proposed``\nthose of them whose proposal is set.  The route writes nothing\nand calls no ERP.",
+        "operationId": "exception_proposal_counts_api_exceptions_proposals_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExceptionProposalCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/feed/status": {
       "get": {
         "tags": [
@@ -15426,6 +15481,67 @@
         ],
         "title": "ExceptionProposal",
         "description": "The stockout decision that already chose the row's remedy.\n\nThe item-site's current decision of the ``stockout_decisions``\nread model that answers the row: ``record_kind`` is\n``stockout_decision``, the only record kind of this slice,\n``record_id`` the decision's id, ``decision`` and ``action`` the\ndecision's own (``action`` null when it has none), ``recorded_at``\nits ``decided_at`` in UTC, ``recorded_by_name`` its\n``decided_by_name`` (null when it has none) and ``reason`` the\none line of text for why the decision answers the row."
+      },
+      "ExceptionProposalBucket": {
+        "properties": {
+          "acknowledged": {
+            "type": "integer",
+            "title": "Acknowledged"
+          },
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acknowledged",
+          "proposed"
+        ],
+        "title": "ExceptionProposalBucket",
+        "description": "One exception kind's stored acknowledgement events: their\nnumber and the number of them whose proposal is set."
+      },
+      "ExceptionProposalCounts": {
+        "properties": {
+          "acknowledged": {
+            "type": "integer",
+            "title": "Acknowledged"
+          },
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed"
+          },
+          "without_proposal": {
+            "type": "integer",
+            "title": "Without Proposal"
+          },
+          "snoozed": {
+            "type": "integer",
+            "title": "Snoozed"
+          },
+          "snoozed_proposed": {
+            "type": "integer",
+            "title": "Snoozed Proposed"
+          },
+          "by_kind": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ExceptionProposalBucket"
+            },
+            "type": "object",
+            "title": "By Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "acknowledged",
+          "proposed",
+          "without_proposal",
+          "snoozed",
+          "snoozed_proposed",
+          "by_kind"
+        ],
+        "title": "ExceptionProposalCounts",
+        "description": "The stored acknowledgement events of the exceptions list,\ncounted: every event counts once, a snooze and a second\nacknowledgement of a key included; ``proposed`` plus\n``without_proposal`` equals ``acknowledged``, and the buckets of\n``by_kind`` add up to ``acknowledged`` and ``proposed``."
       },
       "ExceptionResponse": {
         "properties": {

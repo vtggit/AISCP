@@ -6066,7 +6066,7 @@
           "exceptions"
         ],
         "summary": "List Exceptions",
-        "description": "The exceptions triage list of the fifteen sources.\n\nOpen to any signed-in user (the router is mounted behind the\napp's authentication gate).  Each source is read once per call;\na source that raises is caught and listed in ``sources_failed``\nwhile the other sources still answer (status 200).  The rows are\nordered high before medium, then kind order, then item_code and\nkey; ``as_of`` is the latest as-of date reported by any\nsuccessful source (null when none reports one).\n\nThe order minimums source reads the stored supplier order\nminimums once per call and, only when at least one is stored,\nbuilds the 7-day order plan (the horizon ``GET /api/supply-plan``\nand the Order plan screen default to), through\n``build_supply_plan``: one row per plan supplier group that\ncarries a minimum and a shortfall above 0 and holds a line whose\n``due_in_days`` is at most the\n``exceptions.order_minimum_due_days`` system setting (default\n2), kind \"order_below_minimum\", severity \"high\" when one of the\ngroup's lines has a ``due_in_days`` of 0, else \"medium\", the key\n\"order_below_minimum:<source_system>:<supplier_code>\",\n``item_code`` and ``site_code`` null, title \"Order below\nsupplier minimum\", the detail \"The order to <name> comes to\n<total_value>, <shortfall> below its minimum of <minimum>;\n<item_code> at <site_code> must be ordered by <order_by>.\"\n(the name the group's name, else its supplier code; the line\nnamed the group's first; the amounts dollars and cents with\nthousands separators, ``order_by`` read ``YYYY-MM-DD``), view\n\"#/orders\" and ``detected_on`` the plan's ``as_of`` (the plan's\n``as_of`` is the rows' ``detected_on`` only, never the\nresponse's ``as_of``; a failure of the minimums read or of the\nplan build fails the source, listed \"order_minimums\").\n\nThe standing grants source reads the grants in force, once per\ncall for each of ``order_plan_release`` and\n``transfer_release``, and each process's latest standing-grant\nrun: with the ``erp.standing_grants_enabled`` switch from the\nstored system settings stored false (a missing value, or one\nthat is not a boolean, counts as on) it raises nothing; a\nlatest run under the grant in force that failed, that skipped,\nor that released with a ``left_out`` that is not empty is one\nrow, and a grant whose time (the later of its ``created_at``\nand the latest run's ``started_at`` under the grant, or\n``created_at`` alone while the process has no run under the\ngrant) is more than ``STANDING_GRANT_IDLE_HOURS`` (26 \u2014 one\ndaily sync plus two hours) hours before the current UTC time is\none idle row, whatever the latest run's outcome: kind\n\"standing_grant_run\", severity \"high\" for a failed run and for\nthe idle row, else \"medium\", ``item_code`` and ``site_code``\nnull, title \"Standing grant run needs attention\", view\n\"#/releases\", the key \"standing_grant_run:<run id>\" (the idle\nrow's key \"standing_grant_run:idle:<grant id>:<the latest run\nid under the grant, or 0>\") and ``detected_on`` the run's UTC\ndate (the idle row's the grant's time plus 26 hours) \u2014 neither\never the response's ``as_of``; a failure of the grants read or\nof the runs read fails the source, listed\n\"standing_grants\".\n\nEvery row carries the stored acknowledgement of its key, when\nthere is one: ``acknowledged`` (true) plus\n``acknowledged_by_name``, ``acknowledged_at`` and\n``snooze_until`` \u2014 all null or false while the key is\nunacknowledged.  A row snoozed until a date after the as-of date\nis left out of the rows and the counts unless the request passes\n``include_snoozed=true``, and acknowledgements whose key no\nlonger appears in the list are simply ignored.  ``counts`` count\nonly the rows returned and carry ``acknowledged``.  Nothing is\nwritten and no ERP client is called.\n\nEvery row also carries its first-seen date from the\n``exception_first_seen`` table, read once per call and never\nwritten: ``first_seen_on`` (the date the key was first captured,\nor null when it has never been captured) and ``new`` (true only\nwhen ``first_seen_on`` equals the response's as-of date), and\n``counts`` carries ``new``, the number of returned rows whose\n``new`` is true.  A failure reading the table is caught: every\nrow then reads ``first_seen_on`` null and ``new`` false, and the\nroute still answers 200.",
+        "description": "The exceptions triage list of the fifteen sources.\n\nOpen to any signed-in user (the router is mounted behind the\napp's authentication gate).  Each source is read once per call;\na source that raises is caught and listed in ``sources_failed``\nwhile the other sources still answer (status 200).  The rows are\nordered high before medium, then kind order, then item_code and\nkey; ``as_of`` is the latest as-of date reported by any\nsuccessful source (null when none reports one).\n\nThe order minimums source reads the stored supplier order\nminimums once per call and, only when at least one is stored,\nbuilds the 7-day order plan (the horizon ``GET /api/supply-plan``\nand the Order plan screen default to), through\n``build_supply_plan``: one row per plan supplier group that\ncarries a minimum and a shortfall above 0 and holds a line whose\n``due_in_days`` is at most the\n``exceptions.order_minimum_due_days`` system setting (default\n2), kind \"order_below_minimum\", severity \"high\" when one of the\ngroup's lines has a ``due_in_days`` of 0, else \"medium\", the key\n\"order_below_minimum:<source_system>:<supplier_code>\",\n``item_code`` and ``site_code`` null, title \"Order below\nsupplier minimum\", the detail \"The order to <name> comes to\n<total_value>, <shortfall> below its minimum of <minimum>;\n<item_code> at <site_code> must be ordered by <order_by>.\"\n(the name the group's name, else its supplier code; the line\nnamed the group's first; the amounts dollars and cents with\nthousands separators, ``order_by`` read ``YYYY-MM-DD``), view\n\"#/orders\" and ``detected_on`` the plan's ``as_of`` (the plan's\n``as_of`` is the rows' ``detected_on`` only, never the\nresponse's ``as_of``; a failure of the minimums read or of the\nplan build fails the source, listed \"order_minimums\").\n\nThe standing grants source reads the grants in force, once per\ncall for each of ``order_plan_release`` and\n``transfer_release``, and each process's latest standing-grant\nrun: with the ``erp.standing_grants_enabled`` switch from the\nstored system settings stored false (a missing value, or one\nthat is not a boolean, counts as on) it raises nothing; a\nlatest run under the grant in force that failed, that skipped,\nor that released with a ``left_out`` that is not empty is one\nrow, and a grant whose time (the later of its ``created_at``\nand the latest run's ``started_at`` under the grant, or\n``created_at`` alone while the process has no run under the\ngrant) is more than ``STANDING_GRANT_IDLE_HOURS`` (26 \u2014 one\ndaily sync plus two hours) hours before the current UTC time is\none idle row, whatever the latest run's outcome: kind\n\"standing_grant_run\", severity \"high\" for a failed run and for\nthe idle row, else \"medium\", ``item_code`` and ``site_code``\nnull, title \"Standing grant run needs attention\", view\n\"#/releases\", the key \"standing_grant_run:<run id>\" (the idle\nrow's key \"standing_grant_run:idle:<grant id>:<the latest run\nid under the grant, or 0>\") and ``detected_on`` the run's UTC\ndate (the idle row's the grant's time plus 26 hours) \u2014 neither\never the response's ``as_of``; a failure of the grants read or\nof the runs read fails the source, listed\n\"standing_grants\".\n\nEvery row carries the stored acknowledgement of its key, when\nthere is one: ``acknowledged`` (true) plus\n``acknowledged_by_name``, ``acknowledged_at`` and\n``snooze_until`` \u2014 all null or false while the key is\nunacknowledged.  A row snoozed until a date after the as-of date\nis left out of the rows and the counts unless the request passes\n``include_snoozed=true``, and acknowledgements whose key no\nlonger appears in the list are simply ignored.  ``counts`` count\nonly the rows returned and carry ``acknowledged``.  Nothing is\nwritten and no ERP client is called.\n\nEvery row also carries its first-seen date from the\n``exception_first_seen`` table, read once per call and never\nwritten: ``first_seen_on`` (the date the key was first captured,\nor null when it has never been captured) and ``new`` (true only\nwhen ``first_seen_on`` equals the response's as-of date), and\n``counts`` carries ``new``, the number of returned rows whose\n``new`` is true.  A failure reading the table is caught: every\nrow then reads ``first_seen_on`` null and ``new`` false, and the\nroute still answers 200.\n\nWhile ``include_proposal`` is false (the default) the answer is\nexactly that, key for key: no row carries a ``proposal`` key and\nthe stockout decisions are not read.  While it is true and at\nleast one row is returned, every current stockout decision is\nread once \u2014 the latest of each item-site by ``decided_at``,\n``id`` breaking ties, the decision the Work queue shows on\n``GET /api/stockout`` \u2014 through\n``_stockout_decisions_repo.current_all()``, and every returned\nrow carries ``proposal``, an ``ExceptionProposal`` (\n``record_kind`` ``stockout_decision``, the only record kind of\nthis slice, ``record_id`` the decision's id, ``decision`` and\n``action`` the decision's own, ``recorded_at`` its ``decided_at``\nin UTC, ``recorded_by_name`` its ``decided_by_name`` and the\none-line ``reason``) or null when nothing answers the row.  The\nrule runs on each returned row, after the snoozed rows are left\nout and each row's acknowledgement and ``first_seen_on`` are\nattached: a row of kind ``stockout_likely``,\n``stockout_at_risk``, ``buffer_stocked_out`` or\n``buffer_critical`` is answered when its item-site's current\ndecision is ``accepted`` with an action of ``expedite``,\n``raise_order`` or ``transfer``, a row of kind\n``expedite_late`` or ``expedite_after_stockout`` only when the\ndecision is ``accepted`` with the action ``expedite``, and the\ndecision must be recorded on or after the day the row was first\nseen \u2014 the UTC date of its ``decided_at`` (read through the\nmodule's ``_aware_utc``, a value with no time zone taken as UTC)\non or after the row's ``first_seen_on``.  A row with a null\n``item_code`` or ``site_code``, a null ``first_seen_on``, a kind\nno rule answers, an item-site with no current decision, a\ndismissed or snoozed decision, an action that does not answer\nthe row's kind or is none of the three, a decision recorded\nbefore the first-seen day, or a decision whose ``decided_at``\ncarries no time has no proposal, and the row's own\nacknowledgement is looked at not at all: an acknowledged row\ncarries its proposal like any other row.  The read is never a\nsource (it adds no row and is never listed in\n``sources_failed``); with no row returned it is not called, and\na read that raises is caught \u2014 every row's ``proposal`` is then\nnull and the route still answers 200 with the rows, the counts\nand the ``sources_failed`` it answers without the parameter.\nNothing is written and no ERP client is called.",
         "operationId": "list_exceptions_api_exceptions_get",
         "security": [
           {
@@ -6082,6 +6082,16 @@
               "type": "boolean",
               "default": false,
               "title": "Include Snoozed"
+            }
+          },
+          {
+            "name": "include_proposal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Proposal"
             }
           },
           {
@@ -15359,6 +15369,64 @@
         "title": "ExceptionCounts",
         "description": "The response's row counts: by severity, by stored\nacknowledgement and the rows whose ``new`` is true.  The counts\ncover only the rows returned."
       },
+      "ExceptionProposal": {
+        "properties": {
+          "record_kind": {
+            "type": "string",
+            "const": "stockout_decision",
+            "title": "Record Kind"
+          },
+          "record_id": {
+            "type": "string",
+            "title": "Record Id"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          },
+          "recorded_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded By Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_kind",
+          "record_id",
+          "decision",
+          "recorded_at",
+          "reason"
+        ],
+        "title": "ExceptionProposal",
+        "description": "The stockout decision that already chose the row's remedy.\n\nThe item-site's current decision of the ``stockout_decisions``\nread model that answers the row: ``record_kind`` is\n``stockout_decision``, the only record kind of this slice,\n``record_id`` the decision's id, ``decision`` and ``action`` the\ndecision's own (``action`` null when it has none), ``recorded_at``\nits ``decided_at`` in UTC, ``recorded_by_name`` its\n``decided_by_name`` (null when it has none) and ``reason`` the\none line of text for why the decision answers the row."
+      },
       "ExceptionResponse": {
         "properties": {
           "as_of": {
@@ -15509,6 +15577,16 @@
             "type": "boolean",
             "title": "New",
             "default": false
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

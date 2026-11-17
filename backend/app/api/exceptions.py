@@ -342,6 +342,47 @@ as-of date is left out of the rows and the counts unless the request
 passes ``include_snoozed=true``, and acknowledgements whose key no
 longer appears in the list are simply ignored.
 
+``GET /api/exceptions`` takes ``include_proposal``, a boolean query
+parameter, false by default.  While it is false the answer is
+exactly that, key for key: no row carries a ``proposal`` key and the
+stockout decisions are not read.  While it is true and at least one
+row is returned, the route reads every current stockout decision
+once — the latest of each item-site by ``decided_at``, ``id``
+breaking ties, the decision the Work queue shows on
+``GET /api/stockout`` — through
+``_stockout_decisions_repo.current_all()`` (the read is never a
+source: it adds no row and is never listed in
+``sources_failed``), and every returned row carries ``proposal``, an
+``ExceptionProposal`` — ``record_kind`` ``stockout_decision``, the
+only record kind of this slice, ``record_id`` the decision's id,
+``decision`` and ``action`` the decision's own, ``recorded_at`` its
+``decided_at`` in UTC, ``recorded_by_name`` its ``decided_by_name``
+(null when it has none) and ``reason`` the one line of text for why
+the decision answers the row — or null when nothing answers the
+row.  The rule runs on each returned row, after the snoozed rows are
+left out and each row's acknowledgement and ``first_seen_on`` are
+attached: a row of kind ``stockout_likely``, ``stockout_at_risk``,
+``buffer_stocked_out`` or ``buffer_critical`` is answered when its
+item-site's current decision is ``accepted`` with an action of
+``expedite``, ``raise_order`` or ``transfer``, a row of kind
+``expedite_late`` or ``expedite_after_stockout`` only when the
+decision is ``accepted`` with the action ``expedite``, and the
+decision must be recorded on or after the day the row was first
+seen — the UTC date of its ``decided_at`` (read through the module's
+``_aware_utc``, a value with no time zone taken as UTC) on or after
+the row's ``first_seen_on``.  A row with a null ``item_code`` or
+``site_code``, a null ``first_seen_on``, a kind no rule answers, an
+item-site with no current decision, a dismissed or snoozed decision,
+an action that does not answer the row's kind or is none of the
+three, a decision recorded before the first-seen day, or a decision
+whose ``decided_at`` carries no time has no proposal, and the row's
+own acknowledgement is looked at not at all: an acknowledged row
+carries its proposal like any other row.  With no row returned the
+decisions are not read, and a read that raises is caught: every
+row's ``proposal`` is then null and the route still answers 200 with
+the rows, the counts and the ``sources_failed`` it answers without
+the parameter.  Nothing is written and no ERP client is called.
+
 ``PUT /api/exceptions/ack`` (admin only — the same
 ``require_role("admin")`` the planner decisions use) takes
 ``{"key", "snooze_until"?, "note"?}`` and stores or replaces the
@@ -365,9 +406,10 @@ import math
 import numbers
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_serializer, model_validator
 
 from app.aggregate import projection
 from app.api.ddmrp import _stored_system_settings, ddmrp_zone_rows
@@ -416,6 +458,9 @@ from app.repositories.sop_signoffs_postgres_repository import (
 )
 from app.repositories.standing_grant_runs_postgres_repository import (
     StandingGrantRunPostgresRepository,
+)
+from app.repositories.stockout_decisions_postgres_repository import (
+    StockoutDecisionPostgresRepository,
 )
 from app.repositories.supplier_order_minimums_postgres_repository import (
     SupplierOrderMinimumPostgresRepository,
@@ -467,6 +512,7 @@ _supplier_order_minimum_repo = SupplierOrderMinimumPostgresRepository()
 _sop_signoffs_repo = SopSignoffsPostgresRepository()
 _exception_acks_repo = ExceptionAcksPostgresRepository()
 _exception_first_seen_repo = ExceptionFirstSeenPostgresRepository()
+_stockout_decisions_repo = StockoutDecisionPostgresRepository()
 _erp_code_clashes_repo = ErpCodeClashPostgresRepository()
 _standing_grants_repo = ErpStandingGrantPostgresRepository()
 _standing_grant_runs_repo = StandingGrantRunPostgresRepository()
@@ -549,6 +595,28 @@ class ExceptionCounts(BaseModel):
     new: int
 
 
+class ExceptionProposal(BaseModel):
+    """The stockout decision that already chose the row's remedy.
+
+    The item-site's current decision of the ``stockout_decisions``
+    read model that answers the row: ``record_kind`` is
+    ``stockout_decision``, the only record kind of this slice,
+    ``record_id`` the decision's id, ``decision`` and ``action`` the
+    decision's own (``action`` null when it has none), ``recorded_at``
+    its ``decided_at`` in UTC, ``recorded_by_name`` its
+    ``decided_by_name`` (null when it has none) and ``reason`` the
+    one line of text for why the decision answers the row.
+    """
+
+    record_kind: Literal["stockout_decision"]
+    record_id: str
+    decision: str
+    action: str | None = None
+    recorded_at: datetime
+    recorded_by_name: str | None = None
+    reason: str
+
+
 class ExceptionRow(BaseModel):
     """One exception: a row of the triage list.
 
@@ -576,6 +644,35 @@ class ExceptionRow(BaseModel):
     snooze_until: date | None = None
     first_seen_on: date | None = None
     new: bool = False
+    proposal: ExceptionProposal | None = None
+    # The route's include_proposal parameter for this row: read off
+    # the answered row's dict (a key the validation ignores) by the
+    # validator below and kept as private state, so it is part of
+    # neither the model's fields nor its schema, let alone the answer.
+    _include_proposal: bool = PrivateAttr(default=False)
+
+    @model_validator(mode="wrap")
+    def _remember_include_proposal(cls, value, handler):
+        """Remember the route's include_proposal parameter from the
+        answered row's dict, so the serializer can drop the proposal
+        key while it is false."""
+        if isinstance(value, dict):
+            include_proposal = value.get("include_proposal", False)
+        else:
+            include_proposal = getattr(value, "_include_proposal", False)
+        row = handler(value)
+        row._include_proposal = bool(include_proposal)
+        return row
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        """The row's fields, without ``proposal`` while the route's
+        ``include_proposal`` parameter is false (the key stays out of
+        the answer, exactly as before the proposal existed)."""
+        data = handler(self)
+        if not self._include_proposal:
+            data.pop("proposal", None)
+        return data
 
 
 class AckBody(BaseModel):
@@ -2144,8 +2241,108 @@ def _first_seen_rows() -> dict[str, date]:
         return {}
 
 
+# The one-line words of the decision's action, in the words of
+# AIERP-D-51, per action.
+_PROPOSAL_ACTION_WORDS = {
+    "expedite": "speed up an open order",
+    "raise_order": "place or increase an order",
+    "transfer": "move stock from another site",
+}
+
+# The exception kinds an accepted stockout decision answers, by the
+# actions that answer them: the four stockout and buffer kinds any of
+# the three actions, the two expedite kinds only an expedite.  Every
+# other kind has no rule and is never answered.
+_PROPOSAL_KIND_ACTIONS = {
+    "buffer_stocked_out": ("expedite", "raise_order", "transfer"),
+    "buffer_critical": ("expedite", "raise_order", "transfer"),
+    "stockout_likely": ("expedite", "raise_order", "transfer"),
+    "stockout_at_risk": ("expedite", "raise_order", "transfer"),
+    "expedite_after_stockout": ("expedite",),
+    "expedite_late": ("expedite",),
+}
+
+
+def _current_stockout_decisions() -> list[dict] | None:
+    """The item-sites' current stockout decisions, the one read.
+
+    Every current decision — the latest of each item-site by
+    ``decided_at``, ``id`` breaking ties, the decision the Work queue
+    shows on ``GET /api/stockout`` — read once through
+    ``_stockout_decisions_repo.current_all()``.  None when the read
+    raised: the read is never a source (it adds no row and is never
+    listed in ``sources_failed``), so a failure simply answers no
+    proposal.
+    """
+    try:
+        return _stockout_decisions_repo.current_all()
+    except Exception:
+        return None
+
+
+def _row_proposal(
+    row: ExceptionRow, by_item_site: dict[tuple, dict] | None
+) -> ExceptionProposal | None:
+    """The row's proposal: its item-site's current stockout decision
+    when the decision already chose the remedy the row points at.
+
+    ``by_item_site`` maps ``(item_code, site_code)`` to the
+    item-site's current decision; it is None when the read raised, in
+    which case no row has a proposal.  Answered only when the row's
+    kind is one the decision answers (``_PROPOSAL_KIND_ACTIONS``),
+    the decision is ``accepted`` with an action that answers the
+    kind, and the decision was recorded on or after the day the row
+    was first seen — the UTC date of its ``decided_at``, read through
+    the module's ``_aware_utc`` (a value with no time zone taken as
+    UTC), on or after the row's ``first_seen_on``.  A row with a null
+    ``item_code`` or ``site_code``, a null ``first_seen_on``, a kind
+    no rule answers, an item-site with no current decision, a
+    dismissed or snoozed decision, an action that does not answer the
+    row's kind or is none of the three, a decision recorded before
+    the first-seen day, or a decision whose ``decided_at`` carries no
+    time has none.  The row's own acknowledgement is looked at not at
+    all: an acknowledged row carries its proposal like any other row.
+    """
+    if by_item_site is None:
+        return None
+    if row.item_code is None or row.site_code is None:
+        return None
+    if row.first_seen_on is None:
+        return None
+    answering = _PROPOSAL_KIND_ACTIONS.get(row.kind)
+    if answering is None:
+        return None
+    decision = by_item_site.get((row.item_code, row.site_code))
+    if decision is None or decision.get("decision") != "accepted":
+        return None
+    action = decision.get("action")
+    if action not in answering:
+        return None
+    decided_at = _aware_utc(decision.get("decided_at"))
+    if decided_at is None or decided_at.date() < row.first_seen_on:
+        return None
+    record_id = decision.get("id")
+    if not record_id:
+        return None
+    return ExceptionProposal(
+        record_kind="stockout_decision",
+        record_id=record_id,
+        decision=decision["decision"],
+        action=action,
+        recorded_at=decided_at,
+        recorded_by_name=decision.get("decided_by_name"),
+        reason=(
+            "This item-site's stockout decision, accepted on "
+            f"{decided_at.date().isoformat()}, already chose to "
+            f"{_PROPOSAL_ACTION_WORDS[action]}."
+        ),
+    )
+
+
 @router.get("", response_model=ExceptionResponse)
-def list_exceptions(include_snoozed: bool = False) -> dict:
+def list_exceptions(
+    include_snoozed: bool = False, include_proposal: bool = False
+) -> dict:
     """The exceptions triage list of the fifteen sources.
 
     Open to any signed-in user (the router is mounted behind the
@@ -2224,6 +2421,48 @@ def list_exceptions(include_snoozed: bool = False) -> dict:
     ``new`` is true.  A failure reading the table is caught: every
     row then reads ``first_seen_on`` null and ``new`` false, and the
     route still answers 200.
+
+    While ``include_proposal`` is false (the default) the answer is
+    exactly that, key for key: no row carries a ``proposal`` key and
+    the stockout decisions are not read.  While it is true and at
+    least one row is returned, every current stockout decision is
+    read once — the latest of each item-site by ``decided_at``,
+    ``id`` breaking ties, the decision the Work queue shows on
+    ``GET /api/stockout`` — through
+    ``_stockout_decisions_repo.current_all()``, and every returned
+    row carries ``proposal``, an ``ExceptionProposal`` (
+    ``record_kind`` ``stockout_decision``, the only record kind of
+    this slice, ``record_id`` the decision's id, ``decision`` and
+    ``action`` the decision's own, ``recorded_at`` its ``decided_at``
+    in UTC, ``recorded_by_name`` its ``decided_by_name`` and the
+    one-line ``reason``) or null when nothing answers the row.  The
+    rule runs on each returned row, after the snoozed rows are left
+    out and each row's acknowledgement and ``first_seen_on`` are
+    attached: a row of kind ``stockout_likely``,
+    ``stockout_at_risk``, ``buffer_stocked_out`` or
+    ``buffer_critical`` is answered when its item-site's current
+    decision is ``accepted`` with an action of ``expedite``,
+    ``raise_order`` or ``transfer``, a row of kind
+    ``expedite_late`` or ``expedite_after_stockout`` only when the
+    decision is ``accepted`` with the action ``expedite``, and the
+    decision must be recorded on or after the day the row was first
+    seen — the UTC date of its ``decided_at`` (read through the
+    module's ``_aware_utc``, a value with no time zone taken as UTC)
+    on or after the row's ``first_seen_on``.  A row with a null
+    ``item_code`` or ``site_code``, a null ``first_seen_on``, a kind
+    no rule answers, an item-site with no current decision, a
+    dismissed or snoozed decision, an action that does not answer
+    the row's kind or is none of the three, a decision recorded
+    before the first-seen day, or a decision whose ``decided_at``
+    carries no time has no proposal, and the row's own
+    acknowledgement is looked at not at all: an acknowledged row
+    carries its proposal like any other row.  The read is never a
+    source (it adds no row and is never listed in
+    ``sources_failed``); with no row returned it is not called, and
+    a read that raises is caught — every row's ``proposal`` is then
+    null and the route still answers 200 with the rows, the counts
+    and the ``sources_failed`` it answers without the parameter.
+    Nothing is written and no ERP client is called.
     """
     as_of, rows, sources_failed = _collect()
     acks = _acked_rows()
@@ -2240,24 +2479,36 @@ def list_exceptions(include_snoozed: bool = False) -> dict:
         if snoozed and not include_snoozed:
             continue
         first_seen_on = first_seen.get(row.key)
-        returned.append(
-            row.model_copy(
-                update={
-                    "acknowledged": ack is not None,
-                    "acknowledged_by_name": (
-                        ack["acknowledged_by_name"] if ack is not None else None
-                    ),
-                    "acknowledged_at": (
-                        ack["acknowledged_at"].isoformat()
-                        if ack is not None and ack["acknowledged_at"] is not None
-                        else None
-                    ),
-                    "snooze_until": (ack["snooze_until"] if ack is not None else None),
-                    "first_seen_on": first_seen_on,
-                    "new": as_of is not None and first_seen_on == as_of,
-                }
-            )
+        answered = row.model_copy(
+            update={
+                "acknowledged": ack is not None,
+                "acknowledged_by_name": (
+                    ack["acknowledged_by_name"] if ack is not None else None
+                ),
+                "acknowledged_at": (
+                    ack["acknowledged_at"].isoformat()
+                    if ack is not None and ack["acknowledged_at"] is not None
+                    else None
+                ),
+                "snooze_until": (ack["snooze_until"] if ack is not None else None),
+                "first_seen_on": first_seen_on,
+                "new": as_of is not None and first_seen_on == as_of,
+            }
         )
+        answered._include_proposal = include_proposal
+        returned.append(answered)
+    if include_proposal and returned:
+        decisions = _current_stockout_decisions()
+        by_item_site = (
+            None
+            if decisions is None
+            else {
+                (decision.get("item_code"), decision.get("site_code")): decision
+                for decision in decisions
+            }
+        )
+        for row in returned:
+            row.proposal = _row_proposal(row, by_item_site)
     counts = ExceptionCounts(
         high=sum(1 for row in returned if row.severity == "high"),
         medium=sum(1 for row in returned if row.severity == "medium"),

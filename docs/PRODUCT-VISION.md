@@ -654,7 +654,7 @@ AIERP computes many signals: a buffer in the red, a likely stockout, a late orde
 - **A failing source never hides the others.** Each source is read on its own. One that fails is named in the answer, and the rest still list.
 - **Stored ERP error text is never repeated here.** A failed release reads "release to the supplier failed"; the error itself stays with the release.
 - **New, acknowledged, snoozed.** AIERP records the day it first saw each exception and marks the ones first seen today. An admin can acknowledge an exception, with an optional date to snooze it until; a snoozed exception leaves the list and the counts until that date.
-- **The thresholds are settings.** How large a forecast bias must be (50 percent, over at least 3 compared periods), how many days a released order may wait for approval in the ERP (3), and the day of the month after which a missing S&OP sign-off appears (10).
+- **The thresholds are settings.** How large a forecast bias must be (50 percent, over at least 3 compared periods), over how many of an item-site's latest forecast periods the bias is measured (6, each forecast one period ahead and at least 30 days after the one before, live and backfill snapshots alike), how many days a released order may wait for approval in the ERP (3), and the day of the month after which a missing S&OP sign-off appears (10).
 - **In the app first.** Email or chat notices come later (operator, 2026-10-29). Until then nothing about an exception leaves AIERP.
 
 ## Supplier risk (operator direction, 2026-11-07 and 2026-11-08; method defaults decided by Claude under delegation)

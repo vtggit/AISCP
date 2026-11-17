@@ -78,21 +78,26 @@ percentage part only when the plan reports one);
   kind "erp_push_failed" (high), the ref is the row id, the detail
   reads "push to <source_system> failed" (never the stored error);
 * the forecast bias — the item-sites of
-  ``app.forecast.accuracy.realised_accuracy`` (read with its
-  default as-of): an item-site whose ``compared_buckets`` is at
+  ``app.forecast.accuracy.realised_accuracy``, read with its
+  default as-of, with ``bucket_index=1`` (the forecast one period
+  ahead) and ``latest_periods`` the
+  ``exceptions.forecast_bias_periods`` system setting (default 6) —
+  each item-site's latest forecast periods, each forecast one period
+  ahead: an item-site whose ``compared_buckets`` — its number of
+  distinct measured periods, at most the setting's value — is at
   least the ``exceptions.forecast_bias_min_periods`` system setting
   (default 3) and whose ``effective_bias`` is a finite number of
   absolute value at least the
   ``exceptions.forecast_bias_threshold`` system setting (default
-  0.5) is kind "forecast_bias" (medium); the two
+  0.5) is kind "forecast_bias" (medium); the three
   settings are read once per call — a missing or out-of-range stored
   value falls back to the registry default, and a settings read
   failure fails the source like any other forecast failure — the ref
   is the item/site and the detail reads "forecast <over|under>
   actual by <p>% across <n> periods" (a positive bias is
   "over", <p> the absolute bias as a whole percent, <n> the
-  compared buckets); the accuracy's as-of is the row's
-  ``detected_on``, never the response's ``as_of``.
+  item-site's compared buckets); the accuracy's as-of is the
+  row's ``detected_on``, never the response's ``as_of``.
 * the S&OP sign-off — the ``sop_signoffs`` rows, read once per
   call: the newest row of any month, through
   ``SopSignoffsPostgresRepository.list_newest(limit=1)``, and the
@@ -531,10 +536,13 @@ _PUSHS_READ_LIMIT = 10_000
 # is never truncated by the pagination.
 _TRANSFERS_READ_LIMIT = 200
 
-# The two system settings the forecast-bias filter applies: the
-# absolute bias at or above which an item-site is an exception and
-# the fewest compared forecast periods it needs first.  A missing
-# or out-of-range stored value falls back to the registry default.
+# The system settings the forecast-bias measure and filter apply:
+# how many of the latest forecast periods, each forecast one period
+# ahead, the measure runs over, the absolute bias at or above which
+# an item-site is an exception and the fewest compared forecast
+# periods it needs first.  A missing or out-of-range stored value
+# falls back to the registry default.
+FORECAST_BIAS_PERIODS_KEY = "exceptions.forecast_bias_periods"
 FORECAST_BIAS_THRESHOLD_KEY = "exceptions.forecast_bias_threshold"
 FORECAST_BIAS_MIN_PERIODS_KEY = "exceptions.forecast_bias_min_periods"
 ORDER_MINIMUM_DUE_DAYS_KEY = "exceptions.order_minimum_due_days"
@@ -957,6 +965,24 @@ def _compared_bucket_count(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         return 0
     return max(value, 0)
+
+
+def _forecast_bias_accuracy(stored_settings: dict | None) -> dict:
+    """The forecast bias's one accuracy read for a call.
+
+    Takes the stored system settings the caller already read once
+    and reads no setting of its own: it reads
+    ``exceptions.forecast_bias_periods`` from them through
+    ``setting_value``, so a missing, out-of-range or non-numeric
+    stored value reads the registry default, 6, and answers
+    ``realised_accuracy(bucket_index=1, latest_periods=periods)``
+    with ``periods`` the whole part of that value — the completed
+    snapshots one period ahead over the item-sites' latest
+    forecast periods, each forecast one period ahead.  The read
+    goes through the module's own ``realised_accuracy`` name.
+    """
+    periods = int(setting_value(stored_settings, FORECAST_BIAS_PERIODS_KEY))
+    return realised_accuracy(bucket_index=1, latest_periods=periods)
 
 
 def _forecast_rows(
@@ -2014,8 +2040,8 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
     sources_failed: list[str] = []
     reported_as_ofs: list[date] = []
 
-    # The stored system settings the two setting-driven filters
-    # apply (the forecast-bias bounds and the release-approval
+    # The stored system settings the setting-driven filters apply
+    # (the forecast-bias measure and bounds and the release-approval
     # window), read once per call: a missing or out-of-range stored
     # value falls back to the registry default, and a settings read
     # failure fails the forecast source like any other forecast
@@ -2234,12 +2260,19 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
             raise RuntimeError("the settings read failed")
         # The two system settings the forecast-bias filter applies:
         # a missing or out-of-range stored value falls back to the
-        # registry default.
+        # registry default.  The measure's own setting (how many of
+        # the latest periods, each forecast one period ahead, it
+        # runs over) is read from these same stored settings inside
+        # _forecast_bias_accuracy.
         bias_threshold = setting_value(stored_settings, FORECAST_BIAS_THRESHOLD_KEY)
         min_periods = setting_value(stored_settings, FORECAST_BIAS_MIN_PERIODS_KEY)
         # The accuracy result's as-of is the row's detected_on
         # only: it never counts in the response's as_of.
-        rows.extend(_forecast_rows(realised_accuracy(), bias_threshold, min_periods))
+        rows.extend(
+            _forecast_rows(
+                _forecast_bias_accuracy(stored_settings), bias_threshold, min_periods
+            )
+        )
     except Exception:
         sources_failed.append("forecast")
 

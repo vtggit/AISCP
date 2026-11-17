@@ -410,7 +410,7 @@ def test_issue910_freeform(client, monkeypatch) -> None:
     huge_pct = "9999999999999999860310597603" + "0" * 281
     monkeypatch.setattr(
         "app.api.exceptions.realised_accuracy",
-        lambda: {
+        lambda **kwargs: {
             "as_of": TODAY_STR,
             "compared_buckets": 7,
             "item_sites": [

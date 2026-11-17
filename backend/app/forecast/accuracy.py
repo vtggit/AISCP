@@ -1,8 +1,8 @@
 """Realised accuracy of stored forecast snapshots (issue #336).
 
-``realised_accuracy(as_of=None, origin=None, bucket_index=None)``
-compares the buckets of the stored forecast snapshots with what
-actually happened.  A snapshot bucket is compared only when it has
+``realised_accuracy(as_of=None, origin=None, bucket_index=None,
+latest_periods=None)`` compares the buckets of the stored forecast
+snapshots with what actually happened.  A snapshot bucket is compared only when it has
 *completed* — that is, when its ``bucket_end`` is on or before the
 as-of date: demand after the latest demand date is unknown, not zero,
 so with no ``as_of`` the shared default as-of date
@@ -64,6 +64,23 @@ totals are 0, the ratios and ``value_added`` null, and
 origin, and ``bucket_index`` (1 to 12) keeps only that horizon; with
 neither, everything compared is included.
 
+``latest_periods`` (a whole number of at least 1) keeps, of each
+item-site's compared rows, only the rows of the item-site's latest
+forecast periods: the item-site's origins — its distinct snapshot
+``as_of`` dates — are walked back in date order from the latest, the
+latest kept and then each origin whose date is at least
+``app.stats.demand.BUCKET_DAYS`` (30) days before the last kept one
+kept and the nearer ones skipped, until ``latest_periods`` origins
+are kept or none is left (an item-site with fewer such origins keeps
+all it has); every row of a kept origin counts, one per horizon.  The
+answer's ``compared_buckets``, ``overall``, ``by_horizon`` and
+``item_sites`` cover only the kept rows — the entries keep their
+keys, their measures and their order, and an item-site's ``method``
+is still the method of its most recent compared row.  While
+``latest_periods`` is ``None`` (the default) the read and the answer
+are exactly what they are without it: the same statement, the same
+parameters, and the same answer.
+
 The result of ``realised_accuracy`` is a dict with ``as_of``,
 ``compared_buckets``,
 ``overall`` (the measures over everything compared), ``by_horizon``
@@ -80,10 +97,10 @@ both lists are empty.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from app.db.connection import get_cursor
-from app.stats.demand import default_as_of
+from app.stats.demand import BUCKET_DAYS, default_as_of
 
 _COMPARE_SQL = (
     "SELECT s.as_of, s.item_code, s.site_code, s.bucket_index, s.method, "
@@ -177,6 +194,7 @@ def realised_accuracy(
     as_of: date | None = None,
     origin: str | None = None,
     bucket_index: int | None = None,
+    latest_periods: int | None = None,
 ) -> dict:
     """Compare the completed stored snapshot buckets with actual demand.
 
@@ -189,6 +207,22 @@ def realised_accuracy(
     ``occurred_on`` from ``bucket_start`` to ``bucket_end`` inclusive
     (0 when there is no demand in the range).  ``origin`` keeps only
     snapshots of that origin and ``bucket_index`` only that horizon.
+
+    ``latest_periods`` (a whole number of at least 1) keeps, for each
+    item-site, only the rows of its latest forecast periods: the
+    item-site's distinct snapshot ``as_of`` dates (its origins) are
+    walked back in date order from the latest, the latest kept and
+    then each origin whose date is at least ``BUCKET_DAYS`` (30, from
+    ``app.stats.demand``) days before the last kept one kept and the
+    nearer ones skipped, until ``latest_periods`` origins are kept or
+    none is left — an item-site with fewer such origins keeps all it
+    has, and every row of a kept origin counts, one row with
+    ``bucket_index=1``, one per horizon without it.  The answer's
+    ``compared_buckets``, ``overall``, ``by_horizon`` and
+    ``item_sites`` cover only the kept rows; while ``None`` (the
+    default) the read and the answer are exactly what they are
+    without it — the same statement, the same parameters, and the
+    same answer key for key and value for value.
     """
     with get_cursor() as cur:
         if as_of is None:
@@ -203,6 +237,32 @@ def realised_accuracy(
             params.append(bucket_index)
         cur.execute(sql, params)
         rows = cur.fetchall()
+
+    if latest_periods is not None:
+        site_origins: dict[tuple[str, str], set[date]] = {}
+        for row in rows:
+            site_origins.setdefault((row["item_code"], row["site_code"]), set()).add(
+                row["as_of"]
+            )
+        kept_origins: dict[tuple[str, str], set[date]] = {}
+        for pair_key, origins in site_origins.items():
+            kept: list[date] = []
+            last_kept: date | None = None
+            for origin in sorted(origins, reverse=True):
+                if last_kept is not None and origin > last_kept - timedelta(
+                    days=BUCKET_DAYS
+                ):
+                    continue
+                kept.append(origin)
+                last_kept = origin
+                if len(kept) == latest_periods:
+                    break
+            kept_origins[pair_key] = set(kept)
+        rows = [
+            row
+            for row in rows
+            if row["as_of"] in kept_origins[(row["item_code"], row["site_code"])]
+        ]
 
     _ZERO = [0.0, 0.0, 0.0, 0, 0.0, 0.0, 0, 0.0, 0.0]
     totals = list(_ZERO)

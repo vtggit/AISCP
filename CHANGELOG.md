@@ -91,6 +91,9 @@ code is the authority for details.
   parameter that is off by default (#1344).
 - The Exceptions screen asks for those proposals and shows, under a row's detail, the recorded
   decision that already answers the exception; acknowledging stays an admin's click (#1347).
+- Exception acknowledgements now keep the proposal the exceptions list would have shown for the
+  row at that moment, and `GET /api/exceptions/proposals` counts the stored acknowledgement
+  events by kind and whether they had a proposal or a snooze (#1350).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the

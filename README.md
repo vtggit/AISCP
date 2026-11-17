@@ -79,6 +79,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - The Overview's Stockout risk card shows that measure when the read succeeds: the chosen
   remedies among accepted decisions, by remedy kind, and accepted decisions before proposals
   were kept (`app/js/overview.js`).
+- The Overview's Excess and dead stock card shows the excess proposals measure when the read
+  succeeds: the chosen actions among accepted decisions, by action kind, and accepted
+  decisions before proposals were kept (`app/js/overview.js`).
 - An accepted decision is shown as applied once the ERP data reflects it, and a summary
   totals accepted, applied and outstanding decisions with their money
   (`backend/app/api/decision_summary.py`).

@@ -49,6 +49,9 @@ code is the authority for details.
 - Excess decisions now store the proposed action for their item-site row when one is proposed,
   and `GET /api/excess/proposals` counts the accepted decisions that proposed or chose each
   action kind (#1336).
+- The Overview's Excess and dead stock card now shows how proposed actions fared, with the
+  accepted decisions that took an action, by action kind, and accepted decisions before proposals
+  were kept (#1338).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

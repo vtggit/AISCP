@@ -7476,6 +7476,61 @@
         }
       }
     },
+    "/api/forecast/overrides/proposals": {
+      "get": {
+        "tags": [
+          "forecast"
+        ],
+        "summary": "Forecast Override Proposal Counts",
+        "description": "The proposals counted over the current forecast overrides.\n\nAny signed-in user may read the counts [rule: OVR-10].  The\ncurrent overrides are the very rows the effective forecast\ncounts: each period's highest-``id`` stored row, when it is an\n``override`` [rule: OVR-2] [rule: OVR-9] [rule: OVR-13], read in\none query; ``overrides`` their number.  Of them, ``proposed``\ncarry a stored proposal with a period for the override's own\n``period_start`` (the override's proposed period); ``taken``\nthose of them whose ``quantity``, rounded to 2 decimals, equals\nthat period's ``proposed_quantity``; ``same_direction`` those of\nthem for which the override's ``quantity`` minus the period's\n``quantity`` and the period's ``proposed_quantity`` minus its\n``quantity`` are both above 0 or both below 0; and\n``without_proposal`` the current overrides with no stored\nproposal, or none for their period \u2014 every override stored before\nthe proposals existed among them, so ``proposed`` plus\n``without_proposal`` equals ``overrides``.  Their stored\nproposals come from one read of the proposal store.  The route\nwrites nothing.",
+        "operationId": "forecast_override_proposal_counts_api_forecast_overrides_proposals_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastOverrideProposalCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/lead-time-observations": {
       "get": {
         "tags": [
@@ -16703,6 +16758,40 @@
         ],
         "title": "ForecastCorrectionPeriod",
         "description": "One forecast bucket the correction proposes a quantity for.\n\n``period_start`` and ``period_end`` are the bucket's own\nboundaries, ``quantity`` its statistical forecast and\n``proposed_quantity`` the correction's proposal for it \u2014\n``max(0, round(quantity x factor, 2))``, the factor of its\nrow's ``ForecastCorrection``."
+      },
+      "ForecastOverrideProposalCounts": {
+        "properties": {
+          "overrides": {
+            "type": "integer",
+            "title": "Overrides"
+          },
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed"
+          },
+          "taken": {
+            "type": "integer",
+            "title": "Taken"
+          },
+          "same_direction": {
+            "type": "integer",
+            "title": "Same Direction"
+          },
+          "without_proposal": {
+            "type": "integer",
+            "title": "Without Proposal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "overrides",
+          "proposed",
+          "taken",
+          "same_direction",
+          "without_proposal"
+        ],
+        "title": "ForecastOverrideProposalCounts",
+        "description": "The current overrides' proposals, counted.\n\n``overrides`` the number of current overrides \u2014 each period's\nhighest-``id`` stored row, when it is an ``override`` [rule:\nOVR-2] [rule: OVR-9] [rule: OVR-13]; ``proposed`` those whose\nstored proposal carries a period for the override's own\n``period_start`` (the override's proposed period); ``taken``\nthose of them whose ``quantity``, rounded to 2 decimals, equals\nthat period's ``proposed_quantity``; ``same_direction`` those of\nthem for which the override's ``quantity`` minus the period's\n``quantity`` and the period's ``proposed_quantity`` minus its\n``quantity`` are both above 0 or both below 0; and\n``without_proposal`` the current overrides with no stored\nproposal, or none for their period \u2014 every override stored before\nthe proposals existed among them.  ``proposed`` plus\n``without_proposal`` equals ``overrides``."
       },
       "ForecastRow": {
         "properties": {

@@ -56,12 +56,12 @@ items:
   - key: AIERP-D-194
     type: design
     title: "The thresholds are settings"
-    statement: "How large a forecast bias must be (50 percent, over at least 3 compared periods), how many days a released order may wait for approval in the ERP (3), and the day of the month after which a missing S&OP sign-off appears (10)."
+    statement: "How large a forecast bias must be (50 percent, over at least 3 compared periods), over how many of an item-site's latest forecast periods the bias is measured (6, each forecast one period ahead and at least 30 days after the one before, live and backfill snapshots alike), how many days a released order may wait for approval in the ERP (3), and the day of the month after which a missing S&OP sign-off appears (10)."
     decided:
       by: model:claude
-      date: 2026-11-11
+      date: 2026-11-17
       under: delegation
-      ref: "AIERP#1119"
+      ref: "AISCP#1357"
 
   - key: AIERP-D-195
     type: design

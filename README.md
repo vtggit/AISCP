@@ -167,6 +167,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   `GET /api/exceptions/proposals` counts the stored events by kind, snooze and proposal
   (`backend/app/api/exceptions.py`,
   `backend/app/repositories/exception_ack_events_postgres_repository.py`).
+- The Overview's Exceptions today card shows the exceptions proposals measure when the read
+  succeeds: how often AISCP had proposed the answer among acknowledgements, or that no
+  acknowledgements have been measured yet (`app/js/overview.js`).
 
 **Suppliers**
 

@@ -157,8 +157,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   opportunities, high-risk suppliers, sole-source items short of stock, orders below a
   supplier's minimum, and standing grant runs that failed, sent nothing, held documents back,
   or have not run recently. A source that fails never hides the others. The list records the day
-  each exception was first seen, and an admin can acknowledge or snooze one
-  (`backend/app/api/exceptions.py`).
+  each exception was first seen, and an admin can acknowledge or snooze one; with
+  `include_proposal=true`, a row can carry a `proposal` naming the current stockout decision
+  that already answers it, or null when nothing answers it (`backend/app/api/exceptions.py`).
 
 **Suppliers**
 

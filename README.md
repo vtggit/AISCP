@@ -162,6 +162,11 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   that already answers it, or null when nothing answers it (`backend/app/api/exceptions.py`).
 - The Exceptions screen asks for the proposal in its list fetches and shows the answer under
   the row's detail when the proposal has a reason.
+- Each accepted acknowledgement or snooze appends one row to an append-only event history
+  with the proposal the list answered for the row at that moment, and
+  `GET /api/exceptions/proposals` counts the stored events by kind, snooze and proposal
+  (`backend/app/api/exceptions.py`,
+  `backend/app/repositories/exception_ack_events_postgres_repository.py`).
 
 **Suppliers**
 
@@ -358,7 +363,7 @@ any write to an ERP. Personal settings and saved scenarios are open to any signe
 | Supply plan | `/api/supply-plan` (plan, summary, top-ups, release, transfers, transfer release and its audit), `/api/supplier-order-minimums` |
 | Suppliers | `/api/suppliers/performance`, `/api/supplier-risk`, `/api/second-sources`, `/api/expedite` |
 | DDMRP | `/api/ddmrp` (buffers, zones, plan, candidates, adjustments, performance) |
-| Exceptions | `/api/exceptions` (the list and acknowledgements) |
+| Exceptions | `/api/exceptions` (the list, acknowledgements and proposal counts) |
 | Several ERPs | `/api/erp-sources`, `/api/erp-mappings` (with suggested matches), `/api/cross-erp/items`, `/api/erp-currencies` |
 | ERP actions | `/api/replenishment/actions/draft-po`, `/api/parameter-writeback` (preview, confirm, history) |
 | Settings | `/api/settings` |

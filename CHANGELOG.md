@@ -86,6 +86,9 @@ code is the authority for details.
   (#1169).
 - Standing grant runs that failed, sent nothing, held documents back, or have not run for more
   than 26 hours now appear in the Exceptions inbox (#1208).
+- `GET /api/exceptions` can include a `proposal` on each row, from the item-site's current
+  stockout decision when it already answers the exception, behind an `include_proposal` query
+  parameter that is off by default (#1344).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the

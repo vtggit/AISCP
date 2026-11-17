@@ -26,7 +26,7 @@ wants to see the value of the decisions taken.
 
 - A fixed-height layout (`height: 100vh`, never taller) with two columns: a dark sidebar, 232 px
   wide, and the main area.
-- **Sidebar**, top to bottom: the AIERP mark and name; the navigation buttons Overview, Work queue
+- **Sidebar**, top to bottom: the AISCP mark and name; the navigation buttons Overview, Work queue
   (with a count of rows still to decide), Decision log and Settings; and at the bottom, the ERP feed status
   ("Synced today 07:30 UTC") and the signed-in user.
 - **Main area header**: the page title, a one-line subtitle, and on the right the as-of date and
@@ -163,6 +163,7 @@ The tokens are in `app/css/tokens.css`; use them, never raw values.
 | Value tiles and list cards | `GET /api/decisions/summary` |
 | Stockout risk card's proposed remedy block | `GET /api/stockout/proposals` |
 | Excess and dead stock card's proposed action block | `GET /api/excess/proposals` |
+| Exceptions today card and its measure line | `GET /api/exceptions`; `GET /api/exceptions/proposals` |
 | Recording a decision | `POST /api/drift/decisions`, `POST /api/excess/decisions`, `POST /api/stockout/decisions` |
 | History | the matching `GET …/decisions?item_code=&site_code=` |
 | Settings | `GET /api/settings`; `PUT` and `DELETE /api/settings/{key}` |

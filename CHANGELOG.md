@@ -94,6 +94,8 @@ code is the authority for details.
 - Exception acknowledgements now keep the proposal the exceptions list would have shown for the
   row at that moment, and `GET /api/exceptions/proposals` counts the stored acknowledgement
   events by kind and whether they had a proposal or a snooze (#1350).
+- The Overview's "Exceptions today" card now shows how many of the stored acknowledgements had a
+  proposed answer, as a count and a percentage, or that none are measured yet (#1353).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the
@@ -231,8 +233,6 @@ code is the authority for details.
 - The docs check now reports routes, settings, and environment variables that a changed Markdown
   file names but the code does not define (#1175).
 - The order plan's run holds back an order it cannot value (#1301).
-- Exception acknowledgements D: the Overview shows how often AIERP had proposed the answers
-  admins acknowledged (#1353).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a

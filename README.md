@@ -160,6 +160,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   each exception was first seen, and an admin can acknowledge or snooze one; with
   `include_proposal=true`, a row can carry a `proposal` naming the current stockout decision
   that already answers it, or null when nothing answers it (`backend/app/api/exceptions.py`).
+- A forecast bias row measures the item-site's effective forecast one period ahead over its
+  latest forecast periods, at least 30 days apart (6 by default, the system setting
+  `exceptions.forecast_bias_periods`), and its detail counts those periods
+  (`backend/app/api/exceptions.py`, `backend/app/forecast/accuracy.py`).
 - The Exceptions screen asks for the proposal in its list fetches and shows the answer under
   the row's detail when the proposal has a reason.
 - Each accepted acknowledgement or snooze appends one row to an append-only event history

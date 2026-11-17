@@ -637,9 +637,9 @@ def test_issue309_freeform(client, user_token, admin_headers):
         "application/json"
     ]["schema"] == {"$ref": "#/components/schemas/ForecastRowDetail"}
     row_schema = spec["components"]["schemas"]["ForecastRow"]
-    assert set(row_schema["properties"]) == ROW_FIELDS
+    assert set(row_schema["properties"]) == ROW_FIELDS | {"correction"}
     detail_schema = spec["components"]["schemas"]["ForecastRowDetail"]
-    assert set(detail_schema["properties"]) == ROW_FIELDS | {"history"}
+    assert set(detail_schema["properties"]) == ROW_FIELDS | {"history", "correction"}
 
     # ------------------------------------------------------------------
     # AC-3: an unauthenticated request is refused.

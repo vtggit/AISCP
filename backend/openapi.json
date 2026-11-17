@@ -6625,7 +6625,7 @@
           "forecast"
         ],
         "summary": "List Forecasts",
-        "description": "List one row per item-site that has a forecast, for any signed-in user.\n\nOrdered by ``total_forecast`` descending, then ``item_code`` and\n``site_code``; item-sites whose demand class is ``no_demand`` are\nleft out. ``demand_class`` filters the list, ``as_of`` sets the date\n(the shared ``app.stats.demand`` default when absent), and\n``limit`` / ``offset`` page it.",
+        "description": "List one row per item-site that has a forecast, for any signed-in user.\n\nOrdered by ``total_forecast`` descending, then ``item_code`` and\n``site_code``; item-sites whose demand class is ``no_demand`` are\nleft out. ``demand_class`` filters the list, ``as_of`` sets the date\n(the shared ``app.stats.demand`` default when absent), and\n``limit`` / ``offset`` page it.\n\nWhile ``include_correction`` is false (the default) the answer\nis exactly that, key for key: no row carries a ``correction``\nkey and neither the stored system settings nor the bias\nexception's measure is read.  While it is true and at least one\nrow is answered, those two reads run once each, before any\ncorrection is worked out: the stored system settings (the one\nread the exceptions list makes) and, on them, the bias\nexception's measure (the very read the exceptions list makes for\nits forecast bias rows, over the window its setting names, with\nno as-of of its own).  The two bounds come from the stored\nsettings through ``setting_value`` (a missing or out-of-range\nstored value the registry default), and the item-sites whose\nbias persists are the ones the exceptions list's own\nforecast-bias rule answers a row for.  Every answered row then\ncarries ``correction``, a ``ForecastCorrection`` or null:\n``measured_on`` the exception's detected date,\n``compared_buckets``, ``effective_total``, ``actual_total`` and\n``effective_bias`` the measure's item-site entry's own,\n``factor`` the entry's actual total over its effective total\n(unrounded), ``periods`` one ``ForecastCorrectionPeriod`` per\nforecast bucket without an override day and without a demand\nsignal, in order, its proposed quantity ``max(0, round(quantity\nx factor, 2))``, and ``reason`` the exception's own detail,\nfirst letter upper-cased, and the percent of its forecast each\nsuch period is proposed at.  Null covers an item-site whose\nbias does not persist, one the measure has no entry or no\nfinite totals above 0 for, and one with no such bucket left.\nA read that raises never fails the list: every answered row's\n``correction`` is then null and the route still answers 200\nwith the rows it answers without the parameter; the rule reads\nno acknowledgement or snooze of the exception, and nothing is\nwritten.",
         "operationId": "list_forecasts_api_forecast_get",
         "security": [
           {
@@ -6698,6 +6698,16 @@
             }
           },
           {
+            "name": "include_correction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Correction"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -6748,7 +6758,7 @@
           "forecast"
         ],
         "summary": "Get Forecast By Key",
-        "description": "One item-site's forecast row plus the ``history`` it was built from.\n\nAnswers 404 when the item-site has no demand events, or when its\ndemand class is ``no_demand``.",
+        "description": "One item-site's forecast row plus the ``history`` it was built from.\n\nAnswers 404 when the item-site has no demand events, or when its\ndemand class is ``no_demand`` \u2014 before either correction read\nruns.\n\n``include_correction`` (false by default) carries the list's\n``correction`` over to this row.  While it is false the answer\nis exactly today's, key for key: no ``correction`` key and\nneither the stored system settings nor the bias exception's\nmeasure is read.  While it is true, those two reads run once\neach, before the correction is worked out, and the row carries\n``correction``, a ``ForecastCorrection`` (the row's item-site's\nmeasured bias \u2014 the exception's detected date, the measure's\ncompared buckets, totals and bias and the factor the measured\nactual total over the effective one \u2014 and one\n``ForecastCorrectionPeriod`` per forecast bucket without an\noverride day and without a demand signal, its proposed quantity\n``max(0, round(quantity x factor, 2))``) or null exactly as the\nlist decides it; a read that raises never fails the answer \u2014\nthe route still answers 200 with the row, ``correction`` null.\nNothing is written.",
         "operationId": "get_forecast_by_key_api_forecast_by_key_get",
         "security": [
           {
@@ -6791,6 +6801,16 @@
                 }
               ],
               "title": "As Of"
+            }
+          },
+          {
+            "name": "include_correction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Correction"
             }
           },
           {
@@ -16600,6 +16620,90 @@
         "title": "ForecastBucket",
         "description": "One 30-day bucket: its boundaries, its statistical quantity,\nand the effective forecast beside it.\n\n``quantity`` is the statistical forecast, never changed by any\noverride [rule: OVR-4].  ``effective_quantity`` is the sum of the\nbucket's day shares \u2014 one day's share of the counted override\ncovering each day, else one day's share of the statistical\nquantity \u2014 and ``override_days`` how many of the bucket's days an\noverride covers, from 0 to the bucket's length."
       },
+      "ForecastCorrection": {
+        "properties": {
+          "measured_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Measured On"
+          },
+          "compared_buckets": {
+            "type": "integer",
+            "title": "Compared Buckets"
+          },
+          "effective_total": {
+            "type": "number",
+            "title": "Effective Total"
+          },
+          "actual_total": {
+            "type": "number",
+            "title": "Actual Total"
+          },
+          "effective_bias": {
+            "type": "number",
+            "title": "Effective Bias"
+          },
+          "factor": {
+            "type": "number",
+            "title": "Factor"
+          },
+          "periods": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastCorrectionPeriod"
+            },
+            "type": "array",
+            "title": "Periods"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "measured_on",
+          "compared_buckets",
+          "effective_total",
+          "actual_total",
+          "effective_bias",
+          "factor",
+          "periods",
+          "reason"
+        ],
+        "title": "ForecastCorrection",
+        "description": "The correction proposed for one forecast row.\n\n``measured_on`` is the forecast-bias exception's detected date\n(the measure's as-of), ``compared_buckets`` how many of the\nitem-site's latest forecast periods the measure compared,\n``effective_total`` and ``actual_total`` the measure's totals\nover them, ``effective_bias`` the measure's bias over them and\n``factor`` the actual total over the effective total,\nunrounded \u2014 the factor every period is proposed at.  ``periods``\ncarries one ``ForecastCorrectionPeriod`` per forecast bucket\nwithout an override day and without a demand signal, in the\nforecast's order, and ``reason`` the one line of text for the\nproposal."
+      },
+      "ForecastCorrectionPeriod": {
+        "properties": {
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "proposed_quantity": {
+            "type": "number",
+            "title": "Proposed Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period_start",
+          "period_end",
+          "quantity",
+          "proposed_quantity"
+        ],
+        "title": "ForecastCorrectionPeriod",
+        "description": "One forecast bucket the correction proposes a quantity for.\n\n``period_start`` and ``period_end`` are the bucket's own\nboundaries, ``quantity`` its statistical forecast and\n``proposed_quantity`` the correction's proposal for it \u2014\n``max(0, round(quantity x factor, 2))``, the factor of its\nrow's ``ForecastCorrection``."
+      },
       "ForecastRow": {
         "properties": {
           "item_code": {
@@ -16668,6 +16772,16 @@
           "arithmetic": {
             "type": "string",
             "title": "Arithmetic"
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastCorrection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -16758,6 +16872,16 @@
           "arithmetic": {
             "type": "string",
             "title": "Arithmetic"
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastCorrection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "history": {
             "items": {

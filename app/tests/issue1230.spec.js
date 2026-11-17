@@ -870,11 +870,7 @@ test('issue1230 freeform', async ({ page }) => {
     const literals = jsStringLiterals(src);
     expect(literals.length, name + ' yielded no string literals at all').toBeGreaterThan(0);
     allLiterals.push.apply(allLiterals, literals);
-    const bad = literals.filter(
-      (literal) =>
-        literal.indexOf('AIERP') !== -1 &&
-        literal !== 'AIERP had proposed the answer for ',
-    );
+    const bad = literals.filter((literal) => literal.indexOf('AIERP') !== -1);
     expect(bad, name + ' still carries AIERP in a quoted string: ' + bad.join(' | ')).toEqual([]);
   }
   expect(allLiterals).toContain(LIMIT_CURRENCY);

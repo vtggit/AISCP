@@ -13,7 +13,7 @@
 // acknowledged — the card renders as today and gains
 // <p class="ov-exceptions-measure" data-testid="ov-exceptions-measure">
 // directly before its "Open the inbox" link:
-// "AIERP had proposed the answer for <proposed> of <acknowledged>
+// "AISCP had proposed the answer for <proposed> of <acknowledged>
 // acknowledgements (<pct>%)" when acknowledged is above 0 (pct
 // Math.round(100 * proposed / acknowledged)), "No acknowledgements
 // measured yet." when it is 0. Every number through the file's
@@ -49,7 +49,7 @@
 //     Overview.invalidate() leaves the line in place and
 //     ctrl.proposalsGets at 1.
 //   * The re-read: with answer SECOND, reactivateOverview raises
-//     ctrl.proposalsGets by exactly 1 and the line reads "AIERP had
+//     ctrl.proposalsGets by exactly 1 and the line reads "AISCP had
 //     proposed the answer for 2 of 3 acknowledgements (67%)"; with
 //     answer ZERO it reads "No acknowledgements measured yet.".
 //   * A failed read: first the status 500, then the status 200 with
@@ -519,7 +519,7 @@ test('issue1353 freeform', async ({ page }) => {
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   const FIRST_TEXT =
-    'AIERP had proposed the answer for 5 of 10 acknowledgements (50%)';
+    'AISCP had proposed the answer for 5 of 10 acknowledgements (50%)';
 
   /* ---------------- planner pass: development sign-in ------------------ */
   page.setViewportSize({ width: 1440, height: 900 });
@@ -598,7 +598,7 @@ test('issue1353 freeform', async ({ page }) => {
   await reactivateOverview(page);
   await expect.poll(() => ctrl.proposalsGets).toBe(getsBefore + 1);
   await expect(line).toHaveText(
-    'AIERP had proposed the answer for 2 of 3 acknowledgements (67%)',
+    'AISCP had proposed the answer for 2 of 3 acknowledgements (67%)',
   );
   expect(ctrl.exceptionsQueries.every((query) => query === '')).toBe(true);
   expect(pageErrors).toEqual([]);

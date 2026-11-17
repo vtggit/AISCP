@@ -66,7 +66,7 @@
 //     line, the "<n> new today" line when the answer's counts.new is
 //     a number above 0, up to three of the unacknowledged rows (the
 //     answer's order), the measure line from GET
-//     /api/exceptions/proposals — "AIERP had proposed the answer for
+//     /api/exceptions/proposals — "AISCP had proposed the answer for
 //     <proposed> of <acknowledged> acknowledgements (<pct>%)" when
 //     acknowledged is above 0, "No acknowledgements measured yet."
 //     when it is 0 — directly before the link, the link to
@@ -1137,7 +1137,7 @@
   // "<n> new today" line directly after the counts line; otherwise
   // there is no such element. The measure line comes from the
   // card's own read (GET /api/exceptions/proposals) and stands
-  // directly before the link: "AIERP had proposed the answer for
+  // directly before the link: "AISCP had proposed the answer for
   // <proposed> of <acknowledged> acknowledgements (<pct>%)" when
   // acknowledged is above 0, "No acknowledgements measured yet."
   // when it is 0. A failed measure read — any status, a network
@@ -1242,7 +1242,7 @@
     );
   }
 
-  // "AIERP had proposed the answer for <proposed> of
+  // "AISCP had proposed the answer for <proposed> of
   // <acknowledged> acknowledgements (<pct>%)" — every number through
   // countLabel, the words the same for a count of 1 — or "No
   // acknowledgements measured yet." when acknowledged is 0.
@@ -1252,7 +1252,7 @@
     }
     var pct = Math.round(100 * measure.proposed / measure.acknowledged);
     return (
-      'AIERP had proposed the answer for ' +
+      'AISCP had proposed the answer for ' +
       countLabel(measure.proposed) +
       ' of ' +
       countLabel(measure.acknowledged) +

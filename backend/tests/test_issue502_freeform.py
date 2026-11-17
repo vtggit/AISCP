@@ -377,6 +377,7 @@ def test_issue502_freeform(client):
         "erp.standing_grants_enabled",
         "erp.standing_grants_horizon_days",
         "exceptions.forecast_bias_min_periods",
+        "exceptions.forecast_bias_periods",
         "exceptions.forecast_bias_threshold",
         "exceptions.order_minimum_due_days",
         "exceptions.release_approval_days",

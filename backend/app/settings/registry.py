@@ -200,6 +200,18 @@ register(
 
 register(
     Setting(
+        key="exceptions.forecast_bias_periods",
+        scope="system",
+        type="number",
+        default=6,
+        description="How many of the latest forecast periods, each forecast one period ahead, the forecast bias is measured over.",
+        min=1,
+        max=36,
+    )
+)
+
+register(
+    Setting(
         key="exceptions.forecast_bias_threshold",
         scope="system",
         type="number",

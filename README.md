@@ -196,8 +196,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   forecast bias, releases and transfers that failed or are still waiting in the ERP, failed
   parameter pushes, a missing S&OP sign-off, ERP code clashes, currency mismatches, cross-ERP
   opportunities, high-risk suppliers, sole-source items short of stock, orders below a
-  supplier's minimum, and standing grant runs that failed, sent nothing, held documents back,
-  or have not run recently. A source that fails never hides the others. The list records the day
+  supplier's minimum, standing grant runs that failed, sent nothing, held documents back, or
+  have not run recently, and a demand basis to review when the demand basis not in use was
+  nearer what sold one period ahead. A source that fails never hides the others. The list records the day
   each exception was first seen, and an admin can acknowledge or snooze one; with
   `include_proposal=true`, a row can carry a `proposal` naming the current stockout decision
   that already answers it, or null when nothing answers it (`backend/app/api/exceptions.py`).

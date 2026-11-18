@@ -100,6 +100,9 @@ code is the authority for details.
   forecast periods, at least 30 days apart, as many as the new system setting
   `exceptions.forecast_bias_periods` says (default 6), so old long-range forecasts no longer decide
   it; the detail's period count now counts those distinct periods (#1357).
+- The Exceptions inbox proposes switching the demand basis when the basis not in use was nearer
+  what sold, one period ahead, by at least a set margin (5 points by default) over enough compared
+  periods (60 by default); an admin makes the switch in Settings (#1397).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the

@@ -103,6 +103,8 @@ code is the authority for details.
 - The Exceptions inbox proposes switching the demand basis when the basis not in use was nearer
   what sold, one period ahead, by at least a set margin (5 points by default) over enough compared
   periods (60 by default); an admin makes the switch in Settings (#1397).
+- The demand-basis switch proposal now shows under the Settings card's verdict, and the Exceptions
+  screen labels its rows "Demand basis to review" (#1401).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the

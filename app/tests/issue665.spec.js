@@ -737,6 +737,7 @@ const ALLOWED_API_PATHS = new Set([
   '/api/stockout/proposals',
   '/api/excess/proposals',
   '/api/exceptions/proposals',
+  '/api/forecast/overrides/proposals',
   '/api/drift/decisions',
   '/api/excess/decisions',
   '/api/stockout/decisions',

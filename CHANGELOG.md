@@ -148,6 +148,9 @@ code is the authority for details.
 - The S&OP review proposes signing the month off when no value figure moved more than a set change
   since the last sign-off (`sop.signoff_proposal_max_change`, 5% by default), and says which figure
   moved most (#1403).
+- The S&OP status card shows the sign-off proposal, saying whether the month is proposed for
+  sign-off and, when it is not, which value figure moved most since the last sign-off or that none
+  can be compared (#1407).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

@@ -108,6 +108,8 @@ Every judgement call is a default plus a setting: service levels, forecast-bias 
 
 **Service levels and their cost** is the card to open when someone asks what a higher service level would cost. For each ABC class it lists the service levels from 90% to 99.5%, with the safety stock each one needs in units and in value, its holding cost a year, the extra cost of each step up, and the fill rate to expect, which is the share of demand served straight from stock. The level in use is marked "(now)". On the demo data, class A at 95% carries about $570,000 a year in holding cost for a fill rate near 97%, and 99% costs about $235,000 a year more for a fill rate of about 99.5%. The levels can be one for every class or one per class. A line on the card says what they mean. By default they are cycle service levels: the chance of not running out in a replenishment cycle. A setting turns them into fill-rate targets, and safety stock and reorder points are then solved to meet the target.
 
+**Demand basis: history or forecast** answers the question an admin asks before switching reorder points from the history to the forecast: which was nearer what sold. It compares the two one period ahead over the periods completed so far and lists the ten item-sites with the most demand. It needs periods that completed after the daily snapshots began keeping the history basis's figure, so a new system says that no period has completed yet.
+
 ## Talking points
 
 - **Explainable:** every number shows its inputs and arithmetic.

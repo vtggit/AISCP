@@ -109,10 +109,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   how many took the proposed quantity, how many moved the same way, and how many have none
   (`backend/app/api/forecast.py`,
   `backend/app/repositories/forecast_override_proposals_postgres_repository.py`).
-- The Overview's Forecast overrides card, directly after the Supply this week card (or where it
-  would stand), shows those counts when the read succeeds: the proposed quantity taken in a share
-  of proposed overrides, how many moved the same way, and how many have no proposed correction,
-  with a link to Demand; a failed read removes the card (`app/js/overview.js`).
+- The Overview's "Forecast overrides" card shows those counts: how often an override took the
+  proposed quantity, how often it moved the same way, and how many overrides had no proposal, with
+  a link to Demand (`app/js/overview.js`).
 - Demand signals: known extra demand (a promotion, deal or event) for one item-site and date
   window, added on top of the forecast and counted in the reorder point and the aggregate
   projection. Signals are append-only; a withdrawal is a new row with a reason
@@ -317,8 +316,8 @@ A static single-page app in `app/` (plain HTML, CSS and JavaScript, served by ng
 views are:
 
 - **Overview**: value tiles, the three decision lists, released orders, value by ABC class,
-  today's exceptions, this week's supply plan, and the decisions that need attention, largest
-  money first.
+  today's exceptions, this week's supply plan, how often forecast overrides follow the proposed
+  corrections, and the decisions that need attention, largest money first.
 - **Exceptions**: the triage list across every planning signal, with the answer under each
   row's detail when the item-site has already answered it, and acknowledge and snooze for an
   admin.

@@ -31,6 +31,14 @@
 //     numbers with proposed no greater than acknowledged — leaves
 //     the line out, the card renders exactly as before;
 //   * GET /api/supply-plan/summary, the "Supply this week" card's answer.
+//   * GET /api/forecast/overrides/proposals, the "Forecast
+//     overrides" card's answer; a failed read — any status, a
+//     network error, or a body that is not an object whose
+//     overrides, proposed, taken, same_direction and
+//     without_proposal hold the finite numbers with taken and
+//     same_direction each no greater than proposed and proposed no
+//     greater than overrides — removes the card — no error text,
+//     no Retry, no skeleton survives.
 //
 // The figures load the first time the view becomes the active view. A
 // decision recorded in the Work queue (any of the three kinds) marks
@@ -82,6 +90,17 @@
 //     and the link to #/orders;
 //     a failed read removes the card — no error text, no Retry, no
 //     skeleton survives;
+//   * the "Forecast overrides" card — GET
+//     /api/forecast/overrides/proposals, the card's own read beside
+//     the Supply this week card: the line ("Proposed quantity taken
+//     in <taken> of <proposed> overrides (<pct>%)" while proposed
+//     is above 0, "No proposed corrections measured yet." when it
+//     is 0), the direction line ("Moved the same way as the
+//     proposal in <same_direction> of <proposed>") while proposed
+//     is above 0, the note ("Without a proposed correction:
+//     <without_proposal> of <overrides>") while without_proposal
+//     is above 0, and the link to #/demand; a failed read removes
+//     the card — no error text, no Retry, no skeleton survives;
 //   * the attention region — "Needs a decision, largest money first",
 //     the five undecided rows with the most money across the three
 //     lists; it renders only when all three lists loaded, never from
@@ -101,6 +120,7 @@
   var EXCEPTIONS_PATH = '/api/exceptions';
   var EXCEPTIONS_PROPOSALS_PATH = '/api/exceptions/proposals';
   var SUPPLY_PATH = '/api/supply-plan/summary';
+  var OVERRIDES_PROPOSALS_PATH = '/api/forecast/overrides/proposals';
   var STOCKOUT_PROPOSALS_PATH = '/api/stockout/proposals';
   var EXCESS_PROPOSALS_PATH = '/api/excess/proposals';
 
@@ -148,6 +168,7 @@
     'ov-region-abc',
     'ov-region-exceptions',
     'ov-region-supply',
+    'ov-region-overrides',
     'ov-attention-body',
   ];
 
@@ -357,6 +378,9 @@
     if (regionId === SUPPLY_REGION_ID) {
       ensureSupplySection();
     }
+    if (regionId === OVERRIDES_REGION_ID) {
+      ensureOverridesSection();
+    }
     if (regionId === 'ov-region-tiles') {
       var tiles = '';
       for (var i = 0; i < 3; i++) {
@@ -456,6 +480,10 @@
       work = global.Api.get(SUPPLY_PATH).then(function (answer) {
         renderSupply(answer);
       });
+    } else if (regionId === OVERRIDES_REGION_ID) {
+      work = global.Api.get(OVERRIDES_PROPOSALS_PATH).then(function (answer) {
+        renderOverrides(answer);
+      });
     } else if (regionId === 'ov-attention-body') {
       work = Promise.all([
         global.Api.get(KINDS_BY_KIND.drift.endpoint),
@@ -507,6 +535,8 @@
         removeExceptionsSection();
       } else if (regionId === SUPPLY_REGION_ID) {
         removeSupplySection();
+      } else if (regionId === OVERRIDES_REGION_ID) {
+        removeOverridesSection();
       } else if (regionId === 'ov-region-releases') {
         showReleasesError(error);
       } else {
@@ -529,13 +559,15 @@
     started = true;
     stale = false;
     REGION_IDS.forEach(function (regionId) {
-      // The "Value by class", "Exceptions today" and "Supply this
-      // week" sections are dropped from the DOM when their read
-      // fails, so they are (re)created on every activation.
+      // The "Value by class", "Exceptions today", "Supply this
+      // week" and "Forecast overrides" sections are dropped from
+      // the DOM when their read fails, so they are (re)created on
+      // every activation.
       if (
         regionId === ABC_REGION_ID ||
         regionId === EXCEPTIONS_REGION_ID ||
         regionId === SUPPLY_REGION_ID ||
+        regionId === OVERRIDES_REGION_ID ||
         regionEls[regionId]
       ) {
         loadRegion(regionId);
@@ -562,6 +594,8 @@
         removeExceptionsSection();
       } else if (regionId === SUPPLY_REGION_ID) {
         removeSupplySection();
+      } else if (regionId === OVERRIDES_REGION_ID) {
+        removeOverridesSection();
       } else if (regionEls[regionId]) {
         regionEls[regionId].innerHTML = '';
       }
@@ -1512,6 +1546,176 @@
     section.appendChild(open);
   }
 
+  /* ------------------------ forecast overrides ------------------------ */
+
+  // The "Forecast overrides" card is a load region like the "Supply
+  // this week" card, with the same silent failure: a failed read —
+  // any status, a network error, or a body that is not an object
+  // whose overrides, proposed, taken, same_direction and
+  // without_proposal hold the finite numbers with taken and
+  // same_direction each no greater than proposed and proposed no
+  // greater than overrides — removes the section from the DOM. No
+  // error text, no Retry and no skeleton survive; the next load
+  // recreates the section after the "Supply this week" card, or,
+  // where that card would stand, using the Supply card's own
+  // anchors in order: after the "Exceptions today" card, after the
+  // "Value by class" card, after the Released orders card, or before
+  // the attention region. Every number goes through countLabel, the
+  // words stay the same for a count of 1, and every API value is
+  // set as text.
+
+  var OVERRIDES_REGION_ID = 'ov-region-overrides';
+
+  function ensureOverridesSection() {
+    var existing = document.getElementById(OVERRIDES_REGION_ID);
+    if (existing) {
+      return existing;
+    }
+    var section = document.createElement('section');
+    section.id = OVERRIDES_REGION_ID;
+    section.className = 'card ov-overrides';
+    section.setAttribute('aria-label', 'Forecast overrides');
+    // After the "Supply this week" card when it is in the DOM,
+    // otherwise where that card would stand: after the "Exceptions
+    // today" card, after the "Value by class" card, after the
+    // Released orders card, or before the attention region.
+    var supply = document.querySelector('.ov-supply');
+    var anchor = supply && supply.parentNode ? supply : null;
+    if (!anchor) {
+      var exceptions = document.querySelector('.ov-exceptions');
+      anchor = exceptions && exceptions.parentNode ? exceptions : null;
+    }
+    if (!anchor) {
+      var abc = document.querySelector('.ov-abc');
+      anchor = abc && abc.parentNode ? abc : null;
+    }
+    if (!anchor) {
+      var releases = document.getElementById('ov-region-releases');
+      anchor = releases && releases.parentNode ? releases : null;
+    }
+    if (anchor) {
+      anchor.insertAdjacentElement('afterend', section);
+    } else {
+      var container = document.querySelector('#view-overview .ov');
+      if (container) {
+        var attention = container.querySelector('.ov-attention');
+        if (attention) {
+          attention.insertAdjacentElement('beforebegin', section);
+        } else {
+          container.appendChild(section);
+        }
+      }
+    }
+    regionEls[OVERRIDES_REGION_ID] = section;
+    return section;
+  }
+
+  function removeOverridesSection() {
+    var section = regionEls[OVERRIDES_REGION_ID];
+    regionEls[OVERRIDES_REGION_ID] = null;
+    if (section && section.parentNode) {
+      section.parentNode.removeChild(section);
+    }
+  }
+
+  // The answer is usable only with the finite numbers overrides,
+  // proposed, taken, same_direction and without_proposal, taken and
+  // same_direction each no greater than proposed and proposed no
+  // greater than overrides; anything else fails the region.
+  function overridesAnswerValid(answer) {
+    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) {
+      return false;
+    }
+    return (
+      isMoney(answer.overrides) &&
+      isMoney(answer.proposed) &&
+      isMoney(answer.taken) &&
+      isMoney(answer.same_direction) &&
+      isMoney(answer.without_proposal) &&
+      answer.taken <= answer.proposed &&
+      answer.same_direction <= answer.proposed &&
+      answer.proposed <= answer.overrides
+    );
+  }
+
+  function renderOverrides(answer) {
+    if (!overridesAnswerValid(answer)) {
+      removeOverridesSection();
+      return;
+    }
+    var section = ensureOverridesSection();
+
+    // Every API value is set as text: the DOM is built node by node,
+    // nothing goes through innerHTML.
+    while (section.firstChild) {
+      section.removeChild(section.firstChild);
+    }
+
+    var title = document.createElement('h2');
+    title.className = 'ov-overrides-title';
+    title.textContent = 'Forecast overrides';
+    section.appendChild(title);
+
+    // "Proposed quantity taken in <taken> of <proposed> overrides
+    // (<pct>%)" while proposed is above 0 — pct the rounded share of
+    // the proposed overrides whose quantity was taken — "No proposed
+    // corrections measured yet." when it is 0. The words stay the
+    // same for a count of 1.
+    var line = document.createElement('p');
+    line.className = 'ov-overrides-line';
+    line.setAttribute('data-testid', 'ov-overrides-line');
+    if (answer.proposed > 0) {
+      var pct = Math.round(100 * answer.taken / answer.proposed);
+      line.textContent =
+        'Proposed quantity taken in ' +
+        countLabel(answer.taken) +
+        ' of ' +
+        countLabel(answer.proposed) +
+        ' overrides (' +
+        countLabel(pct) +
+        '%)';
+    } else {
+      line.textContent = 'No proposed corrections measured yet.';
+    }
+    section.appendChild(line);
+
+    // The direction line: only while proposed is above 0 — "Moved
+    // the same way as the proposal in <same_direction> of
+    // <proposed>".
+    if (answer.proposed > 0) {
+      var direction = document.createElement('p');
+      direction.className = 'ov-overrides-direction';
+      direction.setAttribute('data-testid', 'ov-overrides-direction');
+      direction.textContent =
+        'Moved the same way as the proposal in ' +
+        countLabel(answer.same_direction) +
+        ' of ' +
+        countLabel(answer.proposed);
+      section.appendChild(direction);
+    }
+
+    // The note: only while without_proposal is above 0 — "Without a
+    // proposed correction: <without_proposal> of <overrides>".
+    if (answer.without_proposal > 0) {
+      var note = document.createElement('p');
+      note.className = 'ov-overrides-note';
+      note.setAttribute('data-testid', 'ov-overrides-note');
+      note.textContent =
+        'Without a proposed correction: ' +
+        countLabel(answer.without_proposal) +
+        ' of ' +
+        countLabel(answer.overrides);
+      section.appendChild(note);
+    }
+
+    var open = document.createElement('a');
+    open.className = 'ov-overrides-open';
+    open.setAttribute('href', '#/demand');
+    open.setAttribute('data-testid', 'ov-overrides-open');
+    open.textContent = 'Open Demand';
+    section.appendChild(open);
+  }
+
   /* -------------------------------- boot -------------------------------- */
 
   (function boot() {
@@ -1521,16 +1725,20 @@
         regionEls[regionId] = regionEl;
       }
     });
-    // The "Value by class", "Exceptions today" and "Supply this week"
-    // cards are not in the markup: they are created after the Released
-    // orders card (the supply card after the exceptions card, where
-    // that card would stand when its read failed) and again after any
+    // The "Value by class", "Exceptions today", "Supply this week"
+    // and "Forecast overrides" cards are not in the markup: they are
+    // created after the Released orders card (the supply card after
+    // the exceptions card, where that card would stand when its read
+    // failed; the overrides card after the supply card, where that
+    // card would stand when its read failed) and again after any
     // failed read removed them (see ensureAbcSection /
     // removeAbcSection, ensureExceptionsSection / removeExceptionsSection,
-    // ensureSupplySection / removeSupplySection).
+    // ensureSupplySection / removeSupplySection,
+    // ensureOverridesSection / removeOverridesSection).
     ensureAbcSection();
     ensureExceptionsSection();
     ensureSupplySection();
+    ensureOverridesSection();
 
     var appEl = document.getElementById('app');
     if (!appEl) {

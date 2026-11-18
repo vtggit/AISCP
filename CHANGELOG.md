@@ -167,9 +167,9 @@ code is the authority for details.
 - Each live forecast snapshot keeps the correction proposed for every period that had one, so the
   corrections can be measured against what sold once their periods complete; a backfill keeps none
   (#1375).
-- Forecast accuracy measures the realised value of the stored corrections against actual demand
-  (`GET /api/forecast/accuracy/corrections`), with before and after totals, WAPE, bias and value
-  added overall and per item-site (#1376).
+- Realised accuracy measures the stored corrections once their periods complete: the forecast's
+  error and bias as it was and as corrected, overall and per item-site, and whether the corrections
+  would have moved it nearer what sold (`GET /api/forecast/accuracy/corrections`) (#1376).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

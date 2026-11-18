@@ -160,6 +160,10 @@ code is the authority for details.
 - Forecast overrides now keep the correction proposed for their period when one is proposed, and
   `GET /api/forecast/overrides/proposals` counts how often the current overrides follow their
   stored proposals (#1365).
+- The Demand screen shows the proposed correction beside the forecast: the reason, and each
+  period's forecast and proposed quantity (#1359).
+- A "Forecast overrides" card on the Overview: how often an override took the proposed quantity or
+  moved the same way, and how many overrides had no proposal (#1369).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

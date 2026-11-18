@@ -98,6 +98,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   where the forecast bias exception finds its bias persists: a proposed quantity for each forecast
   period without an override or a demand signal, the forecast scaled by the measured actual over
   forecast, with the figures it rests on and a one-line reason (`backend/app/api/forecast.py`).
+- The Demand screen shows that correction for the chosen item-site in a "Proposed correction"
+  section after "Forecast periods": the reason, and each period's forecast and proposed quantity,
+  or "No correction proposed." (`app/js/demand.js`).
 - Planner overrides of a forecast period, with a required reason, and withdrawals
   (`backend/app/forecast/overrides.py`).
 - Each forecast override keeps the correction proposed for its period when it was stored, if one
@@ -106,6 +109,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   how many took the proposed quantity, how many moved the same way, and how many have none
   (`backend/app/api/forecast.py`,
   `backend/app/repositories/forecast_override_proposals_postgres_repository.py`).
+- The Overview's "Forecast overrides" card shows those counts: how often an override took the
+  proposed quantity, how often it moved the same way, and how many overrides had no proposal, with
+  a link to Demand (`app/js/overview.js`).
 - Demand signals: known extra demand (a promotion, deal or event) for one item-site and date
   window, added on top of the forecast and counted in the reorder point and the aggregate
   projection. Signals are append-only; a withdrawal is a new row with a reason
@@ -310,16 +316,17 @@ A static single-page app in `app/` (plain HTML, CSS and JavaScript, served by ng
 views are:
 
 - **Overview**: value tiles, the three decision lists, released orders, value by ABC class,
-  today's exceptions, this week's supply plan, and the decisions that need attention, largest
-  money first.
+  today's exceptions, this week's supply plan, how often forecast overrides follow the proposed
+  corrections, and the decisions that need attention, largest money first.
 - **Exceptions**: the triage list across every planning signal, with the answer under each
   row's detail when the item-site has already answered it, and acknowledge and snooze for an
   admin.
 - **Work queue**: the reorder-point, excess and stockout lists with a detail pane to record
   a decision, each row's ERP and an ERP filter when there is more than one ERP, CSV
   downloads, and the Odoo draft purchase order action.
-- **Demand**: the forecast list, history and forecast chart, method and accuracy, overrides,
-  demand signals, and the empirical reorder point of intermittent and lumpy item-sites.
+- **Demand**: the forecast list, history and forecast chart, method and accuracy, the proposed
+  correction, overrides, demand signals, and the empirical reorder point of intermittent and
+  lumpy item-sites.
 - **Scenario**: the what-if levers, per-class service levels and saved scenarios.
 - **Aggregate**: the monthly projection by site, spend against budget, deferral candidates,
   and the release of planned orders to the ERP.

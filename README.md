@@ -162,8 +162,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   plan, on one page. An admin signs the month off, and the sign-off stores the figures agreed
   (`backend/app/sop/review.py`, `backend/app/api/sop.py`). The review proposes signing the
   month off when no value figure moved more than a set change since the last sign-off (the
-  `sop.signoff_proposal_max_change` setting, 5% by default).
-- The S&OP screen's status card shows the sign-off proposal line from the review answer when it is usable, after the sign-off line and before the sign-off button, without a request of its own (`app/js/sop.js`, `app/css/sop.css`).
+  `sop.signoff_proposal_max_change` setting, 5% by default). The S&OP screen's status card
+  shows the proposal, or which value figure moved most since the last sign-off
+  (`app/js/sop.js`).
 
 **Supply planning**
 

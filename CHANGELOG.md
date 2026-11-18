@@ -164,6 +164,9 @@ code is the authority for details.
   period's forecast and proposed quantity (#1359).
 - A "Forecast overrides" card on the Overview: how often an override took the proposed quantity or
   moved the same way, and how many overrides had no proposal (#1369).
+- Live forecast snapshots now store the proposed correction quantity for each bucket, null when the
+  item-site has no correction or the bucket has an override or demand signal, and backfills store
+  null (#1375).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

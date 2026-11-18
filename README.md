@@ -98,6 +98,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   where the forecast bias exception finds its bias persists: a proposed quantity for each forecast
   period without an override or a demand signal, the forecast scaled by the measured actual over
   forecast, with the figures it rests on and a one-line reason (`backend/app/api/forecast.py`).
+- A live forecast snapshot stores, for each bucket, the proposed quantity of the correction
+  period with the same start, null when the item-site has no correction, the correction has no
+  period for the bucket, or the correction read fails; a backfill stores null
+  (`backend/app/forecast/snapshots.py`).
 - The Demand screen shows that correction for the chosen item-site in a "Proposed correction"
   section after "Forecast periods": the reason, and each period's forecast and proposed quantity,
   or "No correction proposed." (`app/js/demand.js`).

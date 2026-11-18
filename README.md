@@ -140,6 +140,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   (`backend/app/forecast/signals.py`).
 - A system setting chooses whether reorder points are built on demand history (the default)
   or on the forecast (`backend/app/forecast/basis.py`, `backend/app/settings/registry.py`).
+- Beside that setting, the Settings screen's "Demand basis: history or forecast" card shows which
+  basis reorder points use, each basis's error one period ahead once periods have completed, which
+  was nearer what sold, and the ten item-sites with the most demand (`app/js/settings.js`).
 
 **Scenarios, aggregate planning and S&OP**
 

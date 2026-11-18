@@ -105,6 +105,12 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   proposed.", and an answer without the key shows no section (`app/js/demand.js`).
 - Planner overrides of a forecast period, with a required reason, and withdrawals
   (`backend/app/forecast/overrides.py`).
+- Each forecast override keeps the correction proposed for its period when it was stored, if one
+  was proposed (a failed read stores the override without it).
+  `GET /api/forecast/overrides/proposals` counts the current overrides: how many had a proposal,
+  how many took the proposed quantity, how many moved the same way, and how many have none
+  (`backend/app/api/forecast.py`,
+  `backend/app/repositories/forecast_override_proposals_postgres_repository.py`).
 - Demand signals: known extra demand (a promotion, deal or event) for one item-site and date
   window, added on top of the forecast and counted in the reorder point and the aggregate
   projection. Signals are append-only; a withdrawal is a new row with a reason

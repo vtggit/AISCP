@@ -145,9 +145,9 @@ code is the authority for details.
 - Sign-offs that store the figures agreed (admin), past sign-offs with their figures, and what
   moved since the last sign-off (#928, #931, #933, #935, #938).
 - Saved scenarios compared with the plan (`GET /api/sop/scenarios`) (#941, #945).
-- The S&OP review (`GET /api/sop/review`) answers a sign-off proposal, proposing to sign the month
-  off when the largest relative change of its value figures since the last sign-off is at most the
-  new `sop.signoff_proposal_max_change` setting (default 5%) (#1403).
+- The S&OP review proposes signing the month off when no value figure moved more than a set change
+  since the last sign-off (`sop.signoff_proposal_max_change`, 5% by default), and says which figure
+  moved most (#1403).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

@@ -109,6 +109,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   forecast's error and bias as it was and as corrected, overall and per item-site, and whether the
   corrections would have moved it nearer what sold (`GET /api/forecast/accuracy/corrections`,
   `backend/app/forecast/accuracy.py`).
+- Realised accuracy also measures the stored history basis beside the forecast once its periods
+  complete: the error and bias of the history basis and of the effective forecast, and whether the
+  forecast was nearer what sold, overall and per item-site (`GET /api/forecast/accuracy/basis`,
+  `backend/app/forecast/accuracy.py`).
 - The Demand screen shows that correction for the chosen item-site in a "Proposed correction"
   section after "Forecast periods": the reason, and each period's forecast and proposed quantity,
   or "No correction proposed." (`app/js/demand.js`).

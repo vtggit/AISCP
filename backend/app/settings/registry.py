@@ -188,6 +188,30 @@ register(
 
 register(
     Setting(
+        key="exceptions.basis_switch_margin",
+        scope="system",
+        type="number",
+        default=5,
+        description="How many points nearer what sold, one period ahead, the demand basis not in use must have been before the exceptions inbox proposes switching to it.",
+        min=0.5,
+        max=50,
+    )
+)
+
+register(
+    Setting(
+        key="exceptions.basis_switch_min_periods",
+        scope="system",
+        type="number",
+        default=60,
+        description="The fewest periods, one period ahead, the demand basis measure must compare before the exceptions inbox proposes switching the basis.",
+        min=1,
+        max=100000,
+    )
+)
+
+register(
+    Setting(
         key="exceptions.forecast_bias_min_periods",
         scope="system",
         type="number",

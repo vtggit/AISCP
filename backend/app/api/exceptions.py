@@ -2,7 +2,7 @@
 
 ``GET /api/exceptions`` (any signed-in user; the router is mounted
 behind the app's authentication gate) gathers one row per exception
-from fifteen sources, each read once per call (the releases
+from sixteen sources, each read once per call (the releases
 source reads its ``plan_releases`` rows and the newest open-purchase
 snapshot, once each, the transfers source its newest
 ``transfer_releases`` rows and its in-flight rows, once each, and
@@ -262,6 +262,39 @@ percentage part only when the plan reports one);
   in UTC as ``YYYY-MM-DD HH:MM UTC``), view "#/releases" and
   ``detected_on`` the run's UTC date (the idle row's the grant's
   time plus 26 hours) — neither ever the response's ``as_of``.
+* the demand basis switch — the one call of
+  ``app.forecast.accuracy.basis_accuracy`` per call, with
+  ``bucket_index=1`` (the demand basis one period ahead, the
+  horizon the reorder points compare): one row, kind
+  "demand_basis_switch" (medium), the key
+  "demand_basis_switch:<the proposed basis>", ``item_code`` and
+  ``site_code`` null, title "Demand basis to review", the detail
+  "One period ahead over <N> periods, the <proposed basis> was
+  <Z> points nearer what sold than the <basis in use>, which
+  reorder points use. An admin may switch the demand basis to the
+  <proposed basis> in Settings." (N the measure's compared
+  buckets, with thousands separators, Z the absolute
+  ``value_added`` times 100, to one decimal), view "#/settings"
+  and ``detected_on`` the measure's ``as_of`` — never the
+  response's ``as_of`` — yielded only when the measure's
+  ``compared_buckets`` is at least the
+  ``exceptions.basis_switch_min_periods`` system setting (default
+  60) and the demand basis not in use was nearer what sold, one
+  period ahead, by at least the
+  ``exceptions.basis_switch_margin`` system setting (default 5)
+  points: the in-use basis ``history`` with ``value_added`` times
+  100 at least the margin proposes ``forecast``, the in-use basis
+  ``forecast`` with minus ``value_added`` times 100 at least the
+  margin proposes ``history``, a null ``value_added`` proposes
+  neither.  The effective ``replenishment.demand_basis`` and the
+  two settings come from the stored system settings the list
+  already reads once per call (the two settings through
+  ``setting_value`` — a missing or out-of-range stored value
+  falls back to the registry default, as the other settings do —
+  the basis the way the reorder point reads it, never through
+  ``setting_value`` and never stored by the route; while the
+  settings read itself failed the source runs off the registry
+  defaults, never failing on that account).
 
 The 14-day window is a UTC timestamp cutoff: a failure row is
 included when its timestamp is at least the current UTC time minus
@@ -281,7 +314,8 @@ whose day is the setting, the code clash's the date of its
 ``seen_at``, the cross-ERP opportunity's the comparison's
 ``as_of``, the supplier risk high's the rating's ``as_of``, the
 standing grant run's the run's UTC date and the idle row's the
-grant's time plus 26 hours).
+grant's time plus 26 hours, the demand basis switch's the
+measure's ``as_of``).
   The rows are ordered high before
 medium, then kind order (buffer_stocked_out, buffer_critical,
 stockout_likely, stockout_at_risk, expedite_after_stockout,
@@ -290,7 +324,8 @@ transfer_awaiting_release, release_failed, transfer_failed,
 erp_push_failed, sop_signoff_due, erp_code_clash,
 erp_currency_mismatch, cross_erp_opportunity,
 supplier_risk_high, sole_source_short,
-order_below_minimum, standing_grant_run), then item_code
+order_below_minimum, standing_grant_run,
+demand_basis_switch), then item_code
 then key.
 
 The response is ``{"as_of", "counts": {"high", "medium",
@@ -300,15 +335,15 @@ reports one) — the DDMRP plan's, the stockout rows' and the
 expedite lines' as-ofs (the forecast bias, the three failure
 kinds, the two awaiting kinds, the S&OP sign-off due, the code
 clash, the currency mismatch, the cross-ERP opportunity,
-the supplier risk high, the sole source short and
-the order below minimum report none,
+the supplier risk high, the sole source short,
+the order below minimum and the demand basis switch report none,
 their dates are the rows'
 ``detected_on``),
 and a source that raises is caught — its name ("ddmrp",
 "stockout", "expedite", "releases", "transfers", "pushes",
 "forecast", "sop", "clashes", "currencies", "supplier_risk",
 "second_sources", "order_minimums",
-"standing_grants" or "across") is listed
+"standing_grants", "basis" or "across") is listed
 in ``sources_failed`` and the other sources still answer, with
 status 200.  The counts cover only the rows returned.  Nothing is
 written and no ERP client is called.
@@ -462,7 +497,7 @@ from app.auth.models import AuthUser
 from app.db.connection import get_cursor
 from app.ddmrp.plan import plan_ddmrp
 from app.ddmrp.zones import setting_value
-from app.forecast.accuracy import realised_accuracy
+from app.forecast.accuracy import basis_accuracy, realised_accuracy
 from app.recommend.cross_erp import cross_erp_items
 from app.recommend.expedite import expedite_list
 from app.recommend.reorder import recommendations_memo
@@ -540,8 +575,15 @@ _TRANSFERS_READ_LIMIT = 200
 # how many of the latest forecast periods, each forecast one period
 # ahead, the measure runs over, the absolute bias at or above which
 # an item-site is an exception and the fewest compared forecast
-# periods it needs first.  A missing or out-of-range stored value
-# falls back to the registry default.
+# periods it needs first.  The demand-basis-switch settings: the
+# fewest periods, one period ahead, the basis measure must compare
+# before the inbox proposes switching the basis and the margin, in
+# points nearer what sold, one period ahead, the basis not in use
+# must have been; and the demand basis the reorder points are built
+# on, the basis the switch reads its in-use basis from.  A missing
+# or out-of-range stored value falls back to the registry default.
+BASIS_SWITCH_MARGIN_KEY = "exceptions.basis_switch_margin"
+BASIS_SWITCH_MIN_PERIODS_KEY = "exceptions.basis_switch_min_periods"
 FORECAST_BIAS_PERIODS_KEY = "exceptions.forecast_bias_periods"
 FORECAST_BIAS_THRESHOLD_KEY = "exceptions.forecast_bias_threshold"
 FORECAST_BIAS_MIN_PERIODS_KEY = "exceptions.forecast_bias_min_periods"
@@ -550,6 +592,7 @@ RELEASE_APPROVAL_DAYS_KEY = "exceptions.release_approval_days"
 SOP_SIGNOFF_DAY_KEY = "exceptions.sop_signoff_day"
 REPORTING_CURRENCY_KEY = "erp.reporting_currency"
 STANDING_GRANTS_ENABLED_KEY = "erp.standing_grants_enabled"
+DEMAND_BASIS_KEY = "replenishment.demand_basis"
 
 # One daily sync plus two hours: a standing grant whose time is
 # more than this many hours before the current UTC time is idle.
@@ -587,8 +630,9 @@ _ACK_MAX_LENGTH = 255
 # directly after the currency mismatch, the supplier risk high
 # directly after the cross-ERP opportunity, the sole source
 # short directly after the supplier risk high, the order
-# below minimum directly after the sole source short and the
-# standing grant run the last kind).
+# below minimum directly after the sole source short, the
+# standing grant run directly after the order below minimum
+# and the demand basis switch the last kind).
 _KIND_ORDER = {
     "buffer_stocked_out": 0,
     "buffer_critical": 1,
@@ -610,6 +654,7 @@ _KIND_ORDER = {
     "sole_source_short": 17,
     "order_below_minimum": 18,
     "standing_grant_run": 19,
+    "demand_basis_switch": 20,
 }
 
 _TITLES = {
@@ -633,6 +678,7 @@ _TITLES = {
     "sole_source_short": "Sole source, short of stock",
     "order_below_minimum": "Order below supplier minimum",
     "standing_grant_run": "Standing grant run needs attention",
+    "demand_basis_switch": "Demand basis to review",
 }
 
 
@@ -1991,6 +2037,112 @@ def _transfer_detail(row: dict) -> str:
     return f"transfer {row.get('from_site_code')} → {row.get('to_site_code')} " "failed"
 
 
+def _effective_demand_basis(stored_settings: dict | None) -> str:
+    """The effective ``replenishment.demand_basis`` of the call's
+    stored settings: the stored value when it is one of the
+    setting's allowed values, else the registry default
+    (``history``) — the same rule the reorder point's basis
+    applies.  It runs off the settings the list already read once:
+    no settings read of its own, and the enum never runs through
+    ``setting_value`` — a value written out of band that the
+    setting cannot hold never names a basis, and the exceptions
+    flow persists none."""
+    setting = get_setting(DEMAND_BASIS_KEY)
+    if setting is None:
+        return "history"
+    value = (stored_settings or {}).get(setting.key)
+    if value is not None and value in setting.allowed:
+        return value
+    return setting.default
+
+
+def _basis_switch_rows(
+    answer: object,
+    stored_settings: dict | None,
+) -> list[ExceptionRow]:
+    """The one demand-basis-switch row, when the measure proposes
+    one.
+
+    ``answer`` is the call's one ``basis_accuracy(bucket_index=1)``
+    read (the demand basis one period ahead, the horizon the
+    reorder points compare).  The row is yielded only when the
+    measure's ``compared_buckets`` is at least the
+    ``exceptions.basis_switch_min_periods`` system setting (default
+    60) and the demand basis not in use was nearer what sold, one
+    period ahead, by at least the ``exceptions.basis_switch_margin``
+    system setting (default 5) points: the in-use basis ``history``
+    with ``value_added`` times 100 at least the margin proposes
+    ``forecast``; the in-use basis ``forecast`` with minus
+    ``value_added`` times 100 at least the margin proposes
+    ``history`` — a null ``value_added`` proposes neither.  The two
+    settings come from the stored system settings the list already
+    read once, through ``setting_value`` — a missing or out-of-range
+    stored value falls back to the registry default, as the other
+    settings do — while the stored settings hold no read at all
+    (the settings read failed) the source runs off the registry
+    defaults, never failing on that account — and the effective
+    ``replenishment.demand_basis`` from them, the way the reorder
+    point reads it.  The row is kind
+    "demand_basis_switch" (medium), the key
+    "demand_basis_switch:<the proposed basis>", ``item_code`` and
+    ``site_code`` null, title "Demand basis to review", the detail
+    "One period ahead over <N> periods, the <proposed basis> was
+    <Z> points nearer what sold than the <basis in use>, which
+    reorder points use. An admin may switch the demand basis to the
+    <proposed basis> in Settings." (N the measure's compared
+    buckets, with thousands separators, Z the absolute
+    ``value_added`` times 100, to one decimal), view "#/settings"
+    and ``detected_on`` the measure's ``as_of`` — never the
+    response's ``as_of``.  Nothing here can raise on a hostile
+    answer (never a 500).
+    """
+    if not isinstance(answer, dict):
+        return []
+    min_periods = setting_value(stored_settings, BASIS_SWITCH_MIN_PERIODS_KEY)
+    buckets = _compared_bucket_count(answer.get("compared_buckets"))
+    if buckets < min_periods:
+        return []
+    value_added = _finite_number(answer.get("value_added"))
+    if value_added is None:
+        return []
+    margin = setting_value(stored_settings, BASIS_SWITCH_MARGIN_KEY)
+    basis = _effective_demand_basis(stored_settings)
+    if basis == "history":
+        if value_added * 100 < margin:
+            return []
+        proposed, in_use = "forecast", "history"
+    else:
+        if -value_added * 100 < margin:
+            return []
+        proposed, in_use = "history", "forecast"
+    points = abs(value_added) * 100
+    points_text = (
+        f"{points:.1f}"
+        if math.isfinite(points)
+        else f"{Decimal(abs(value_added)) * 100:.1f}"
+    )
+    as_of = _as_date(answer.get("as_of"))
+    return [
+        ExceptionRow(
+            kind="demand_basis_switch",
+            severity="medium",
+            key=f"demand_basis_switch:{proposed}",
+            item_code=None,
+            site_code=None,
+            title=_TITLES["demand_basis_switch"],
+            detail=(
+                f"One period ahead over {buckets:,} periods, the "
+                f"{proposed} was {points_text} points nearer what "
+                f"sold than the {in_use}, which reorder points use. "
+                f"An admin may switch the demand basis to the "
+                f"{proposed} in Settings."
+            ),
+            view="#/settings",
+            detected_on=as_of,
+        )
+    ]
+
+
 def _sort_key(row: ExceptionRow) -> tuple:
     """High before medium, then kind order, then item_code (nulls
     last) and key."""
@@ -2005,7 +2157,7 @@ def _sort_key(row: ExceptionRow) -> tuple:
 
 
 def _collect() -> tuple[date | None, list[ExceptionRow], list[str]]:
-    """The current exceptions list: the fifteen sources, each read once.
+    """The current exceptions list: the sixteen sources, each read once.
 
     Returns the latest as-of date reported by any successful source
     (null when none reports one), the rows — ordered high before
@@ -2027,7 +2179,7 @@ def _collect() -> tuple[date | None, list[ExceptionRow], list[str]]:
 
 
 def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
-    """The fifteen sources of the exceptions list, each read once,
+    """The sixteen sources of the exceptions list, each read once,
     under ``_collect``'s one ``recommendations_memo``.
 
     Returns the latest as-of date reported by any successful source
@@ -2288,6 +2440,20 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
     except Exception:
         sources_failed.append("standing_grants")
 
+    try:
+        # The one call of the basis accuracy per call (the demand
+        # basis one period ahead, the horizon the reorder points
+        # compare): the demand-basis-switch row, when the measure
+        # proposes one.  The effective demand basis and the two
+        # settings come from the stored system settings read once
+        # per call above — a missing or out-of-range stored value
+        # falls back to the registry default, as the other settings
+        # do; while the settings read itself failed the source runs
+        # off the registry defaults rather than failing.
+        rows.extend(_basis_switch_rows(basis_accuracy(bucket_index=1), stored_settings))
+    except Exception:
+        sources_failed.append("basis")
+
     rows.sort(key=_sort_key)
     as_of = max(reported_as_ofs) if reported_as_ofs else None
     return as_of, rows, sources_failed
@@ -2457,7 +2623,7 @@ def _ack_proposal(row: ExceptionRow) -> dict | None:
 def list_exceptions(
     include_snoozed: bool = False, include_proposal: bool = False
 ) -> dict:
-    """The exceptions triage list of the fifteen sources.
+    """The exceptions triage list of the sixteen sources.
 
     Open to any signed-in user (the router is mounted behind the
     app's authentication gate).  Each source is read once per call;
@@ -2514,6 +2680,38 @@ def list_exceptions(
     ever the response's ``as_of``; a failure of the grants read or
     of the runs read fails the source, listed
     "standing_grants".
+
+    The basis source calls ``basis_accuracy(bucket_index=1)`` once
+    per call (the demand basis one period ahead, the horizon the
+    reorder points compare) and, from the stored system settings the
+    list already reads once, the effective
+    ``replenishment.demand_basis`` and the two settings the switch
+    applies — the number settings through ``setting_value`` (a
+    missing or out-of-range stored value falling back to the
+    registry default, as the other settings do) and the basis the
+    way the reorder point reads it, never through ``setting_value``:
+    the route persists no demand basis of its own.  One row, kind
+    "demand_basis_switch" (medium), the key
+    "demand_basis_switch:<the proposed basis>", ``item_code`` and
+    ``site_code`` null, title "Demand basis to review", the detail
+    "One period ahead over <N> periods, the <proposed basis> was
+    <Z> points nearer what sold than the <basis in use>, which
+    reorder points use. An admin may switch the demand basis to the
+    <proposed basis> in Settings." (N the measure's compared
+    buckets, with thousands separators, Z the absolute
+    ``value_added`` times 100, to one decimal), view "#/settings"
+    and ``detected_on`` the measure's ``as_of`` — never the
+    response's ``as_of`` — when the measure's ``compared_buckets``
+    is at least the ``exceptions.basis_switch_min_periods`` system
+    setting (default 60) and the demand basis not in use was nearer
+    what sold, one period ahead, by at least the
+    ``exceptions.basis_switch_margin`` system setting (default 5)
+    points: the in-use basis ``history`` with ``value_added`` times
+    100 at least the margin proposes ``forecast``, the in-use basis
+    ``forecast`` with minus ``value_added`` times 100 at least the
+    margin proposes ``history``, a null ``value_added`` proposes
+    neither (a settings read failure runs the source off the
+    registry defaults, never failing it on that account).
 
     Every row carries the stored acknowledgement of its key, when
     there is one: ``acknowledged`` (true) plus

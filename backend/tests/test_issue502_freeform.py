@@ -376,6 +376,8 @@ def test_issue502_freeform(client):
         "erp.reporting_currency",
         "erp.standing_grants_enabled",
         "erp.standing_grants_horizon_days",
+        "exceptions.basis_switch_margin",
+        "exceptions.basis_switch_min_periods",
         "exceptions.forecast_bias_min_periods",
         "exceptions.forecast_bias_periods",
         "exceptions.forecast_bias_threshold",

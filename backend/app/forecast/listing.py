@@ -1,14 +1,20 @@
 """The forecast list on a fixed query budget (issue #374).
 
-``forecast_rows(as_of=None, demand_class=None)`` returns every
-item-site's forecast row — the effective forecast beside the
-statistical one [rule: OVR-3] [rule: OVR-4] — in the order
+``forecast_rows(as_of=None, demand_class=None,
+include_history_mean=False)`` returns every item-site's forecast
+row — the effective forecast beside the statistical one
+[rule: OVR-3] [rule: OVR-4] — in the order
 ``app.api.forecast.list_forecasts`` returns them today:
 ``total_forecast`` descending, then ``item_code`` and then
 ``site_code``.  Item-sites whose demand class is ``no_demand`` are
 left out, and an item-site with no usable forecast is simply absent.
 ``demand_class`` filters the list and the default ``as_of`` is the
-shared ``app.stats.demand`` default.
+shared ``app.stats.demand`` default.  With the keyword-only
+``include_history_mean=True`` each row also carries
+``history_mean_daily``, the ``mean_daily`` of the demand
+statistics row — from the same ``demand_stats_for_all`` call
+— the row was built from; with the default ``False`` every
+row is exactly as before, and either way no extra query runs.
 
 The number of SQL statements executed is fixed and does not grow with
 the number of item-sites: the demand statistics come from
@@ -87,6 +93,8 @@ def build_forecast_row(
 def forecast_rows(
     as_of: date | None = None,
     demand_class: str | None = None,
+    *,
+    include_history_mean: bool = False,
 ) -> list[dict]:
     """Every item-site's forecast row, the effective beside the statistical.
 
@@ -104,7 +112,12 @@ def forecast_rows(
     the demand statistics from ``demand_stats_for_all``, every
     item-site's 30-day history buckets from one ``history_for_all``
     query and the counted overrides of every row from one
-    ``effective_for_all`` query.
+    ``effective_for_all`` query.  With
+    ``include_history_mean=True`` each row also carries
+    ``history_mean_daily``, the ``mean_daily`` of the demand
+    statistics row the row was built from — read from the same
+    ``demand_stats_for_all`` call, no extra query, set where the
+    row is built, before ``effective_for_all``.
     """
     histories = history_for_all(as_of)
     rows: list[dict] = []
@@ -119,6 +132,8 @@ def forecast_rows(
             histories.get((stats["item_code"], stats["site_code"])),
         )
         if row is not None:
+            if include_history_mean:
+                row["history_mean_daily"] = stats["mean_daily"]
             rows.append(row)
     rows = effective_for_all(rows)
     rows.sort(

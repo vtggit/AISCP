@@ -97,6 +97,7 @@ ALL_COLUMNS = {
     "override_days",
     "signal_quantity",
     "proposed_quantity",
+    "history_quantity",
     "method",
     "demand_class",
     "history_buckets",

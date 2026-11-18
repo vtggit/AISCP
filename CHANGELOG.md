@@ -173,6 +173,9 @@ code is the authority for details.
 - The Demand screen shows how the proposed corrections would have done, in a line under the demand
   signals line: the periods compared, the error as forecast and if corrected, and the difference in
   points (#1378).
+- Each forecast snapshot also keeps what the history basis expected for every period, the
+  item-site's mean daily demand times the period's days, in live captures and backfills alike, so
+  the history basis can be measured beside the forecast (#1382).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

@@ -40,6 +40,23 @@ effective quantity), ``signal_total``, ``before_wape`` /
 the forecast nearer the actuals) overall and per item-site, ordered
 by ``signal_total`` descending.
 
+``GET /api/forecast/accuracy/corrections`` reports the realised
+value of the stored corrections, for any signed-in user and with
+the same ``as_of`` and ``origin`` parameters: the same
+completed-bucket comparison restricted to the buckets with a
+stored ``proposed_quantity`` (a null proposal is left out), with
+``before_total`` (each bucket's effective quantity — the
+forecast before the corrections), ``after_total`` (its proposed
+quantity), ``before_wape`` / ``after_wape`` (each the absolute
+difference of the before and the after figure from the actuals,
+over the actuals) and ``before_bias`` / ``after_bias`` (each the
+before or the after total minus the actuals, over the actuals),
+all null when the actuals are 0, and ``value_added``
+(``before_wape`` minus ``after_wape``, positive when the
+corrections would have moved the forecast nearer the actuals)
+overall and per item-site, ordered by ``actual_total``
+descending.
+
 ``POST /api/forecast/overrides`` (admin only) stores a planner
 override — the planner's quantity for one forecast period of one
 item-site — and ``POST /api/forecast/overrides/withdrawals`` (admin
@@ -111,7 +128,11 @@ from app.auth.authorization import require_role
 from app.auth.models import AuthUser
 from app.db.connection import get_cursor
 from app.ddmrp.zones import setting_value
-from app.forecast.accuracy import realised_accuracy, signal_accuracy
+from app.forecast.accuracy import (
+    correction_accuracy,
+    realised_accuracy,
+    signal_accuracy,
+)
 from app.forecast.history import history_for_pair
 from app.forecast.listing import build_forecast_row, forecast_rows
 from app.forecast.overrides import (
@@ -816,6 +837,82 @@ def get_forecast_accuracy_signals(
     422 in FastAPI's validation envelope.
     """
     return signal_accuracy(as_of=as_of, origin=origin)
+
+
+class CorrectionAccuracyItemSite(BaseModel):
+    """One item-site's correction measures.
+
+    Only the compared buckets with a stored
+    ``proposed_quantity`` are summed in: ``before_total`` is each
+    bucket's effective quantity (the forecast before the
+    corrections), ``after_total`` its proposed quantity,
+    ``before_wape`` and ``after_wape`` the sums of their absolute
+    differences from the actuals over ``actual_total`` (null when it
+    is 0), ``before_bias`` and ``after_bias`` ``before_total`` or
+    ``after_total`` minus ``actual_total``, over ``actual_total``
+    (null likewise), and ``value_added`` ``before_wape`` minus
+    ``after_wape`` — positive when the corrections would have moved
+    the forecast nearer the actuals.
+    """
+
+    item_code: str
+    site_code: str
+    compared_buckets: int
+    actual_total: float
+    before_total: float
+    after_total: float
+    before_wape: float | None
+    after_wape: float | None
+    before_bias: float | None
+    after_bias: float | None
+    value_added: float | None
+
+
+class CorrectionAccuracyResult(BaseModel):
+    """The realised value of the stored corrections.
+
+    Only completed snapshot buckets (``bucket_end`` on or before
+    ``as_of`` — the shared default as-of date when absent) with a
+    stored ``proposed_quantity`` are compared with the actual demand
+    of their range, the same way ``GET /api/forecast/accuracy``
+    compares; a bucket whose proposal is null is left out.
+    ``item_sites`` carries one entry per item-site with the same
+    measures, ordered by ``actual_total`` descending, then
+    ``item_code`` and ``site_code``.
+    """
+
+    as_of: date
+    compared_buckets: int
+    actual_total: float
+    before_total: float
+    after_total: float
+    before_wape: float | None
+    after_wape: float | None
+    before_bias: float | None
+    after_bias: float | None
+    value_added: float | None
+    item_sites: list[CorrectionAccuracyItemSite]
+
+
+@router.get("/accuracy/corrections", response_model=CorrectionAccuracyResult)
+def get_forecast_accuracy_corrections(
+    as_of: date | None = Query(default=None),
+    origin: Literal["live", "backfill"] | None = Query(default=None),
+) -> dict:
+    """The realised value of the stored corrections, any signed-in user.
+
+    Only completed snapshot buckets with a stored
+    ``proposed_quantity`` (``bucket_end`` on or before ``as_of`` —
+    the shared default as-of date when absent, because demand after
+    the latest demand date is unknown, not zero) are compared with
+    the actual demand of their range; a bucket whose proposal is
+    null is left out.  ``origin`` (``live`` or ``backfill``) keeps
+    only snapshots of that origin.  ``item_sites`` is ordered by
+    ``actual_total`` descending, then ``item_code`` and
+    ``site_code``.  A malformed ``as_of`` or ``origin`` answers 422
+    in FastAPI's validation envelope.
+    """
+    return correction_accuracy(as_of=as_of, origin=origin)
 
 
 class OverrideBody(BaseModel):

@@ -43,7 +43,7 @@ The forecast basis per item-site (smooth, intermittent, erratic, lumpy), the bac
 
 The signal reaches the reorder point and the aggregate projection whichever demand basis is set. The order plan moves only if the item's position falls below the new reorder point, so pick an item with little stock to show that step. A signal can't be edited or deleted. **Withdraw** adds a row with a reason and the signal stays in the history, so anything you enter stays on the demo system afterwards.
 
-Under the realised accuracy, a **Demand signals** line says whether people's signals helped: the error with and without them, on the periods that carried one. It stays hidden until a daily snapshot has stored a standing signal and that forecast period has completed, so expect at least a month before it appears. A demo system with no such period shows nothing here, and that is correct.
+Under the realised accuracy, a **Demand signals** line says whether people's signals helped: the error with and without them, on the periods that carried one. It stays hidden until a daily snapshot has stored a standing signal and that forecast period has completed, so expect at least a month before it appears. A demo system with no such period shows nothing here, and that is correct. A **Proposed corrections** line follows it the same way once a period with a stored proposal has completed: the error as forecast, the error had the proposals been applied, and the difference.
 
 ### Order plan: what to buy, from whom, by when
 

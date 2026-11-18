@@ -17,9 +17,14 @@
 //     method, the 12-bucket forecast total, the backtest error as a
 //     percentage — an em dash when there is no backtest) above the
 //     rows, which scroll under it — at 900px and below, where the
-//     panes stack, the header does not pin: the list's port is too
-//     short for a pinned header to ever clear a row, so the header
-//     stays in flow and scrolls with the rows; each row is a
+//     panes stack, the view scrolls vertically instead of the panes
+//     filling it: the root and the split take flex: none, the list
+//     keeps a fixed height (clamp(240px, 50vh, 520px)) whose body
+//     scrolls within it, and the detail shows at its full height
+//     below the list without scrolling of its own; the header does
+//     not pin: the list's port is too short for a pinned header to
+//     ever clear a row, so the header stays in flow and scrolls with
+//     the rows; each row is a
 //     [data-testid="demand-row"] button with data-item and data-site;
 //     the chosen row is tinted and carries aria-current="true"; the
 //     first row is chosen when the view opens, and when a filter chip

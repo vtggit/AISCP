@@ -4,7 +4,8 @@
 
 /* The demand view owns its full height: the chip bar and the split
    panes fill the view, only the list body and the detail pane scroll,
-   and the document never does. */
+   and the document never does — on narrow screens, where the panes
+   stack, the view scrolls instead. */
 #view-demand.is-active {
   display: flex;
   flex-direction: column;
@@ -945,5 +946,35 @@
 
   .d-backtest-tiles {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The stacked panes are taller than the view, so squeezing them
+     into it would leave a stub of each pane the user must scroll
+     inside to read: instead the view scrolls vertically (never
+     sideways) and the panes follow one another at their own sizes —
+     the root and the split stop stretching, the list keeps a usable
+     fixed height whose body scrolls within it as it does now, and
+     the detail shows at its full height below the list, which the
+     view scrolls to. The document still never scrolls, at any width. */
+  #view-demand.is-active {
+    overflow-y: auto;
+  }
+
+  #view-demand.is-active #demand-root {
+    flex: none;
+  }
+
+  .d-split {
+    flex: none;
+  }
+
+  .d-list {
+    flex: none;
+    height: clamp(240px, 50vh, 520px);
+  }
+
+  .d-detail {
+    flex: none;
+    overflow-y: visible;
   }
 }

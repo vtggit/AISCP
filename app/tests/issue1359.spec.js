@@ -797,6 +797,7 @@ test('issue1359 freeform', async ({ page }) => {
     { method: 'GET', path: '/api/forecast/accuracy', search: '?limit=1000' },
     { method: 'GET', path: '/api/forecast/accuracy/signals', search: '' },
     { method: 'GET', path: '/api/forecast/accuracy/corrections', search: '' },
+    { method: 'GET', path: '/api/forecast/overrides/proposals', search: '' },
   ];
   for (const req of api.requests.filter((r) => r.path.startsWith('/api/forecast'))) {
     expect(

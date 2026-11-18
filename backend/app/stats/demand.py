@@ -33,6 +33,7 @@ import statistics
 from datetime import date, timedelta
 
 from app.db.connection import get_cursor
+from app.db.read_cache import cached_read
 
 BUCKET_DAYS = 30
 DEFAULT_N_BUCKETS = 12
@@ -197,6 +198,7 @@ def _resolve_as_of(cur, as_of: date | None) -> date:
     return default_as_of(cur)
 
 
+@cached_read
 def demand_stats_for_all(
     as_of: date | None = None,
     with_daily: bool = False,

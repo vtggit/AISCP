@@ -23,6 +23,7 @@ from datetime import date, timedelta
 from decimal import ROUND_FLOOR, Decimal, localcontext
 
 from app.db.connection import get_cursor
+from app.db.read_cache import cached_read
 from app.recommend.reorder import recommendations_for_all
 from app.repositories.item_sites_postgres_repository import (
     ItemSitePostgresRepository,
@@ -282,6 +283,7 @@ def _rank_sort_key(row: dict):
     return (-row["p_stockout"], 1, 0.0, row["item_code"], row["site_code"])
 
 
+@cached_read
 def stockout_ranked(as_of: date | None = None) -> list[dict]:
     """Ranked stockout-risk rows for every "ok" recommendation.
 

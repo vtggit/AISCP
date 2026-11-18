@@ -30,6 +30,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from app.db.connection import get_cursor
+from app.db.read_cache import cached_read
 from app.stats.demand import BUCKET_DAYS, _shift_back, resolve_as_of
 
 HISTORY_N_BUCKETS = 36
@@ -152,6 +153,7 @@ def history_for_pair(
     return _buckets_for(daily_totals, first_seen, resolved_as_of)
 
 
+@cached_read
 def history_for_all(as_of: date | None = None) -> dict[tuple[str, str], list[dict]]:
     """Every item-site's 30-day history buckets, from one query.
 

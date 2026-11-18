@@ -284,6 +284,8 @@ code is the authority for details.
   (#1233).
 - The Releases screen's Released cell now reads an order released by a standing grant as by
   standing grant #<id> instead of the actor (#1310).
+- On narrow screens the Demand screen now scrolls its view vertically, keeps the forecast list at a
+  fixed height, and shows the detail pane at its full height below the list (#1387).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

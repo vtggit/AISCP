@@ -23,9 +23,10 @@ A step left to a planner names why, and the evidence that would let AIERP propos
 - **The data.** Every process reads AIERP's own synced copy of the ERP. The sync and the jobs after it (the forecast snapshot, the buffer status snapshot, the transfer-order status read, the standing-grant runs of the order plan and transfers and the exceptions' first-seen dates) run without a person, on the schedule the deployment sets.
 - **The measures.** AIERP-D-225 asks AIERP to show how its answers did against the planner's changes. Today three answers are measured that way: the forecast, by realised accuracy with the effect of overrides and of demand signals measured apart; the stockout remedies, where the Overview's Stockout risk card shows how often accepted decisions took the proposed remedy, by kind (#1321, #1323); and the excess actions, where the Overview's Excess and dead stock card shows the same for the proposed action (#1336, #1338). `GET /api/decisions/summary` counts accepted, applied, dismissed and snoozed decisions with their money. The other measures named below are not built yet.
 
-State on 2026-11-16. Update this file when a step changes hands.
+State on 2026-11-16. Update this file when a step changes hands. Each process section starts with a comment line, which does not render, naming the guidance areas it covers, so that documentation updates for a change in one of those areas reach the section; keep it when you edit the section.
 
 ## Replenishment settings
+<!-- docs-follow areas: replenishment-defaults, recommendation-changes, service-levels-and-their-cost, intermittent-and-lumpy-demand, planning-assumptions-and-abc-classes, parameter-write-back -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -40,6 +41,7 @@ State on 2026-11-16. Update this file when a step changes hands.
 | Track: an accepted row reads "applied" once the ERP's reorder point is within 1 unit of it; a failed push is an exception | AIERP | — | — |
 
 ## Excess
+<!-- docs-follow areas: dead-and-excess-defaults, excess-and-stockout-decisions -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -49,6 +51,7 @@ State on 2026-11-16. Update this file when a step changes hands.
 | Track: an accepted row reads "applied" once it leaves the list; a dismissal lapses when the excess grows by 10% (at least 1 unit) | AIERP | — | — |
 
 ## Stockout risk
+<!-- docs-follow areas: stockout-foresight-defaults, open-purchase-supply, excess-and-stockout-decisions -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -62,6 +65,7 @@ State on 2026-11-16. Update this file when a step changes hands.
 Raising an order or moving stock uses the release steps of the order plan and of transfers below.
 
 ## The order plan and its release
+<!-- docs-follow areas: order-quantities, execution-release-and-tracking, aggregate-planning -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -79,6 +83,7 @@ Raising an order or moving stock uses the release steps of the order plan and of
 The Releases screen tracks the Acumatica releases. Odoo draft orders are not on it. The Released cell reads an order released under a standing grant as "by standing grant #<id>".
 
 ## Transfers
+<!-- docs-follow areas: execution-release-and-tracking, several-erps-one-planner -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -90,6 +95,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Track: read each transfer order's status back from Acumatica, count a move in flight as on order at the receiving site and take it off the sending one, and raise failed moves and those still waiting in the ERP in Exceptions | AIERP | — | — |
 
 ## The forecast and its overrides
+<!-- docs-follow areas: demand-planning, demand-signals -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -102,6 +108,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Choose whether reorder points use the history or the forecast (`replenishment.demand_basis`, history by default) | planner (admin) | The switch moves every reorder point, so an admin makes it after reviewing realised accuracy (AIERP-D-74). | The forecast's realised error beside the historical average's over the same periods, per item-site, so that AIERP can propose the switch where the forecast is better. The backtest compares the two; realised accuracy does not yet. |
 
 ## DDMRP buffers
+<!-- docs-follow areas: demand-driven-replenishment -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -115,6 +122,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Store each buffer's status daily and show its time in each zone | AIERP | — | — |
 
 ## The monthly S&OP review
+<!-- docs-follow areas: monthly-s-op-review, scenario-planning, aggregate-planning -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -127,6 +135,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Raise a month not signed off by day 10 (`exceptions.sop_signoff_day`) in Exceptions | AIERP | — | — |
 
 ## Supplier risk and second sources
+<!-- docs-follow areas: supplier-risk, second-sources -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -140,6 +149,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Hold the bridge stock | planner | AIERP shows the shortfall but turns it into no order and no reorder point. | A bridge-stock line on the order plan, released under AIERP-D-2, measured against what planners order for sole-source items. Not built. |
 
 ## Order minimums
+<!-- docs-follow areas: supplier-order-minimums -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -151,6 +161,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Raise an order below its minimum, with a line that must go out within `exceptions.order_minimum_due_days` (default 2 days), in Exceptions | AIERP, in `GET /api/exceptions` | — | — |
 
 ## The exceptions inbox
+<!-- docs-follow areas: the-exceptions-inbox -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|

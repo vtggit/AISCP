@@ -108,6 +108,11 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - The Demand screen shows that correction for the chosen item-site in a "Proposed correction"
   section after "Forecast periods": the reason, and each period's forecast and proposed quantity,
   or "No correction proposed." (`app/js/demand.js`).
+- The Demand screen also shows a proposed-corrections line under the demand signals line (or
+  under the realised accuracy summary when that line is absent) reading the overall measures of
+  `GET /api/forecast/accuracy/corrections`: periods with a proposal, error as forecast and if
+  corrected, and the point effect, or that proposed correction accuracy is not available
+  (`app/js/demand.js`).
 - Planner overrides of a forecast period, with a required reason, and withdrawals
   (`backend/app/forecast/overrides.py`).
 - Each forecast override keeps the correction proposed for its period when it was stored, if one

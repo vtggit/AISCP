@@ -170,6 +170,8 @@ code is the authority for details.
 - Realised accuracy measures the stored corrections once their periods complete: the forecast's
   error and bias as it was and as corrected, overall and per item-site, and whether the corrections
   would have moved it nearer what sold (`GET /api/forecast/accuracy/corrections`) (#1376).
+- The Demand screen shows a proposed corrections line under the signals line: the periods compared,
+  error as forecast and if corrected, and the points better, worse, or no change (#1378).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

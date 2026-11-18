@@ -22720,6 +22720,16 @@
                 "type": "null"
               }
             ]
+          },
+          "signoff_proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SopReviewSignoffProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -22731,10 +22741,76 @@
           "forecast",
           "item_sites_without_unit_cost",
           "latest_signoff",
-          "since_signoff"
+          "since_signoff",
+          "signoff_proposal"
         ],
         "title": "SopReviewResponse",
-        "description": "The S&OP review of the horizon months."
+        "description": "The S&OP review of the horizon months.\n\n``signoff_proposal`` is the proposal to sign the month off,\n``None`` without an earlier sign-off or while the review month\nis already signed off \u2014 see the module docstring for its\nfields."
+      },
+      "SopReviewSignoffProposal": {
+        "properties": {
+          "proposed": {
+            "type": "boolean",
+            "title": "Proposed"
+          },
+          "max_change": {
+            "type": "number",
+            "title": "Max Change"
+          },
+          "largest_change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Largest Change"
+          },
+          "largest_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Largest Field"
+          },
+          "largest_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Largest Month"
+          },
+          "compared_values": {
+            "type": "integer",
+            "title": "Compared Values"
+          },
+          "since_month": {
+            "type": "string",
+            "title": "Since Month"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposed",
+          "max_change",
+          "largest_change",
+          "largest_field",
+          "largest_month",
+          "compared_values",
+          "since_month"
+        ],
+        "title": "SopReviewSignoffProposal",
+        "description": "The proposal to sign the review month off: the largest\nrelative change of the value figures since the newest stored\nsign-off against the effective value of the\n``sop.signoff_proposal_max_change`` setting, and where the\nlargest change was (all null when nothing was compared)."
       },
       "SopReviewSinceSignoff": {
         "properties": {

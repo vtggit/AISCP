@@ -505,6 +505,18 @@ register(
 
 register(
     Setting(
+        key="sop.signoff_proposal_max_change",
+        scope="system",
+        type="number",
+        default=0.05,
+        description="The largest relative change of any value figure of the S&OP review since the last sign-off (0.05 = 5%) at which the review proposes signing the month off.",
+        min=0.001,
+        max=1,
+    )
+)
+
+register(
+    Setting(
         key="supplier_risk.on_time_floor",
         scope="system",
         type="number",

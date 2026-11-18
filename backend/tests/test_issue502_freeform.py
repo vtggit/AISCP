@@ -398,6 +398,7 @@ def test_issue502_freeform(client):
         "replenishment.service_target",
         "second_source.qualification_days",
         "second_source.similar_prefix_length",
+        "sop.signoff_proposal_max_change",
         "supplier_risk.lead_time_cv_ceiling",
         "supplier_risk.on_time_floor",
         "supply_plan.prefer_lower_risk_supplier",

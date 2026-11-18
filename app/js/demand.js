@@ -2,8 +2,10 @@
 //
 // #/demand is the forecast review screen: one row per item-site the
 // backend forecasts (GET /api/forecast?limit=1000) and, for the chosen
-// row, the full picture (GET /api/forecast/by-key): the history buckets
-// and the 12-bucket forecast as one chart, the method with its
+// row, the full picture (GET /api/forecast/by-key, asked with
+// include_correction=true so the answer may carry the item-site's
+// proposed correction): the history buckets and the 12-bucket
+// forecast as one chart, the method with its
 // parameters and its arithmetic, and the one-bucket-ahead backtest
 // score beside the baseline's.
 //
@@ -14,7 +16,10 @@
 //   * a list pane (left): a sticky column header (item, site, class,
 //     method, the 12-bucket forecast total, the backtest error as a
 //     percentage — an em dash when there is no backtest) above the
-//     rows, which scroll under it; each row is a
+//     rows, which scroll under it — at 900px and below, where the
+//     panes stack, the header does not pin: the list's port is too
+//     short for a pinned header to ever clear a row, so the header
+//     stays in flow and scrolls with the rows; each row is a
 //     [data-testid="demand-row"] button with data-item and data-site;
 //     the chosen row is tinted and carries aria-current="true"; the
 //     first row is chosen when the view opens, and when a filter chip
@@ -48,6 +53,32 @@
 //     an em dash for a bucket no override covers, the effective
 //     quantity with "Overridden" when the override covers the whole
 //     period, "N of M days overridden" for a partly covered one;
+//     "Proposed correction" ([data-testid="demand-correction"],
+//     headed <h3>Proposed correction</h3>) sits directly after
+//     "Forecast periods" and before "Current overrides" while the
+//     shown detail answer carries its own correction key — the
+//     by-key answer's, never a list row's — and it sends no
+//     request of its own: the answer's reason line
+//     ([data-testid="demand-correction-reason"]) and a table
+//     ([data-testid="demand-correction-periods"]) with the head
+//     cells "Period", "Forecast" and "Proposed", one row per
+//     proposed period in the answer's order ([data-testid=
+//     "demand-correction-period"], carrying data-period-start),
+//     the period's dates with the en dash between spaces, then
+//     the statistical and the proposed quantity through the
+//     quantity formatter. A usable correction is an object — not
+//     null, not an array — whose reason is a non-empty string and
+//     whose periods is a non-empty array of objects whose
+//     period_start and period_end are YYYY-MM-DD strings and whose
+//     quantity and proposed_quantity are finite numbers; a null or
+//     unusable value of the key shows the single line "No
+//     correction proposed." ([data-testid="demand-correction-none"])
+//     instead, and an answer without the key at all (an older
+//     server) shows no section, the pane reading exactly as today.
+//     It prefills nothing — the override form still starts at the
+//     period's effective or statistical quantity, never the
+//     proposed one — and after a save or a withdrawal the reloaded
+//     detail's correction is what the section shows;
 //     "Current overrides" ([data-testid="demand-overrides"]) lists
 //     the stored rows whose applies is true, in period order
 //     ([data-testid="override-row"], carrying data-period-start),
@@ -1188,6 +1219,117 @@
     );
   }
 
+  // A YYYY-MM-DD date string, and nothing else (issue #1359).
+  var CORRECTION_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+  // The shown answer's proposed correction, or null for a value
+  // that is not usable: an object — not null, not an array —
+  // whose reason is a non-empty string and whose periods is a
+  // non-empty array of objects whose period_start and period_end
+  // are YYYY-MM-DD strings and whose quantity and
+  // proposed_quantity are finite numbers (issue #1359). Any
+  // other value of the correction key counts as null.
+  function usableCorrection(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    if (typeof value.reason !== 'string' || value.reason === '') {
+      return null;
+    }
+    var periods = value.periods;
+    if (!Array.isArray(periods) || periods.length === 0) {
+      return null;
+    }
+    for (var i = 0; i < periods.length; i++) {
+      var entry = periods[i];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null;
+      }
+      if (
+        typeof entry.period_start !== 'string' ||
+        !CORRECTION_DATE_PATTERN.test(entry.period_start) ||
+        typeof entry.period_end !== 'string' ||
+        !CORRECTION_DATE_PATTERN.test(entry.period_end)
+      ) {
+        return null;
+      }
+      if (!isNumber(entry.quantity) || !isNumber(entry.proposed_quantity)) {
+        return null;
+      }
+    }
+    return value;
+  }
+
+  // The "Proposed correction" section (issue #1359), directly
+  // after "Forecast periods" and before "Current overrides":
+  // it reads the shown detail answer's correction — never a list
+  // row's — and sends no request of its own. An answer without
+  // the correction key (an older server) renders no section at
+  // all; a null or unusable correction renders the single "No
+  // correction proposed." line. Every value from the answer
+  // passes through the escape, so the reason, the dates and the
+  // figures reach the page as text, never as markup.
+  function renderCorrection(detail) {
+    if (
+      !detail ||
+      typeof detail !== 'object' ||
+      Array.isArray(detail) ||
+      !Object.prototype.hasOwnProperty.call(detail, 'correction')
+    ) {
+      return '';
+    }
+    var correction = usableCorrection(detail.correction);
+    var parts = [
+      '<section class="d-section d-correction" data-testid="demand-correction" ' +
+        'aria-label="Proposed correction">',
+      '<h3>Proposed correction</h3>',
+    ];
+    if (!correction) {
+      parts.push(
+        '<p class="d-correction-none" data-testid="demand-correction-none">' +
+          'No correction proposed.' +
+        '</p>'
+      );
+      parts.push('</section>');
+      return parts.join('');
+    }
+    parts.push(
+      '<p class="d-correction-reason" data-testid="demand-correction-reason">' +
+        esc(correction.reason) +
+      '</p>'
+    );
+    var rows = '';
+    for (var i = 0; i < correction.periods.length; i++) {
+      var entry = correction.periods[i];
+      rows +=
+        '<tr data-testid="demand-correction-period" data-period-start="' +
+        esc(entry.period_start) +
+        '">' +
+          '<td class="d-p-dates">' +
+            esc(entry.period_start) +
+            ' \u2013 ' +
+            esc(entry.period_end) +
+          '</td>' +
+          '<td class="d-p-stat">' + esc(quantityText(entry.quantity)) + '</td>' +
+          '<td class="d-p-eff">' + esc(quantityText(entry.proposed_quantity)) + '</td>' +
+        '</tr>';
+    }
+    parts.push(
+      '<table class="d-periods" data-testid="demand-correction-periods">' +
+        '<thead><tr>' +
+          '<th scope="col">Period</th>' +
+          '<th scope="col">Forecast</th>' +
+          '<th scope="col">Proposed</th>' +
+        '</tr></thead>' +
+        '<tbody>' +
+          rows +
+        '</tbody>' +
+      '</table>'
+    );
+    parts.push('</section>');
+    return parts.join('');
+  }
+
   // The period row's "Override" button (admin only): it opens the
   // override form under its row.
   function overrideButtonHtml(bucket) {
@@ -1607,6 +1749,7 @@
           '</figcaption>' +
         '</figure>' +
         renderPeriods(detail) +
+        renderCorrection(detail) +
         renderOverrides() +
         renderSignals() +
         '<section class="d-section" aria-label="How this forecast was made">' +
@@ -2178,7 +2321,8 @@
       '/api/forecast/by-key?item_code=' +
       encodeURIComponent(String(item)) +
       '&site_code=' +
-      encodeURIComponent(String(site));
+      encodeURIComponent(String(site)) +
+      '&include_correction=true';
     global.Api.get(path).then(
       function (detail) {
         if (seq !== detailSeq) {

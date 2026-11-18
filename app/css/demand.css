@@ -434,6 +434,19 @@
   text-align: right;
 }
 
+/* Proposed correction (issue #1359): the correction's reason
+   line and the one-line note for a null or unusable correction;
+   the periods table reuses the forecast periods' .d-periods
+   look. The long unbroken reason wraps, never scrolls the page. */
+.d-correction-reason,
+.d-correction-none {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
 /* Current overrides: the stored rows that apply, each with the
    period's dates and the quantity, the reason, who made it and when;
    or the note for why none are listed. */
@@ -898,6 +911,14 @@
       minmax(0, 1fr)
       minmax(90px, max-content)
       minmax(90px, max-content);
+  }
+
+  /* The column header does not pin on narrow screens: with the panes
+     stacked the list's port is too short for a pinned header to ever
+     clear a row (a pinned header would cover every row's click
+     point), so the header stays in flow and scrolls with the rows. */
+  .d-row-head {
+    position: static;
   }
 
   /* The class, method and realised columns drop off on narrow

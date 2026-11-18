@@ -28,7 +28,15 @@ day or a demand signal) — and a backfill stores
 has no overrides, no signals and no correction read)
 — the statistical columns (``quantity``, ``method``,
 ``demand_class``, ``history_buckets``) are exactly the ones the
-capture stored before the columns existed.  A signal withdrawn after
+capture stored before the columns existed.  Every bucket row also
+stores ``history_quantity``, the item-site's history mean scaled
+to the bucket's length: the ``mean_daily`` of the demand
+statistics row the forecast row was built from — the same
+``forecast_rows`` call, read, never stored as a column of its own
+— times the bucket's days (30 for every horizon bucket), not
+rounded, and null when that ``mean_daily`` is missing or not a
+finite number; a live capture and a backfill alike store it.  A
+signal withdrawn after
 a capture leaves the stored rows as they were: they record what was
 believed on the as-of date.  A stored row whose ``effective_quantity``
 is null — a row written before migration 0015 — is read with
@@ -60,6 +68,7 @@ carry the application's timestamp.
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, date, datetime
 from uuid import uuid4
 
@@ -120,6 +129,18 @@ def _stored_fields(cur, as_of: date, record: dict | None) -> dict:
     }
 
 
+def _history_quantity(mean_daily: object, bucket: dict) -> float | None:
+    """The bucket's history_quantity: the row's history mean times
+    the bucket's days, null when the mean is missing or not a finite
+    number."""
+    if isinstance(mean_daily, bool) or not isinstance(mean_daily, (int, float)):
+        return None
+    if not math.isfinite(mean_daily):
+        return None
+    days = (bucket["bucket_end"] - bucket["bucket_start"]).days + 1
+    return mean_daily * days
+
+
 def _snapshot_rows_for(as_of: date, apply_overrides: bool) -> list[dict]:
     """The per-bucket rows a capture stores for ``as_of``.
 
@@ -154,13 +175,22 @@ def _snapshot_rows_for(as_of: date, apply_overrides: bool) -> list[dict]:
     hindcast has no overrides, no signals and no correction read) the
     bucket stores ``effective_quantity`` equal to its ``quantity``,
     ``override_days`` 0, ``signal_quantity`` 0 and
-    ``proposed_quantity`` null.
+    ``proposed_quantity`` null.  The rows are built with
+    ``forecast_rows(as_of, include_history_mean=True)`` — one
+    call, a live capture and a backfill alike — and every
+    bucket stores ``history_quantity``, the row's
+    ``history_mean_daily`` (the demand statistics row's
+    ``mean_daily``, read, never stored as a column of its own)
+    times the bucket's days (``bucket_end`` minus ``bucket_start``
+    plus one, 30 for every horizon bucket), not rounded, and null
+    when the row's ``history_mean_daily`` is missing or not a
+    finite number.
     """
     # Imported here, not at module level: app.forecast.listing imports
     # HORIZON_BUCKETS from this module.
     from app.forecast.listing import forecast_rows
 
-    rows = list(forecast_rows(as_of))
+    rows = list(forecast_rows(as_of, include_history_mean=True))
     proposed_by_start: list[dict] = [{} for _ in rows]
     if apply_overrides:
         try:
@@ -217,6 +247,9 @@ def _snapshot_rows_for(as_of: date, apply_overrides: bool) -> list[dict]:
                         0 if not apply_overrides else bucket["signal_quantity"]
                     ),
                     "proposed_quantity": starts.get(bucket["bucket_start"]),
+                    "history_quantity": _history_quantity(
+                        row.get("history_mean_daily"), bucket
+                    ),
                     "method": row["method"],
                     "demand_class": row["demand_class"],
                     "history_buckets": row["history_buckets"],
@@ -287,9 +320,10 @@ def capture_snapshot(as_of: date | None = None) -> dict:
                     "(id, as_of, origin, item_code, site_code, bucket_index, "
                     "bucket_start, bucket_end, quantity, effective_quantity, "
                     "override_days, signal_quantity, proposed_quantity, "
-                    "method, demand_class, history_buckets, created_at) "
+                    "history_quantity, method, demand_class, history_buckets, "
+                    "created_at) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                    "%s, %s, %s, %s, %s)",
+                    "%s, %s, %s, %s, %s, %s)",
                     [
                         (
                             str(uuid4()),
@@ -305,6 +339,7 @@ def capture_snapshot(as_of: date | None = None) -> dict:
                             row["override_days"],
                             row["signal_quantity"],
                             row["proposed_quantity"],
+                            row["history_quantity"],
                             row["method"],
                             row["demand_class"],
                             row["history_buckets"],

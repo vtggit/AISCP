@@ -157,6 +157,9 @@ code is the authority for details.
   proposed quantity for each forecast period without an override or a demand signal (the forecast
   scaled by the measured actual over forecast), with the figures it rests on and a one-line reason;
   otherwise null (#1358).
+- Forecast overrides now keep the correction proposed for their period when one is proposed, and
+  `GET /api/forecast/overrides/proposals` counts how often the current overrides follow their
+  stored proposals (#1365).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

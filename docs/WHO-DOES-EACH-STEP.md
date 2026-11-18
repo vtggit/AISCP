@@ -131,7 +131,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Suggest which planned orders to defer in a month over budget: the most cover first, never one that would stock out | AIERP | — | — |
 | Defer the orders | planner | A month's release takes every planned order, so no release leaves the suggested ones out. | A release that leaves out the chosen deferrals, under AIERP-D-2. Not built. |
 | Ask what-if questions and save them as scenarios | planner (any signed-in user); AIERP runs the simulation | A scenario is a question a person asks. | AIERP proposing scenarios from its own signals, such as a high-risk supplier or a lasting forecast bias, measured against the scenarios planners save. |
-| Agree the plan and sign the month off | planner (admin) | The sign-off records that the people who own demand, supply and money agreed. It changes nothing else (AIERP-D-160). | AIERP proposing the sign-off when the figures moved less than an agreed amount since the last one. The review already computes what moved. |
+| Agree the plan and sign the month off | planner (admin) | The sign-off records that the people who own demand, supply and money agreed. It changes nothing else (AIERP-D-160). | AIERP proposes the sign-off in the review when the figures moved less than an agreed amount since the last one; the review already computes what moved. |
 | Raise a month not signed off by day 10 (`exceptions.sop_signoff_day`) in Exceptions | AIERP | — | — |
 
 ## Supplier risk and second sources

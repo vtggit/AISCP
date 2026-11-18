@@ -1,5 +1,7 @@
 """Read-only API for on_hand."""
 
+# parity: backend-only on-hand balances the recommendations read
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.models.on_hand import OnHandResponse

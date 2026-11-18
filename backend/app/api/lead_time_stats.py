@@ -1,5 +1,7 @@
 """Read-only API for lead time statistics per item and supplier."""
 
+# parity: backend-only lead-time statistics the reorder points and the supplier figures read
+
 from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query, status

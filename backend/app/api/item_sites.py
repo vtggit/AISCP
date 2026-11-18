@@ -1,5 +1,7 @@
 """Read-only API for item_sites."""
 
+# parity: backend-only item-site master data kept in step with the ERP, the system of record
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.models.item_sites import ItemSiteResponse

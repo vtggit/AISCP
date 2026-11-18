@@ -1,5 +1,7 @@
 """Read-only API for lead_time_observations."""
 
+# parity: backend-only raw lead-time observations, the input the lead-time statistics read
+
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
 from app.models.lead_time_observations import LeadTimeObservationResponse

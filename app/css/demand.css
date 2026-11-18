@@ -68,10 +68,12 @@
   color: var(--color-ink-2);
 }
 
-/* The demand signals line directly under it (issue #984): the same
+/* The demand signals line directly under it (issue #984) and the
+   proposed corrections line under the signals (issue #1378): the same
    width behaviour and wrap, a quieter ink — the better and worse
    wording keeps the overrides clause' token colours from app.css. */
-.d-realised-signals {
+.d-realised-signals,
+.d-realised-corrections {
   margin: 0;
   padding: 0 var(--space-5) var(--space-3);
   font-size: 13px;

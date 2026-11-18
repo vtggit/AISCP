@@ -143,9 +143,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Beside that setting, the Settings screen's "Demand basis: history or forecast" card shows which
   basis reorder points use, each basis's error one period ahead once periods have completed, which
   was nearer what sold, and the ten item-sites with the most demand (`app/js/settings.js`). It
-  also proposes the other basis when that basis was nearer what sold by at least the screen's
-  margin over at least its minimum periods, and the Exceptions screen labels the matching row
-  "Demand basis to review" (`app/js/exceptions.js`).
+  also proposes switching to the other basis when that one was nearer by the margin, and over the
+  periods, that the two `exceptions.basis_switch_*` settings set, as the Exceptions inbox does in
+  a row labelled "Demand basis to review" (`app/js/exceptions.js`).
 
 **Scenarios, aggregate planning and S&OP**
 

@@ -164,6 +164,9 @@ code is the authority for details.
   period's forecast and proposed quantity (#1359).
 - A "Forecast overrides" card on the Overview: how often an override took the proposed quantity or
   moved the same way, and how many overrides had no proposal (#1369).
+- Each live forecast snapshot keeps the correction proposed for every period that had one, so the
+  corrections can be measured against what sold once their periods complete; a backfill keeps none
+  (#1375).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps
@@ -249,6 +252,7 @@ code is the authority for details.
 - The docs check now reports routes, settings, and environment variables that a changed Markdown
   file names but the code does not define (#1175).
 - The order plan's run holds back an order it cannot value (#1301).
+- The nine backend-only API modules are marked with a comment naming the data each serves (#1374).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a

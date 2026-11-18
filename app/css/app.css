@@ -3158,3 +3158,14 @@ input {
   text-align: right;
   white-space: nowrap;
 }
+
+/* The proposal line: the same switch the exceptions inbox proposes,
+   under the verdict — the accent ink marks it as an offer to the
+   admin's demand basis setting, not a figure of the measures. */
+.demand-basis-proposal {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-accent-ink);
+  overflow-wrap: anywhere;
+}

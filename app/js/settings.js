@@ -211,7 +211,24 @@
 // forecast was <value_added times 100, absolute, to one decimal>
 // points nearer what sold." for a positive value_added, "The
 // history was <the same> points nearer what sold." for a negative
-// one and "Both were as near as each other." for 0. The table
+// one and "Both were as near as each other." for 0. Below the
+// verdict, a proposal line
+// ([data-testid="demand-basis-proposal"], the verdict's next
+// element sibling) reads "Proposed: switch reorder points to the
+// forecast. The exceptions inbox shows the same proposal; an admin
+// makes the switch with the demand basis setting above." — with
+// "the history" in place of "the forecast" for the mirror case —
+// and shows only when the answer's compared_buckets is at least the
+// screen's own exceptions.basis_switch_min_periods entry value
+// (entryByKey) and either the screen's own
+// replenishment.demand_basis entry holds "history" with
+// value_added times 100 at least the screen's own
+// exceptions.basis_switch_margin entry value, which proposes the
+// forecast, or it holds "forecast" with minus value_added times 100
+// at least the margin, which proposes the history; without either
+// threshold entry or with a non-finite threshold value, with the
+// basis entry missing or holding any other value, there is no such
+// line. The table
 // (table.demand-basis-table, [data-testid="demand-basis-table"])
 // inside its own sideways-scroll container
 // (div.demand-basis-table-wrap) reads Item, Site, Periods, History
@@ -395,11 +412,18 @@
     'Extra cost a year',
     'Fill rate',
   ];
-  // The demand-basis card (issue #1394): its title, the setting the
-  // current line reads from and the two lines it holds, the none
-  // line for a compared_buckets of 0 and the table's columns.
+  // The demand-basis card (issue #1394): its title, the settings the
+  // current line and the proposal line read from, the proposal
+  // texts, the none line for a compared_buckets of 0 and the table's
+  // columns.
   var BASIS_TITLE = 'Demand basis: history or forecast';
   var BASIS_SETTING_KEY = 'replenishment.demand_basis';
+  var BASIS_MARGIN_KEY = 'exceptions.basis_switch_margin';
+  var BASIS_MIN_PERIODS_KEY = 'exceptions.basis_switch_min_periods';
+  var BASIS_PROPOSED_FORECAST =
+    'Proposed: switch reorder points to the forecast. The exceptions inbox shows the same proposal; an admin makes the switch with the demand basis setting above.';
+  var BASIS_PROPOSED_HISTORY =
+    'Proposed: switch reorder points to the history. The exceptions inbox shows the same proposal; an admin makes the switch with the demand basis setting above.';
   var BASIS_CURRENT_HISTORY = 'Reorder points use the history.';
   var BASIS_CURRENT_FORECAST = 'Reorder points use the forecast.';
   var BASIS_NONE_LINE = 'No period with a stored history quantity has completed yet.';
@@ -2467,6 +2491,45 @@
     return null;
   }
 
+  // The proposal line's text: the exceptions inbox shows the same
+  // proposal — the basis the measured value added points to — and
+  // the card offers it for the admin's demand basis setting. The
+  // answer's compared_buckets must be at least the screen's own
+  // exceptions.basis_switch_min_periods value and either the
+  // screen's own replenishment.demand_basis entry must hold
+  // "history" with value_added times 100 at least the screen's own
+  // exceptions.basis_switch_margin value (it proposes the forecast)
+  // or it must hold "forecast" with minus value_added times 100 at
+  // least the margin (it proposes the history). Null — no line —
+  // without either threshold entry or with a non-finite threshold
+  // value, with the basis entry missing or holding any other value,
+  // or when the margin is not met.
+  function basisProposalText(data) {
+    var marginEntry = entryByKey(BASIS_MARGIN_KEY);
+    if (!marginEntry || !isPlainNumber(marginEntry.value)) {
+      return null;
+    }
+    var minPeriodsEntry = entryByKey(BASIS_MIN_PERIODS_KEY);
+    if (!minPeriodsEntry || !isPlainNumber(minPeriodsEntry.value)) {
+      return null;
+    }
+    var basisEntry = entryByKey(BASIS_SETTING_KEY);
+    if (!basisEntry || (basisEntry.value !== 'history' && basisEntry.value !== 'forecast')) {
+      return null;
+    }
+    if (!(data.compared_buckets >= minPeriodsEntry.value)) {
+      return null;
+    }
+    var points = data.value_added * 100;
+    if (basisEntry.value === 'history' && points >= marginEntry.value) {
+      return BASIS_PROPOSED_FORECAST;
+    }
+    if (basisEntry.value === 'forecast' && -points >= marginEntry.value) {
+      return BASIS_PROPOSED_HISTORY;
+    }
+    return null;
+  }
+
   // The target line's text by the answer's service_target — the
   // cycle service level or the fill-rate target; null when the field
   // is missing or carries any other value, so the card shows no such
@@ -2538,10 +2601,11 @@
   // values of the screen's own replenishment.demand_basis entry),
   // the none line for a compared_buckets of 0 — and nothing after
   // it — or, with periods compared, the summary line, the verdict,
-  // the item-site table and the more line for more than 10
-  // entries. A failed or malformed read, like the read being out,
-  // renders no card at all, so the caller appends it only when
-  // present.
+  // the proposal line (only when the answer's measures and the
+  // screen's own settings entries propose a switch), the item-site
+  // table and the more line for more than 10 entries. A failed or
+  // malformed read, like the read being out, renders no card at
+  // all, so the caller appends it only when present.
   function renderBasisCard() {
     var basis = state.basis;
     if (basis.loading || basis.data === null) {
@@ -2580,6 +2644,12 @@
     var verdictLine = el('p', 'demand-basis-verdict', basisVerdictText(data.value_added));
     verdictLine.setAttribute('data-testid', 'demand-basis-verdict');
     card.appendChild(verdictLine);
+    var proposalText = basisProposalText(data);
+    if (proposalText !== null) {
+      var proposalLine = el('p', 'demand-basis-proposal', proposalText);
+      proposalLine.setAttribute('data-testid', 'demand-basis-proposal');
+      card.appendChild(proposalLine);
+    }
     card.appendChild(renderBasisTable(data));
     if (data.item_sites.length > BASIS_MAX_ROWS) {
       var moreLine = el(

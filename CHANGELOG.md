@@ -179,6 +179,9 @@ code is the authority for details.
 - Realised accuracy measures the history basis beside the forecast once their periods complete:
   each one's error and bias against what sold, overall and per item-site, at one horizon or all,
   and which was nearer (`GET /api/forecast/accuracy/basis`) (#1389).
+- The Settings screen shows a "Demand basis: history or forecast" card: which basis the reorder
+  points use, the stored history and forecast errors over the compared periods, which was nearer
+  what sold, and the first ten item-sites with their difference (#1394).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

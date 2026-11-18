@@ -109,6 +109,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   how many took the proposed quantity, how many moved the same way, and how many have none
   (`backend/app/api/forecast.py`,
   `backend/app/repositories/forecast_override_proposals_postgres_repository.py`).
+- The Overview's Forecast overrides card, directly after the Supply this week card (or where it
+  would stand), shows those counts when the read succeeds: the proposed quantity taken in a share
+  of proposed overrides, how many moved the same way, and how many have no proposed correction,
+  with a link to Demand; a failed read removes the card (`app/js/overview.js`).
 - Demand signals: known extra demand (a promotion, deal or event) for one item-site and date
   window, added on top of the forecast and counted in the reorder point and the aggregate
   projection. Signals are append-only; a withdrawal is a new row with a reason

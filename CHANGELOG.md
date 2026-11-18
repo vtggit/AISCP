@@ -162,6 +162,9 @@ code is the authority for details.
   stored proposals (#1365).
 - The Demand screen shows the proposed correction beside the forecast: the reason, and each
   period's forecast and proposed quantity (#1359).
+- The Overview's "Forecast overrides" card now shows how often overrides follow their proposed
+  corrections, with the taken and same-direction counts, overrides without a proposal, or that none
+  are measured yet, and a link to Demand (#1369).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

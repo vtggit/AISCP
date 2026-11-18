@@ -101,6 +101,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Each live forecast snapshot also keeps the correction proposed for every period that had one,
   so that the corrections can be measured against what sold once their periods complete; a
   backfill keeps none (`backend/app/forecast/snapshots.py`).
+- Realised accuracy measures those stored corrections once their periods complete: the
+  forecast's error and bias as it was and as corrected, overall and per item-site, and whether the
+  corrections would have moved it nearer what sold (`GET /api/forecast/accuracy/corrections`,
+  `backend/app/forecast/accuracy.py`).
 - The Demand screen shows that correction for the chosen item-site in a "Proposed correction"
   section after "Forecast periods": the reason, and each period's forecast and proposed quantity,
   or "No correction proposed." (`app/js/demand.js`).

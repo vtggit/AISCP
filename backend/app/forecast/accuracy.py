@@ -81,6 +81,28 @@ the same measures, ordered by ``actual_total`` descending, then
 ``compared_buckets`` and the totals are 0, the ratios and
 ``value_added`` null, and ``item_sites`` empty.
 
+``basis_accuracy(as_of=None, origin=None,
+bucket_index=None)`` is the realised value of the stored history
+basis: the same completed-bucket comparison, restricted to the
+buckets with a stored ``history_quantity`` (a null history is left
+out), with ``history_total`` (the sum of the history quantities),
+``forecast_total`` (the sum of the effective quantities —
+``COALESCE(effective_quantity, quantity)``), ``history_wape`` and
+``forecast_wape`` (each the sum of the absolute differences from
+the actuals, over ``actual_total``, of the history and the
+effective forecast, null when ``actual_total`` is 0),
+``history_bias`` and ``forecast_bias`` (each ``history_total`` or
+``forecast_total`` minus ``actual_total``, over ``actual_total``,
+null likewise) and ``value_added`` (``history_wape`` minus
+``forecast_wape`` — positive when the forecast basis was nearer the
+actuals).  Its result carries ``as_of``, ``compared_buckets``,
+those measures and ``item_sites`` (one entry per item-site with
+``item_code``, ``site_code``, ``compared_buckets`` and the same
+measures, ordered by ``actual_total`` descending, then ``item_code``
+and ``site_code``); with nothing compared, ``compared_buckets`` and
+the totals are 0, the ratios and ``value_added`` null, and
+``item_sites`` empty.
+
 ``origin`` (``live`` or ``backfill``) keeps only snapshots of that
 origin, and ``bucket_index`` (1 to 12) keeps only that horizon; with
 neither, everything compared is included.
@@ -178,6 +200,25 @@ _CORRECTION_COMPARE_SQL = (
     ") d ON TRUE "
     "WHERE s.bucket_end <= %s "
     "AND s.proposed_quantity IS NOT NULL"
+)
+
+
+_BASIS_COMPARE_SQL = (
+    "SELECT s.item_code, s.site_code, "
+    "COALESCE(s.effective_quantity, s.quantity) AS effective_quantity, "
+    "s.history_quantity, "
+    "COALESCE(d.actual_quantity, 0) AS actual_quantity "
+    "FROM forecast_snapshots s "
+    "LEFT JOIN LATERAL ("
+    "  SELECT SUM(e.quantity) AS actual_quantity "
+    "  FROM demand_events e "
+    "  WHERE e.item_code = s.item_code "
+    "    AND e.site_code = s.site_code "
+    "    AND e.occurred_on >= s.bucket_start "
+    "    AND e.occurred_on <= s.bucket_end"
+    ") d ON TRUE "
+    "WHERE s.bucket_end <= %s "
+    "AND s.history_quantity IS NOT NULL"
 )
 
 
@@ -482,6 +523,49 @@ def _correction_measures(
     }
 
 
+def _basis_measures(
+    actual_total: float,
+    history_total: float,
+    forecast_total: float,
+    history_abs_error: float,
+    forecast_abs_error: float,
+) -> dict:
+    """The basis measures over one set of compared buckets.
+
+    ``history_wape`` and ``forecast_wape`` are the sums of the
+    absolute differences from the actuals, over ``actual_total``, of
+    the stored history and the effective forecast (null when
+    ``actual_total`` is 0); ``history_bias`` and ``forecast_bias``
+    are ``history_total`` or ``forecast_total`` minus
+    ``actual_total``, over ``actual_total`` (null likewise); and
+    ``value_added`` is ``history_wape`` minus ``forecast_wape`` —
+    positive when the forecast basis was nearer the actuals.
+    """
+    if actual_total:
+        history_wape = history_abs_error / actual_total
+        forecast_wape = forecast_abs_error / actual_total
+        return {
+            "actual_total": float(actual_total),
+            "history_total": float(history_total),
+            "forecast_total": float(forecast_total),
+            "history_wape": history_wape,
+            "forecast_wape": forecast_wape,
+            "history_bias": (history_total - actual_total) / actual_total,
+            "forecast_bias": (forecast_total - actual_total) / actual_total,
+            "value_added": history_wape - forecast_wape,
+        }
+    return {
+        "actual_total": float(actual_total),
+        "history_total": float(history_total),
+        "forecast_total": float(forecast_total),
+        "history_wape": None,
+        "forecast_wape": None,
+        "history_bias": None,
+        "forecast_bias": None,
+        "value_added": None,
+    }
+
+
 def signal_accuracy(
     as_of: date | None = None,
     origin: str | None = None,
@@ -635,5 +719,94 @@ def correction_accuracy(
         "as_of": as_of,
         "compared_buckets": len(rows),
         **_correction_measures(*totals[:5]),
+        "item_sites": item_sites,
+    }
+
+
+def basis_accuracy(
+    as_of: date | None = None,
+    origin: str | None = None,
+    bucket_index: int | None = None,
+) -> dict:
+    """The realised value of the stored history basis.
+
+    Only completed snapshot buckets — their ``bucket_end`` on or
+    before the as-of date, the shared default as-of date when
+    absent — with a stored ``history_quantity`` are compared with
+    the actual demand of their range, the same way
+    ``correction_accuracy`` compares; a bucket whose history is null
+    is left out.  ``origin`` (``live`` or ``backfill``) keeps only
+    snapshots of that origin, and ``bucket_index`` (1 to 12) only
+    that horizon.  The result carries ``as_of``,
+    ``compared_buckets``, the measures — ``actual_total``,
+    ``history_total`` (the sum of the history quantities),
+    ``forecast_total`` (the sum of the effective quantities),
+    ``history_wape`` and ``forecast_wape`` (each the sum of the
+    absolute differences from the actuals, over ``actual_total``, of
+    the history and the effective forecast), ``history_bias`` and
+    ``forecast_bias`` (each ``history_total`` or ``forecast_total``
+    minus ``actual_total``, over ``actual_total``) and
+    ``value_added`` (``history_wape`` minus ``forecast_wape`` —
+    positive when the forecast basis was nearer the actuals), every
+    ratio and ``value_added`` null when ``actual_total`` is 0 — and
+    ``item_sites``, one entry per item-site with ``item_code``,
+    ``site_code``, ``compared_buckets`` and the same measures,
+    ordered by ``actual_total`` descending, then ``item_code`` and
+    ``site_code``.  With nothing compared, ``compared_buckets`` and
+    the totals are 0, the ratios and ``value_added`` null, and
+    ``item_sites`` empty.
+    """
+    with get_cursor() as cur:
+        if as_of is None:
+            as_of = default_as_of(cur)
+        sql = _BASIS_COMPARE_SQL
+        params: list = [as_of]
+        if origin is not None:
+            sql += " AND s.origin = %s"
+            params.append(origin)
+        if bucket_index is not None:
+            sql += " AND s.bucket_index = %s"
+            params.append(bucket_index)
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+    _ZERO = [0.0, 0.0, 0.0, 0.0, 0.0, 0]
+    totals = list(_ZERO)
+    pair_totals: dict[tuple[str, str], list] = {}
+    for row in rows:
+        history = float(row["history_quantity"])
+        forecast = float(row["effective_quantity"])
+        actual = float(row["actual_quantity"])
+        pair_key = (row["item_code"], row["site_code"])
+        for accumulator in (
+            totals,
+            pair_totals.setdefault(pair_key, list(_ZERO)),
+        ):
+            accumulator[0] += actual
+            accumulator[1] += history
+            accumulator[2] += forecast
+            accumulator[3] += abs(history - actual)
+            accumulator[4] += abs(forecast - actual)
+            accumulator[5] += 1
+    item_sites = [
+        {
+            "item_code": pair_key[0],
+            "site_code": pair_key[1],
+            "compared_buckets": accumulator[5],
+            **_basis_measures(*accumulator[:5]),
+        }
+        for pair_key, accumulator in pair_totals.items()
+    ]
+    item_sites.sort(
+        key=lambda entry: (
+            -entry["actual_total"],
+            entry["item_code"],
+            entry["site_code"],
+        )
+    )
+    return {
+        "as_of": as_of,
+        "compared_buckets": len(rows),
+        **_basis_measures(*totals[:5]),
         "item_sites": item_sites,
     }

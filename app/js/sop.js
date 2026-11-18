@@ -16,6 +16,31 @@
 // actor> on <the date of created_at>", with the note — when there is
 // one — in [data-testid="sop-signoff-note"].
 //
+// After the sign-off line and its note — and before the sign-off
+// button — the proposal line
+// ([data-testid="sop-signoff-proposal"]) reads the server's
+// proposal to sign the month off, from the review answer's
+// signoff_proposal: it sends no request of its own. It shows only
+// for a usable proposal — an object whose proposed is a boolean,
+// max_change a finite number and since_month a non-empty string —
+// and with signoff_proposal null, missing or not usable there is no
+// line and the card and the screen read as before, a review
+// answered without the key among them. When proposed is true — the
+// line carries the class is-proposed, in the accent ink — it reads
+// "Proposed: sign off <review_month>. Since the <since_month>
+// sign-off, no value figure moved more than <largest_change>% (the
+// limit is <max_change>%)." and renders only with largest_change
+// finite: with it missing or not finite the card renders no
+// paragraph at all, never "0.0%" or "NaN%". When proposed is false
+// with a finite largest_change, a known largest_field and a
+// largest_month it reads "Not proposed: <label> for <largest_month>
+// moved <largest_change>% since the <since_month> sign-off (the
+// limit is <max_change>%)." — the label is the since card's for the
+// field — and otherwise it reads "Not proposed: no value figure of
+// the <since_month> sign-off can be compared with this review."
+// Every percentage is the value times 100 to one decimal and every
+// value is escaped.
+//
 // The sign-off control under the status line: the view sends
 // GET /api/auth/me once per activation, and the viewer is an admin
 // when user.roles includes "admin", the way the Aggregate view reads
@@ -297,6 +322,17 @@
   var SINCE_HEADING = 'Since the last sign-off';
   var SINCE_NO_COMMON = 'No months in common with that sign-off.';
   var NO_CHANGE = 'No change';
+
+  // The since card's label for each value field the proposal
+  // compares, so the not-proposed line names the figure the way the
+  // since table rows name them.
+  var PROPOSAL_FIELD_LABELS = {
+    demand_value: 'Demand value',
+    supply_value: 'Open supply value',
+    planned_receipts_value: 'Planned receipts value',
+    total_spend: 'Total spend',
+    budget: 'Budget',
+  };
 
   // The horizons the select offers, in display order; 3 months is the
   // default and matches the server's own default.
@@ -1038,8 +1074,75 @@
       '<section class="sop-card sop-status-card">' +
       '<p class="sop-status" data-testid="sop-status">' + esc(status) + '</p>' +
       signoffHtml +
+      signoffProposalHtml(data) +
       signoffOpenHtml(data) +
       '</section>'
+    );
+  }
+
+  // The proposal line: the server's proposal to sign the review
+  // month off, read only from the already-loaded review answer's
+  // signoff_proposal — it sends no request of its own. It belongs to
+  // the live status card only. A usable proposal is an object whose
+  // proposed is a boolean, max_change a finite number and
+  // since_month a non-empty string; with signoff_proposal null,
+  // missing or not usable there is no line and no empty
+  // placeholder. proposed true renders the line with the class
+  // is-proposed, and only with largest_change finite — without it
+  // there is no line at all, never "0.0%" or "NaN%". proposed false
+  // renders the moved sentence with a finite largest_change, a known
+  // largest_field and a largest_month, else the no-common sentence.
+  // Every percentage is the value times 100 to one decimal and every
+  // value is escaped.
+  function signoffProposalHtml(data) {
+    var proposal = data && typeof data === 'object' ? data.signoff_proposal : null;
+    if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
+      return '';
+    }
+    if (typeof proposal.proposed !== 'boolean' || !isUsable(proposal.max_change)) {
+      return '';
+    }
+    var sinceMonth = nonEmptyString(proposal.since_month);
+    var reviewMonth = displayValue(data.review_month);
+    if (!sinceMonth || !reviewMonth) {
+      return '';
+    }
+    var largest = asNumber(proposal.largest_change);
+    if (proposal.proposed === true) {
+      if (!isFinite(largest)) {
+        return '';
+      }
+      var text =
+        'Proposed: sign off ' + reviewMonth +
+        '. Since the ' + sinceMonth + ' sign-off, no value figure moved more than ' +
+        percent1(proposal.largest_change) +
+        ' (the limit is ' + percent1(proposal.max_change) + ').';
+      return (
+        '<p class="sop-signoff-proposal is-proposed" data-testid="sop-signoff-proposal">' +
+        esc(text) + '</p>'
+      );
+    }
+    var fieldLabel =
+      typeof proposal.largest_field === 'string' &&
+      Object.prototype.hasOwnProperty.call(PROPOSAL_FIELD_LABELS, proposal.largest_field)
+        ? PROPOSAL_FIELD_LABELS[proposal.largest_field]
+        : null;
+    var largestMonth = displayValue(proposal.largest_month);
+    var notProposedText;
+    if (isFinite(largest) && fieldLabel && largestMonth) {
+      notProposedText =
+        'Not proposed: ' + fieldLabel + ' for ' + largestMonth + ' moved ' +
+        percent1(proposal.largest_change) +
+        ' since the ' + sinceMonth + ' sign-off (the limit is ' +
+        percent1(proposal.max_change) + ').';
+    } else {
+      notProposedText =
+        'Not proposed: no value figure of the ' + sinceMonth +
+        ' sign-off can be compared with this review.';
+    }
+    return (
+      '<p class="sop-signoff-proposal" data-testid="sop-signoff-proposal">' +
+      esc(notProposedText) + '</p>'
     );
   }
 

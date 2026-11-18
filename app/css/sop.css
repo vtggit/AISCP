@@ -143,6 +143,19 @@
   overflow-wrap: anywhere;
 }
 
+/* The sign-off proposal line: the card's line style under the
+   sign-off line and its note, above the sign-off control. A proposed
+   line reads in the accent ink. */
+.sop-signoff-proposal {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+}
+
+.sop-signoff-proposal.is-proposed {
+  color: var(--color-accent-ink);
+}
+
 /* The sign-off control: the open button under the status line, and
    the panel it opens — the sentence, the optional note and the
    confirm / Cancel pair. The panel sits between the bar and the body

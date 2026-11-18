@@ -11,13 +11,21 @@ they have origin ``backfill``.
 
 Every bucket row also stores the effective forecast beside the
 statistical one [rule: OVR-4]: a live capture stores, for each
-bucket, the ``effective_quantity``, ``override_days`` and
-``signal_quantity`` the forecast list shows for it at capture time
+bucket, the ``effective_quantity``, ``override_days``,
+``signal_quantity`` and ``proposed_quantity`` the forecast list
+shows for it at capture time
 — ``signal_quantity`` the counted signal quantity of the bucket,
 the same value the forecast list adds to the bucket's
-``effective_quantity`` — and a backfill stores
-``effective_quantity`` equal to ``quantity``, ``override_days`` 0 and
-``signal_quantity`` 0 (a hindcast has no overrides and no signals)
+``effective_quantity``, and ``proposed_quantity`` the correction
+the forecast list proposes for the bucket at capture time — the
+``proposed_quantity`` of the period of the item-site's
+``correction`` with the same ``period_start`` as the bucket's
+``bucket_start``, null when the item-site has no correction, or the
+correction has no period for the bucket (a bucket with an override
+day or a demand signal) — and a backfill stores
+``effective_quantity`` equal to ``quantity``, ``override_days`` 0,
+``signal_quantity`` 0 and ``proposed_quantity`` null (a hindcast
+has no overrides, no signals and no correction read)
 — the statistical columns (``quantity``, ``method``,
 ``demand_class``, ``history_buckets``) are exactly the ones the
 capture stored before the columns existed.  A signal withdrawn after
@@ -125,17 +133,69 @@ def _snapshot_rows_for(as_of: date, apply_overrides: bool) -> list[dict]:
     ``effective_quantity``, ``override_days`` and ``signal_quantity``
     the forecast list shows for it at capture time [rule: OVR-3]
     [rule: OVR-4] — read from the same ``forecast_rows`` call, no
-    new query; with it false (a backfill — a hindcast has no
-    overrides and no signals) the bucket stores ``effective_quantity``
-    equal to its ``quantity``, ``override_days`` 0 and
-    ``signal_quantity`` 0.
+    new query — and ``proposed_quantity``, the correction the
+    forecast list proposes for the bucket at capture time: the
+    corrections of the very rows the capture stores are worked out,
+    once, the way the forecast list works them out with
+    ``include_correction=true`` — ``_corrections_for`` from
+    ``app.api.forecast`` called on these same ``forecast_rows(as_of)``
+    rows (imported here, in the function: a module-level import would
+    be circular, since ``app.api.forecast`` imports this module) —
+    and the bucket's ``proposed_quantity`` is the
+    ``proposed_quantity`` of the period of its item-site's
+    ``correction`` with the same ``period_start`` as the bucket's
+    ``bucket_start`` — null when the item-site has no correction,
+    or the correction has no period for the bucket (a bucket with an
+    override day or a demand signal).  An exception anywhere in
+    working out or mapping the proposals, the import included, stores
+    null on every bucket's ``proposed_quantity`` and the capture
+    stores its rows as usual; the call's ``correction`` key is read,
+    never stored.  With ``apply_overrides`` false (a backfill — a
+    hindcast has no overrides, no signals and no correction read) the
+    bucket stores ``effective_quantity`` equal to its ``quantity``,
+    ``override_days`` 0, ``signal_quantity`` 0 and
+    ``proposed_quantity`` null.
     """
     # Imported here, not at module level: app.forecast.listing imports
     # HORIZON_BUCKETS from this module.
     from app.forecast.listing import forecast_rows
 
+    rows = list(forecast_rows(as_of))
+    proposed_by_start: list[dict] = [{} for _ in rows]
+    if apply_overrides:
+        try:
+            # Imported here, in the function, not at module level:
+            # app.api.forecast imports this module (through
+            # app.forecast.listing), so a module-level import would
+            # be circular.
+            from app.api.forecast import _corrections_for
+
+            # The corrections of the very rows the capture stores,
+            # once, the way the forecast list works them out with
+            # include_correction=true.
+            _corrections_for(rows)
+            for row, starts in zip(rows, proposed_by_start):
+                correction = row.get("correction")
+                if not isinstance(correction, dict):
+                    continue
+                periods = correction.get("periods")
+                if not isinstance(periods, list):
+                    continue
+                for period in periods:
+                    if not isinstance(period, dict):
+                        continue
+                    start = period.get("period_start")
+                    if start is None:
+                        continue
+                    starts[start] = period.get("proposed_quantity")
+        except Exception:
+            # Never in the way: an exception anywhere in working out
+            # or mapping the proposals stores null on every bucket,
+            # and the capture stores its rows as usual.
+            proposed_by_start = [{} for _ in rows]
+
     snapshot_rows: list[dict] = []
-    for row in forecast_rows(as_of):
+    for row, starts in zip(rows, proposed_by_start):
         for bucket_index, bucket in enumerate(row["forecast"], start=1):
             snapshot_rows.append(
                 {
@@ -156,6 +216,7 @@ def _snapshot_rows_for(as_of: date, apply_overrides: bool) -> list[dict]:
                     "signal_quantity": (
                         0 if not apply_overrides else bucket["signal_quantity"]
                     ),
+                    "proposed_quantity": starts.get(bucket["bucket_start"]),
                     "method": row["method"],
                     "demand_class": row["demand_class"],
                     "history_buckets": row["history_buckets"],
@@ -225,10 +286,10 @@ def capture_snapshot(as_of: date | None = None) -> dict:
                     "INSERT INTO forecast_snapshots "
                     "(id, as_of, origin, item_code, site_code, bucket_index, "
                     "bucket_start, bucket_end, quantity, effective_quantity, "
-                    "override_days, signal_quantity, method, demand_class, "
-                    "history_buckets, created_at) "
+                    "override_days, signal_quantity, proposed_quantity, "
+                    "method, demand_class, history_buckets, created_at) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                    "%s, %s, %s, %s)",
+                    "%s, %s, %s, %s, %s)",
                     [
                         (
                             str(uuid4()),
@@ -243,6 +304,7 @@ def capture_snapshot(as_of: date | None = None) -> dict:
                             row["effective_quantity"],
                             row["override_days"],
                             row["signal_quantity"],
+                            row["proposed_quantity"],
                             row["method"],
                             row["demand_class"],
                             row["history_buckets"],

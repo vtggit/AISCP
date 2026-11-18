@@ -52,6 +52,7 @@ from __future__ import annotations
 import math
 from datetime import date, datetime, timedelta
 
+from app.db.read_cache import cached_read
 from app.repositories.lead_time_observations_postgres_repository import (
     LeadTimeObservationPostgresRepository,
 )
@@ -205,6 +206,7 @@ def _sort_key(entry: dict):
     )
 
 
+@cached_read
 def supplier_performance(
     as_of: date | None = None, window_days: int = DEFAULT_WINDOW_DAYS
 ) -> dict:

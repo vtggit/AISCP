@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.db.connection import get_connection, get_cursor
+from app.db.read_cache import cached_read_method
 
 
 def _row_to_dict(row) -> dict:
@@ -84,6 +85,7 @@ class LeadTimeObservationPostgresRepository:
             conn.close()
         return {"inserted": inserted, "updated": updated}
 
+    @cached_read_method
     def list_rows(self, limit: int, offset: int, **filters) -> list[dict]:
         """Rows ordered by business_key with optional filters on
         supplier_code and item_code."""

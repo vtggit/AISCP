@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.db.connection import get_connection, get_cursor
+from app.db.read_cache import cached_read_method
 
 
 def _row_to_dict(row) -> dict:
@@ -94,6 +95,7 @@ class OpenPurchaseLinePostgresRepository:
             conn.close()
         return {"inserted": inserted, "updated": updated}
 
+    @cached_read_method
     def list_latest(self) -> list[dict]:
         """The newest sync of each source system: for every
         source_system, the rows whose as_of equals that source system's

@@ -60,6 +60,27 @@ ordered by ``signal_total`` descending, then ``item_code`` and
 totals are 0, the ratios and ``value_added`` null, and
 ``item_sites`` empty.
 
+``correction_accuracy(as_of=None, origin=None)`` is the realised
+value of the stored corrections: the same completed-bucket
+comparison, restricted to the buckets with a stored
+``proposed_quantity`` (a null proposal is left out), with
+``before_total`` (the sum of each bucket's effective quantity),
+``after_total`` (the sum of its proposed quantities),
+``before_wape`` and ``after_wape`` (each the sum of the absolute
+differences from the actuals, over ``actual_total``, of the
+effective forecast and the corrections' proposal, null when
+``actual_total`` is 0), ``before_bias`` and ``after_bias`` (each
+``before_total`` or ``after_total`` minus ``actual_total``, over
+``actual_total``, null likewise) and ``value_added``
+(``before_wape`` minus ``after_wape`` — positive when the
+corrections would have moved the forecast nearer the actuals).
+Its result carries ``as_of``, those measures and ``item_sites``
+(one entry per item-site with ``item_code``, ``site_code`` and
+the same measures, ordered by ``actual_total`` descending, then
+``item_code`` and ``site_code``); with nothing compared,
+``compared_buckets`` and the totals are 0, the ratios and
+``value_added`` null, and ``item_sites`` empty.
+
 ``origin`` (``live`` or ``backfill``) keeps only snapshots of that
 origin, and ``bucket_index`` (1 to 12) keeps only that horizon; with
 neither, everything compared is included.
@@ -138,6 +159,25 @@ _SIGNAL_COMPARE_SQL = (
     ") d ON TRUE "
     "WHERE s.bucket_end <= %s "
     "AND COALESCE(s.signal_quantity, 0) > 0"
+)
+
+
+_CORRECTION_COMPARE_SQL = (
+    "SELECT s.item_code, s.site_code, "
+    "COALESCE(s.effective_quantity, s.quantity) AS effective_quantity, "
+    "s.proposed_quantity, "
+    "COALESCE(d.actual_quantity, 0) AS actual_quantity "
+    "FROM forecast_snapshots s "
+    "LEFT JOIN LATERAL ("
+    "  SELECT SUM(e.quantity) AS actual_quantity "
+    "  FROM demand_events e "
+    "  WHERE e.item_code = s.item_code "
+    "    AND e.site_code = s.site_code "
+    "    AND e.occurred_on >= s.bucket_start "
+    "    AND e.occurred_on <= s.bucket_end"
+    ") d ON TRUE "
+    "WHERE s.bucket_end <= %s "
+    "AND s.proposed_quantity IS NOT NULL"
 )
 
 
@@ -399,6 +439,49 @@ def _signal_measures(
     }
 
 
+def _correction_measures(
+    actual_total: float,
+    before_total: float,
+    after_total: float,
+    before_abs_error: float,
+    after_abs_error: float,
+) -> dict:
+    """The correction measures over one set of compared buckets.
+
+    ``before_wape`` and ``after_wape`` are the sums of the absolute
+    differences from the actuals, over ``actual_total``, of the
+    effective forecast and the corrections' proposal (null when
+    ``actual_total`` is 0); ``before_bias`` and ``after_bias`` are
+    ``before_total`` or ``after_total`` minus ``actual_total``, over
+    ``actual_total`` (null likewise); and ``value_added`` is
+    ``before_wape`` minus ``after_wape`` — positive when the
+    corrections would have moved the forecast nearer the actuals.
+    """
+    if actual_total:
+        before_wape = before_abs_error / actual_total
+        after_wape = after_abs_error / actual_total
+        return {
+            "actual_total": float(actual_total),
+            "before_total": float(before_total),
+            "after_total": float(after_total),
+            "before_wape": before_wape,
+            "after_wape": after_wape,
+            "before_bias": (before_total - actual_total) / actual_total,
+            "after_bias": (after_total - actual_total) / actual_total,
+            "value_added": before_wape - after_wape,
+        }
+    return {
+        "actual_total": float(actual_total),
+        "before_total": float(before_total),
+        "after_total": float(after_total),
+        "before_wape": None,
+        "after_wape": None,
+        "before_bias": None,
+        "after_bias": None,
+        "value_added": None,
+    }
+
+
 def signal_accuracy(
     as_of: date | None = None,
     origin: str | None = None,
@@ -474,5 +557,83 @@ def signal_accuracy(
         "as_of": as_of,
         "compared_buckets": len(rows),
         **_signal_measures(*totals[:6]),
+        "item_sites": item_sites,
+    }
+
+
+def correction_accuracy(
+    as_of: date | None = None,
+    origin: str | None = None,
+) -> dict:
+    """The realised value of the stored corrections.
+
+    Only completed snapshot buckets — their ``bucket_end`` on or
+    before the as-of date, the shared default as-of date when
+    absent — with a stored ``proposed_quantity`` are compared with
+    the actual demand of their range, the same way
+    ``signal_accuracy`` compares; a bucket whose proposal is null is
+    left out.  ``origin`` (``live`` or ``backfill``) keeps only
+    snapshots of that origin.  The result carries ``as_of``,
+    ``compared_buckets``, the measures — ``actual_total``,
+    ``before_total`` (each bucket's effective quantity),
+    ``after_total`` (its proposed quantity), ``before_wape``,
+    ``after_wape``, ``before_bias``, ``after_bias`` and
+    ``value_added`` (positive when the corrections would have moved
+    the forecast nearer the actuals) — and ``item_sites``, one entry
+    per item-site with ``item_code``, ``site_code`` and the same
+    measures, ordered by ``actual_total`` descending, then
+    ``item_code`` and ``site_code``.  With nothing compared,
+    ``compared_buckets`` and the totals are 0, the ratios and
+    ``value_added`` null, and ``item_sites`` empty.
+    """
+    with get_cursor() as cur:
+        if as_of is None:
+            as_of = default_as_of(cur)
+        sql = _CORRECTION_COMPARE_SQL
+        params: list = [as_of]
+        if origin is not None:
+            sql += " AND s.origin = %s"
+            params.append(origin)
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+    _ZERO = [0.0, 0.0, 0.0, 0.0, 0.0, 0]
+    totals = list(_ZERO)
+    pair_totals: dict[tuple[str, str], list] = {}
+    for row in rows:
+        before = float(row["effective_quantity"])
+        after = float(row["proposed_quantity"])
+        actual = float(row["actual_quantity"])
+        pair_key = (row["item_code"], row["site_code"])
+        for accumulator in (
+            totals,
+            pair_totals.setdefault(pair_key, list(_ZERO)),
+        ):
+            accumulator[0] += actual
+            accumulator[1] += before
+            accumulator[2] += after
+            accumulator[3] += abs(before - actual)
+            accumulator[4] += abs(after - actual)
+            accumulator[5] += 1
+    item_sites = [
+        {
+            "item_code": pair_key[0],
+            "site_code": pair_key[1],
+            "compared_buckets": accumulator[5],
+            **_correction_measures(*accumulator[:5]),
+        }
+        for pair_key, accumulator in pair_totals.items()
+    ]
+    item_sites.sort(
+        key=lambda entry: (
+            -entry["actual_total"],
+            entry["item_code"],
+            entry["site_code"],
+        )
+    )
+    return {
+        "as_of": as_of,
+        "compared_buckets": len(rows),
+        **_correction_measures(*totals[:5]),
         "item_sites": item_sites,
     }

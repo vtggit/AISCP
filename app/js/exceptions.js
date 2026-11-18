@@ -148,6 +148,7 @@
     sole_source_short: 'Sole source, short of stock',
     order_below_minimum: 'Order below supplier minimum',
     standing_grant_run: 'Standing grant run needs attention',
+    demand_basis_switch: 'Demand basis to review',
   };
 
   var COLUMNS = ['Severity', 'Signal', 'Item and Site', 'Detail', 'Detected', 'Status', 'Open'];

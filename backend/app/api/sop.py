@@ -26,7 +26,25 @@ review's order) with the current minus stored value of
 ``budget`` (a delta is null when either value is null, missing or
 not a finite number; a
 stored figures without a usable ``months`` answers an empty
-``months``).  ``as_of`` is the current server date,
+``months``).  ``signoff_proposal`` proposes signing the month off
+— null when ``since_signoff`` is null (no earlier sign-off) or
+``latest_signoff`` is not null (the review month is already signed
+off), else ``proposed`` (true when at least one change was compared
+and the largest is at most the effective value of the
+``sop.signoff_proposal_max_change`` setting, read through
+``setting_value`` from the stored system settings, one read per
+review, and answered as ``max_change``), the largest compared
+relative change of the value fields ``demand_value``,
+``supply_value``, ``planned_receipts_value``, ``total_spend`` and
+``budget`` of every ``since_signoff`` month (the absolute delta over
+the larger of the current and the stored value's magnitudes, 0 when
+both are 0, a null delta or current value left out) as
+``largest_change`` with ``largest_field`` and ``largest_month`` where
+it was (the first in review-month and field order winning a tie, all
+null when nothing was compared), ``compared_values`` the number of
+changes compared and ``since_month`` the ``since_signoff``'s signed
+month.  A sign-off stores the review answer, the proposal included.
+``as_of`` is the current server date,
 ``review_month`` the first month of the horizon and
 ``item_sites_without_unit_cost`` the value the spend view returns.
 It accepts no pagination parameters: every month of the requested
@@ -223,8 +241,29 @@ class SopSignoffIn(BaseModel):
         return value
 
 
+class SopReviewSignoffProposal(BaseModel):
+    """The proposal to sign the review month off: the largest
+    relative change of the value figures since the newest stored
+    sign-off against the effective value of the
+    ``sop.signoff_proposal_max_change`` setting, and where the
+    largest change was (all null when nothing was compared)."""
+
+    proposed: bool
+    max_change: float
+    largest_change: float | None
+    largest_field: str | None
+    largest_month: str | None
+    compared_values: int
+    since_month: str
+
+
 class SopReviewResponse(BaseModel):
-    """The S&OP review of the horizon months."""
+    """The S&OP review of the horizon months.
+
+    ``signoff_proposal`` is the proposal to sign the month off,
+    ``None`` without an earlier sign-off or while the review month
+    is already signed off — see the module docstring for its
+    fields."""
 
     as_of: date
     review_month: str
@@ -234,6 +273,7 @@ class SopReviewResponse(BaseModel):
     item_sites_without_unit_cost: int
     latest_signoff: SopSignoffRow | None
     since_signoff: SopReviewSinceSignoff | None
+    signoff_proposal: SopReviewSignoffProposal | None
 
 
 @router.get("/review", response_model=SopReviewResponse)

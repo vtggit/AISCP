@@ -63,12 +63,34 @@ the current value minus the stored value of the same field as
 either value is null, missing or not a finite number, and a stored
 ``figures`` without a usable ``months`` (null or not an object
 included) answers an empty ``months`` and a null ``signed_as_of``.
+``signoff_proposal`` proposes signing the month off: null when
+``since_signoff`` is null (no earlier sign-off) or ``latest_signoff``
+is not null (the review month is already signed off), else an object.
+For every month of ``since_signoff`` (in its order) and each of the
+value fields ``demand_value``, ``supply_value``,
+``planned_receipts_value``, ``total_spend`` and ``budget`` (in that
+field order within a month) it compares the review month's current
+value with the stored one (the current minus its delta); a null
+delta or current value is left out.  One relative change per
+compared field: the absolute delta over the larger of the two
+values' magnitudes, 0 when both are 0.  ``proposed`` is true when at
+least one change was compared and the largest is at most the
+effective value of the ``sop.signoff_proposal_max_change`` setting
+— read through ``setting_value`` from the stored system
+settings, one read per review — answered as ``max_change``;
+``largest_change``, ``largest_field`` and ``largest_month`` are the
+largest change and where it was, the first in review-month and field
+order winning a tie, all null when nothing was compared;
+``compared_values`` the number of changes compared and ``since_month``
+the ``since_signoff``'s ``signed_month``.  A sign-off stores the
+review answer, the proposal included.
 
 The builder runs inside
 ``app.recommend.reorder.recommendations_memo`` so the one projection
 call and its recommendation read happen once, and it performs a fixed
-number of reads (the sign-off reads aside): it writes nothing and
-calls the ERP nowhere.  Every
+number of reads (the sign-off reads and the one stored system
+settings read aside): it writes nothing and calls the ERP nowhere.
+Every
 ``ValueError`` the projection raises (``months`` outside 1 to 12
 inclusive) propagates unchanged.  With no recommendable item-sites
 every horizon month still appears, with zero figures and empty site
@@ -98,6 +120,8 @@ from datetime import date
 
 from app.aggregate.projection import _bucket_months, aggregate_projection
 from app.aggregate.spend import _spend_view
+from app.db.connection import get_cursor
+from app.ddmrp.zones import setting_value
 from app.forecast.accuracy import realised_accuracy
 from app.recommend.reorder import recommendations_memo
 from app.repositories.scenarios_postgres_repository import (
@@ -215,6 +239,95 @@ def _since_signoff(latest: dict | None, months_view: list[dict]) -> dict | None:
     }
 
 
+# The setting that caps the proposal's largest relative change.
+_PROPOSAL_MAX_CHANGE_KEY = "sop.signoff_proposal_max_change"
+
+# The value fields the proposal compares, in field order: the
+# review month field beside its since_signoff delta field.
+_PROPOSAL_VALUE_FIELDS = (
+    "demand_value",
+    "supply_value",
+    "planned_receipts_value",
+    "total_spend",
+    "budget",
+)
+
+
+def _stored_system_settings() -> dict:
+    """The stored values of every system setting, in one query."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT key, value FROM settings " "WHERE scope = 'system' AND owner = ''"
+        )
+        return {row["key"]: row["value"] for row in cur.fetchall()}
+
+
+def _relative_change(delta: float, current: float) -> float:
+    """The absolute delta over the larger of the current and the
+    stored value's magnitudes (the stored one is the current minus
+    the delta), 0 when both are 0."""
+    magnitude = max(abs(current), abs(current - delta))
+    if magnitude == 0:
+        return 0.0
+    return abs(delta) / magnitude
+
+
+def _signoff_proposal(
+    latest_signoff: dict | None,
+    since_signoff: dict | None,
+    months_view: list[dict],
+    max_change: float,
+) -> dict | None:
+    """The proposal to sign the month off, or ``None`` while the
+    review carries no proposal: null when ``since_signoff`` is null
+    (no earlier sign-off) or ``latest_signoff`` is not null (the
+    review month is already signed off).
+
+    Otherwise one relative change per value field of every month of
+    ``since_signoff`` (in its order, ``_PROPOSAL_VALUE_FIELDS`` in
+    field order within a month) — the review month's current value
+    against the stored one (the current minus its delta), a null
+    delta or current value left out — and ``proposed`` true when at
+    least one change was compared and the largest is at most
+    ``max_change`` (the setting's effective value), ``largest_*`` the
+    largest change and where it was (the first in review-month and
+    field order winning a tie, all null when nothing was compared),
+    ``compared_values`` the number of changes compared and
+    ``since_month`` the ``since_signoff``'s ``signed_month``.
+    """
+    if since_signoff is None or latest_signoff is not None:
+        return None
+    current_by_month = {month["month"]: month for month in months_view}
+    largest_change: float | None = None
+    largest_field: str | None = None
+    largest_month: str | None = None
+    compared = 0
+    for entry in since_signoff["months"]:
+        current_month = current_by_month.get(entry.get("month"))
+        if current_month is None:
+            continue
+        for field in _PROPOSAL_VALUE_FIELDS:
+            delta = entry.get(field + "_delta")
+            current = current_month.get(field)
+            if not _is_finite_number(delta) or not _is_finite_number(current):
+                continue
+            change = _relative_change(float(delta), float(current))
+            compared += 1
+            if largest_change is None or change > largest_change:
+                largest_change = change
+                largest_field = field
+                largest_month = entry["month"]
+    return {
+        "proposed": compared > 0 and largest_change <= max_change,
+        "max_change": max_change,
+        "largest_change": largest_change,
+        "largest_field": largest_field,
+        "largest_month": largest_month,
+        "compared_values": compared,
+        "since_month": since_signoff["signed_month"],
+    }
+
+
 # The scenarios the comparison reads: the same repository and
 # ordering ``GET /api/scenarios`` lists them with, newest first.
 _scenarios_repo = ScenarioPostgresRepository()
@@ -234,9 +347,13 @@ def build_sop_review(months: int) -> dict:
 
     Returns ``{"as_of", "review_month", "horizon_months", "months",
     "forecast", "item_sites_without_unit_cost", "latest_signoff",
-    "since_signoff"}`` with one ``months``
-    entry per horizon month in month order.  Raises ``ValueError``
-    when ``months`` is outside 1 to 12 inclusive.
+    "since_signoff", "signoff_proposal"}`` with one ``months``
+    entry per horizon month in month order.  ``signoff_proposal``
+    is the proposal to sign the month off (see the module
+    docstring): the stored system settings are read once and the
+    setting's effective value answered as its ``max_change``.
+    Raises ``ValueError`` when ``months`` is outside 1 to 12
+    inclusive.
     """
     today = date.today()
     with recommendations_memo():
@@ -279,8 +396,13 @@ def build_sop_review(months: int) -> dict:
             }
         )
 
+    stored_settings = _stored_system_settings()
+    max_change = setting_value(stored_settings, _PROPOSAL_MAX_CHANGE_KEY)
     latest_signoff = _signoffs_repo.latest_for_month(buckets[0][2])
     since_signoff = _since_signoff(_signoffs_repo.latest_with_figures(), months_view)
+    signoff_proposal = _signoff_proposal(
+        latest_signoff, since_signoff, months_view, max_change
+    )
     overall = accuracy["overall"]
     next_month = next(
         (entry for entry in accuracy["by_horizon"] if entry["bucket_index"] == 1),
@@ -306,6 +428,7 @@ def build_sop_review(months: int) -> dict:
         "item_sites_without_unit_cost": spend["item_sites_without_unit_cost"],
         "latest_signoff": latest_signoff,
         "since_signoff": since_signoff,
+        "signoff_proposal": signoff_proposal,
     }
 
 

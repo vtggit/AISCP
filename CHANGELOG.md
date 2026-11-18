@@ -176,9 +176,9 @@ code is the authority for details.
 - Each forecast snapshot also keeps what the history basis expected for every period, the
   item-site's mean daily demand times the period's days, in live captures and backfills alike, so
   the history basis can be measured beside the forecast (#1382).
-- Realised accuracy measures the stored history basis once its periods complete: the history and
-  effective forecast error and bias, overall and per item-site, and whether the forecast basis was
-  nearer what sold (`GET /api/forecast/accuracy/basis`) (#1389).
+- Realised accuracy measures the history basis beside the forecast once their periods complete:
+  each one's error and bias against what sold, overall and per item-site, at one horizon or all,
+  and which was nearer (`GET /api/forecast/accuracy/basis`) (#1389).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

@@ -101,6 +101,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Each live forecast snapshot also keeps the correction proposed for every period that had one,
   so that the corrections can be measured against what sold once their periods complete; a
   backfill keeps none (`backend/app/forecast/snapshots.py`).
+- Each forecast snapshot also stores `history_quantity` for every period, the demand statistics
+  row's `mean_daily` scaled to the bucket's days, for a live capture and a backfill alike
+  (`backend/app/forecast/snapshots.py`).
 - Realised accuracy measures those stored corrections once their periods complete: the
   forecast's error and bias as it was and as corrected, overall and per item-site, and whether the
   corrections would have moved it nearer what sold (`GET /api/forecast/accuracy/corrections`,

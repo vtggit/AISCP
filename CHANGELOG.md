@@ -173,6 +173,8 @@ code is the authority for details.
 - The Demand screen shows how the proposed corrections would have done, in a line under the demand
   signals line: the periods compared, the error as forecast and if corrected, and the difference in
   points (#1378).
+- Each forecast snapshot keeps the history basis's quantity for every period, the item-site's
+  history mean scaled to the bucket's length, in live captures and backfills alike (#1382).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps

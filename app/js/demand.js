@@ -197,12 +197,31 @@
 //     numeric wape, and reads "Demand signal accuracy is not
 //     available." when its request fails — independently of the two
 //     accuracy requests' loading and error states.
+//     Directly below the signals line, the proposed corrections line
+//     ([data-testid="demand-realised-corrections"]) reads the
+//     overall measures of
+//     GET /api/forecast/accuracy/corrections: "Proposed corrections:
+//     N periods with a proposal, X% error as forecast, Y% if
+//     corrected, Z points better." — "Z points worse" for a negative
+//     value_added, "no change" for 0 — with N thousands-separated,
+//     X and Y percentages to one decimal and Z the |value_added| x
+//     100 to one decimal, the "better"/"worse" wording carrying the
+//     overrides clause' accent/risk token classes. The line stands
+//     directly after the signals line, or directly after
+//     [data-testid="demand-realised"] while the signals line is
+//     absent, outside both. It is absent while its request is in
+//     flight, with no compared bucket, with a null or non-numeric
+//     value_added or a non-numeric wape, and reads "Proposed
+//     correction accuracy is not available." when its request fails
+//     — independently of the two accuracy requests' and the signals
+//     line's loading and error states.
 //
-// The accuracy requests (the two realised ones and the signals one)
-// go out with the list load (and with the list's "Try again" only):
-// choosing a row or a filter chip sends none of them again, the list
-// and the detail pane never wait for them, and a response that
-// arrives after a newer load has started is ignored.
+// The accuracy requests (the two realised ones, the signals one and
+// the corrections one) go out with the list load (and with the
+// list's "Try again" only): choosing a row or a filter chip sends
+// none of them again, the list and the detail pane never wait for
+// them, and a response that arrives after a newer load has started
+// is ignored.
 //
 // The chosen item-site's stored overrides (GET /api/forecast/overrides
 // with the row's item_code and site_code, limit 200) go out with each
@@ -251,6 +270,10 @@
   // The realised value of the stored demand signals (issue #984):
   // the signals line under the summary reads its overall measures.
   var ACCURACY_SIGNALS_PATH = '/api/forecast/accuracy/signals';
+  // The realised value of the stored proposed corrections (issue
+  // #1378): the corrections line under the signals line reads its
+  // overall measures.
+  var ACCURACY_CORRECTIONS_PATH = '/api/forecast/accuracy/corrections';
   var EM_DASH = '\u2014';
   var REALISED_NOT_AVAILABLE = 'Realised accuracy is not available.';
   var REALISED_LOADING = 'Realised accuracy: loading\u2026';
@@ -260,6 +283,11 @@
   // The signals line's failed state (issue #984): its request is
   // independent of the two accuracy requests' error.
   var SIGNALS_ACCURACY_NOT_AVAILABLE = 'Demand signal accuracy is not available.';
+  // The corrections line's failed state (issue #1378): its request is
+  // independent of the two accuracy requests' error and of the
+  // signals line's state.
+  var CORRECTIONS_ACCURACY_NOT_AVAILABLE =
+    'Proposed correction accuracy is not available.';
   var NOT_ENOUGH_HISTORY =
     'Not enough history to backtest. Fewer than 12 buckets, so the forecast is the average.';
   // The "Current overrides" section's states: the request in flight,
@@ -304,6 +332,10 @@
     accuracySignals: null, // the /api/forecast/accuracy/signals response
     accuracySignalsError: false, // that request failed — its own
     // flag; the signals line never sets or clears the shared
+    // accuracyLoading/accuracyError
+    accuracyCorrections: null, // the /api/forecast/accuracy/corrections response
+    accuracyCorrectionsError: false, // that request failed — its own
+    // flag; the corrections line never sets or clears the shared
     // accuracyLoading/accuracyError
     admin: null, // [rule: OVR-10] null while the view's /me is in flight
     openOverride: null, // the period_start of the open override form
@@ -975,6 +1007,7 @@
         renderRealisedSummary() +
       '</p>' +
       renderRealisedSignalsLine() +
+      renderRealisedCorrectionsLine() +
       '<div class="d-split">' +
         '<section class="d-list" aria-label="Forecast rows">' +
           '<div class="d-list-body">' + renderHead() + renderRows() + '</div>' +
@@ -2017,6 +2050,70 @@
     );
   }
 
+  // The proposed corrections line under the signals line (issue
+  // #1378): the overall measures of
+  // GET /api/forecast/accuracy/corrections — "Proposed corrections: N
+  // periods with a proposal, X% error as forecast, Y% if corrected, Z
+  // points better." — "Z points worse" for a negative value_added,
+  // "no change" for 0, with N through the view's count boundary
+  // (thousands separators), X and Y percentages to one decimal and Z
+  // the effect size in points. The better and worse wording carries
+  // the overrides clause' classes — the word carries the direction
+  // and the token colour is only a second signal. The line is absent
+  // while the request is in flight, with no compared bucket, with a
+  // null or non-numeric value_added or a non-numeric wape, and with
+  // any of them so large that x 100 overflows to Infinity (a hostile
+  // API value, not a valid result); it reads the unavailable
+  // sentence when the request failed — independently of the two
+  // accuracy requests and the signals line.
+  function renderRealisedCorrectionsLine() {
+    if (state.accuracyCorrectionsError) {
+      return (
+        '<p class="d-realised-corrections" data-testid="demand-realised-corrections">' +
+        esc(CORRECTIONS_ACCURACY_NOT_AVAILABLE) +
+        '</p>'
+      );
+    }
+    var data = state.accuracyCorrections;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return ''; // the request is still in flight
+    }
+    var buckets = data.compared_buckets;
+    var beforeWape = data.before_wape;
+    var afterWape = data.after_wape;
+    var valueAdded = data.value_added;
+    if (!isNumber(buckets) || buckets <= 0) {
+      return '';
+    }
+    if (!isScaledNumber(beforeWape) || !isScaledNumber(afterWape) || !isScaledNumber(valueAdded)) {
+      return '';
+    }
+    var text =
+      'Proposed corrections: ' +
+      units(buckets) +
+      ' periods with a proposal, ' +
+      percent1(beforeWape) +
+      ' error as forecast, ' +
+      percent1(afterWape) +
+      ' if corrected, ';
+    var effect = 'no change';
+    var className = 'd-realised-ovr';
+    if (valueAdded > 0) {
+      effect = pointsText(valueAdded) + ' points better';
+      className += ' d-realised-ovr-better';
+    } else if (valueAdded < 0) {
+      effect = pointsText(valueAdded) + ' points worse';
+      className += ' d-realised-ovr-worse';
+    }
+    return (
+      '<p class="d-realised-corrections" data-testid="demand-realised-corrections">' +
+      esc(text) +
+      '<span class="' + className + '">' +
+      esc(effect + '.') +
+      '</span></p>'
+    );
+  }
+
   // The detail section below "Backtest": the chosen item-site's
   // one-period-ahead measures, or the sentence for why they are not
   // there yet.
@@ -2208,14 +2305,15 @@
 
   // The realised accuracy: the two accuracy requests (the
   // one-period-ahead measures at bucket_index=1 and the all-horizons
-  // ones) plus the signals request (issue #984). The list and the
-  // detail pane never wait for them; a response that arrives after a
-  // newer load has started is ignored; either accuracy failure makes
-  // the realised figures unavailable while the rest of the view keeps
-  // working. The signals request rides the same sequence guard but
-  // keeps its own loading and error state: it never sets or clears
-  // accuracyLoading or accuracyError, and neither accuracy request's
-  // settle counts it.
+  // ones) plus the signals request (issue #984) and the corrections
+  // request (issue #1378). The list and the detail pane never wait
+  // for them; a response that arrives after a newer load has started
+  // is ignored; either accuracy failure makes the realised figures
+  // unavailable while the rest of the view keeps working. The signals
+  // and the corrections requests ride the same sequence guard but
+  // keep their own loading and error state: neither ever sets or
+  // clears accuracyLoading or accuracyError or the other line's
+  // state, and neither accuracy request's settle counts them.
   function startAccuracyLoad() {
     state.accuracyAhead = null;
     state.accuracyAll = null;
@@ -2223,6 +2321,8 @@
     state.accuracyLoading = true;
     state.accuracySignals = null;
     state.accuracySignalsError = false;
+    state.accuracyCorrections = null;
+    state.accuracyCorrectionsError = false;
     var pending = 2;
     var seq = ++accuracySeq;
 
@@ -2262,6 +2362,18 @@
       render();
     }
 
+    function settleCorrections(ok, payload) {
+      if (seq !== accuracySeq) {
+        return; // a newer load has started; ignore this response
+      }
+      if (ok && payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        state.accuracyCorrections = payload;
+      } else {
+        state.accuracyCorrectionsError = true;
+      }
+      render();
+    }
+
     global.Api.get(ACCURACY_AHEAD_PATH).then(
       function (payload) {
         settle('ahead', true, payload);
@@ -2284,6 +2396,14 @@
       },
       function () {
         settleSignals(false, null);
+      }
+    );
+    global.Api.get(ACCURACY_CORRECTIONS_PATH).then(
+      function (payload) {
+        settleCorrections(true, payload);
+      },
+      function () {
+        settleCorrections(false, null);
       }
     );
   }
@@ -3279,6 +3399,8 @@
     state.accuracyError = false;
     state.accuracySignals = null;
     state.accuracySignalsError = false;
+    state.accuracyCorrections = null;
+    state.accuracyCorrectionsError = false;
     state.loading = false;
     state.ready = false;
     state.error = null;

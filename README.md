@@ -112,7 +112,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   demand signals line: the periods with a proposal, the error as forecast and if corrected, and the
   difference in points. The line appears once a corrected period has completed
   (`app/js/demand.js`).
-- On screens 900 pixels wide or less, the Demand view scrolls vertically while the list keeps a usable fixed height whose body scrolls and the detail shows at its full height below it (`app/css/demand.css`).
+- On a screen 900 pixels wide or less, the Demand view scrolls: the forecast list keeps a fixed
+  height with its rows scrolling inside it, and the chosen item-site's detail follows below it at
+  full height (`app/css/demand.css`).
 - Planner overrides of a forecast period, with a required reason, and withdrawals
   (`backend/app/forecast/overrides.py`).
 - Each forecast override keeps the correction proposed for its period when it was stored, if one

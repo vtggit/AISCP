@@ -28,6 +28,23 @@ default as-of date when the parameter is absent) is compared with
 the actual demand of its range, and the measures come back overall,
 per horizon and per item-site.
 
+``GET /api/forecast/accuracy/basis`` reports the realised value of
+the stored history basis, for any signed-in user and with the same
+``as_of`` and ``origin`` parameters as the other accuracy reads,
+plus a ``bucket_index`` (1 to 12) keeping only that horizon: the
+same completed-bucket comparison restricted to the buckets with a
+stored ``history_quantity`` (a null history is left out), with
+``history_total`` (the sum of the history quantities),
+``forecast_total`` (the sum of the effective quantities),
+``history_wape`` / ``forecast_wape`` (each the sum of the absolute
+differences from the actuals, over the actuals, of the history and
+the effective forecast), ``history_bias`` / ``forecast_bias`` (each
+the history or the forecast total minus the actuals, over the
+actuals), all null when the actuals are 0, and ``value_added``
+(``history_wape`` minus ``forecast_wape``, positive when the
+forecast basis was nearer the actuals) overall and per item-site,
+ordered by ``actual_total`` descending.
+
 ``GET /api/forecast/accuracy/signals`` reports the realised value of
 the stored demand signals, for any signed-in user and with the same
 ``as_of`` and ``origin`` parameters: the same completed-bucket
@@ -129,6 +146,7 @@ from app.auth.models import AuthUser
 from app.db.connection import get_cursor
 from app.ddmrp.zones import setting_value
 from app.forecast.accuracy import (
+    basis_accuracy,
     correction_accuracy,
     realised_accuracy,
     signal_accuracy,
@@ -765,6 +783,83 @@ def get_forecast_accuracy(
     result = realised_accuracy(as_of=as_of, origin=origin, bucket_index=bucket_index)
     result["item_sites"] = result["item_sites"][offset : offset + limit]
     return result
+
+
+class BasisAccuracyItemSite(BaseModel):
+    """One item-site's history-basis measures.
+
+    Only the compared buckets with a stored ``history_quantity`` are
+    summed in: ``history_total`` is the sum of their history
+    quantities, ``forecast_total`` the sum of their effective
+    quantities, ``history_wape`` and ``forecast_wape`` the sums of
+    their absolute differences from the actuals over
+    ``actual_total`` (null when it is 0), ``history_bias`` and
+    ``forecast_bias`` ``history_total`` or ``forecast_total`` minus
+    ``actual_total``, over ``actual_total`` (null likewise), and
+    ``value_added`` ``history_wape`` minus ``forecast_wape`` —
+    positive when the forecast basis was nearer the actuals.
+    """
+
+    item_code: str
+    site_code: str
+    compared_buckets: int
+    actual_total: float
+    history_total: float
+    forecast_total: float
+    history_wape: float | None
+    forecast_wape: float | None
+    history_bias: float | None
+    forecast_bias: float | None
+    value_added: float | None
+
+
+class BasisAccuracyResult(BaseModel):
+    """The realised value of the stored history basis.
+
+    Only completed snapshot buckets (``bucket_end`` on or before
+    ``as_of`` — the shared default as-of date when absent) with a
+    stored ``history_quantity`` are compared with the actual demand
+    of their range, the same way ``GET /api/forecast/accuracy``
+    compares; a bucket whose history is null is left out.
+    ``item_sites`` carries one entry per item-site with the same
+    measures, ordered by ``actual_total`` descending, then
+    ``item_code`` and ``site_code``.
+    """
+
+    as_of: date
+    compared_buckets: int
+    actual_total: float
+    history_total: float
+    forecast_total: float
+    history_wape: float | None
+    forecast_wape: float | None
+    history_bias: float | None
+    forecast_bias: float | None
+    value_added: float | None
+    item_sites: list[BasisAccuracyItemSite]
+
+
+@router.get("/accuracy/basis", response_model=BasisAccuracyResult)
+def get_forecast_accuracy_basis(
+    as_of: date | None = Query(default=None),
+    origin: Literal["live", "backfill"] | None = Query(default=None),
+    bucket_index: int | None = Query(default=None, ge=1, le=12),
+) -> dict:
+    """The realised value of the stored history basis, any signed-in user.
+
+    Only completed snapshot buckets with a stored
+    ``history_quantity`` (``bucket_end`` on or before ``as_of`` —
+    the shared default as-of date when absent, because demand after
+    the latest demand date is unknown, not zero) are compared with
+    the actual demand of their range; a bucket whose history is null
+    is left out.  ``origin`` (``live`` or ``backfill``) keeps only
+    snapshots of that origin and ``bucket_index`` (1 to 12) only
+    that horizon.  ``item_sites`` is ordered by ``actual_total``
+    descending, then ``item_code`` and ``site_code``.  A malformed
+    ``as_of``, ``origin`` or ``bucket_index`` answers 422 in
+    FastAPI's validation envelope.
+    """
+    return basis_accuracy(as_of=as_of, origin=origin, bucket_index=bucket_index)
 
 
 class SignalAccuracyItemSite(BaseModel):

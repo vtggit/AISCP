@@ -7141,6 +7141,116 @@
         }
       }
     },
+    "/api/forecast/accuracy/basis": {
+      "get": {
+        "tags": [
+          "forecast"
+        ],
+        "summary": "Get Forecast Accuracy Basis",
+        "description": "The realised value of the stored history basis, any signed-in user.\n\nOnly completed snapshot buckets with a stored\n``history_quantity`` (``bucket_end`` on or before ``as_of`` \u2014\nthe shared default as-of date when absent, because demand after\nthe latest demand date is unknown, not zero) are compared with\nthe actual demand of their range; a bucket whose history is null\nis left out.  ``origin`` (``live`` or ``backfill``) keeps only\nsnapshots of that origin and ``bucket_index`` (1 to 12) only\nthat horizon.  ``item_sites`` is ordered by ``actual_total``\ndescending, then ``item_code`` and ``site_code``.  A malformed\n``as_of``, ``origin`` or ``bucket_index`` answers 422 in\nFastAPI's validation envelope.",
+        "operationId": "get_forecast_accuracy_basis_api_forecast_accuracy_basis_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "live",
+                    "backfill"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "bucket_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 12,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bucket Index"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasisAccuracyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/forecast/accuracy/signals": {
       "get": {
         "tags": [
@@ -12375,6 +12485,208 @@
         ],
         "title": "AuthUser",
         "description": "Represents the currently authenticated user derived from token claims."
+      },
+      "BasisAccuracyItemSite": {
+        "properties": {
+          "item_code": {
+            "type": "string",
+            "title": "Item Code"
+          },
+          "site_code": {
+            "type": "string",
+            "title": "Site Code"
+          },
+          "compared_buckets": {
+            "type": "integer",
+            "title": "Compared Buckets"
+          },
+          "actual_total": {
+            "type": "number",
+            "title": "Actual Total"
+          },
+          "history_total": {
+            "type": "number",
+            "title": "History Total"
+          },
+          "forecast_total": {
+            "type": "number",
+            "title": "Forecast Total"
+          },
+          "history_wape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Wape"
+          },
+          "forecast_wape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast Wape"
+          },
+          "history_bias": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Bias"
+          },
+          "forecast_bias": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast Bias"
+          },
+          "value_added": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Added"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_code",
+          "site_code",
+          "compared_buckets",
+          "actual_total",
+          "history_total",
+          "forecast_total",
+          "history_wape",
+          "forecast_wape",
+          "history_bias",
+          "forecast_bias",
+          "value_added"
+        ],
+        "title": "BasisAccuracyItemSite",
+        "description": "One item-site's history-basis measures.\n\nOnly the compared buckets with a stored ``history_quantity`` are\nsummed in: ``history_total`` is the sum of their history\nquantities, ``forecast_total`` the sum of their effective\nquantities, ``history_wape`` and ``forecast_wape`` the sums of\ntheir absolute differences from the actuals over\n``actual_total`` (null when it is 0), ``history_bias`` and\n``forecast_bias`` ``history_total`` or ``forecast_total`` minus\n``actual_total``, over ``actual_total`` (null likewise), and\n``value_added`` ``history_wape`` minus ``forecast_wape`` \u2014\npositive when the forecast basis was nearer the actuals."
+      },
+      "BasisAccuracyResult": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "compared_buckets": {
+            "type": "integer",
+            "title": "Compared Buckets"
+          },
+          "actual_total": {
+            "type": "number",
+            "title": "Actual Total"
+          },
+          "history_total": {
+            "type": "number",
+            "title": "History Total"
+          },
+          "forecast_total": {
+            "type": "number",
+            "title": "Forecast Total"
+          },
+          "history_wape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Wape"
+          },
+          "forecast_wape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast Wape"
+          },
+          "history_bias": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Bias"
+          },
+          "forecast_bias": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast Bias"
+          },
+          "value_added": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Added"
+          },
+          "item_sites": {
+            "items": {
+              "$ref": "#/components/schemas/BasisAccuracyItemSite"
+            },
+            "type": "array",
+            "title": "Item Sites"
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "compared_buckets",
+          "actual_total",
+          "history_total",
+          "forecast_total",
+          "history_wape",
+          "forecast_wape",
+          "history_bias",
+          "forecast_bias",
+          "value_added",
+          "item_sites"
+        ],
+        "title": "BasisAccuracyResult",
+        "description": "The realised value of the stored history basis.\n\nOnly completed snapshot buckets (``bucket_end`` on or before\n``as_of`` \u2014 the shared default as-of date when absent) with a\nstored ``history_quantity`` are compared with the actual demand\nof their range, the same way ``GET /api/forecast/accuracy``\ncompares; a bucket whose history is null is left out.\n``item_sites`` carries one entry per item-site with the same\nmeasures, ordered by ``actual_total`` descending, then\n``item_code`` and ``site_code``."
       },
       "ChangeContributions": {
         "properties": {

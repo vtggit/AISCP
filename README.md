@@ -98,6 +98,11 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   where the forecast bias exception finds its bias persists: a proposed quantity for each forecast
   period without an override or a demand signal, the forecast scaled by the measured actual over
   forecast, with the figures it rests on and a one-line reason (`backend/app/api/forecast.py`).
+- The Demand screen asks for the correction in its by-key detail read
+  (`include_correction=true`) and shows a "Proposed correction" section after "Forecast
+  periods" when the shown detail carries a correction key, with the reason and a table of
+  forecast and proposed quantities; a null or unusable correction shows "No correction
+  proposed.", and an answer without the key shows no section (`app/js/demand.js`).
 - Planner overrides of a forecast period, with a required reason, and withdrawals
   (`backend/app/forecast/overrides.py`).
 - Demand signals: known extra demand (a promotion, deal or event) for one item-site and date
@@ -312,8 +317,9 @@ views are:
 - **Work queue**: the reorder-point, excess and stockout lists with a detail pane to record
   a decision, each row's ERP and an ERP filter when there is more than one ERP, CSV
   downloads, and the Odoo draft purchase order action.
-- **Demand**: the forecast list, history and forecast chart, method and accuracy, overrides,
-  demand signals, and the empirical reorder point of intermittent and lumpy item-sites.
+- **Demand**: the forecast list, history and forecast chart, method and accuracy, the proposed
+  correction, overrides, demand signals, and the empirical reorder point of intermittent and
+  lumpy item-sites.
 - **Scenario**: the what-if levers, per-class service levels and saved scenarios.
 - **Aggregate**: the monthly projection by site, spend against budget, deferral candidates,
   and the release of planned orders to the ERP.

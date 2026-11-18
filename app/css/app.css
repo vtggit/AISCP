@@ -3062,3 +3062,99 @@ input {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+/* ------------------------------------------------------------------ */
+/* Settings view — the demand-basis card (issue #1394). After the      */
+/* service-curve card, under #settings-root: the current-basis line,   */
+/* the none line (no completed period yet) or the summary and verdict  */
+/* lines, the item-site table and the "more" line. Absent while its    */
+/* read is out and on a failed or malformed read. The table scrolls    */
+/* inside its own container, so the page never scrolls sideways.       */
+/* ------------------------------------------------------------------ */
+
+/* Like the service-curve card: under #settings-root, after it — it
+   carries the wrap's own column width and the gap the wrap leaves
+   between its cards. */
+.demand-basis-card {
+  max-width: 760px;
+  margin-top: var(--space-4);
+}
+
+.demand-basis-current {
+  margin: var(--space-1) 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* The lines of the card: the none line (a compared_buckets of 0,
+   nothing after it), the summary and the verdict, and the more line
+   for more than 10 item-sites. */
+.demand-basis-none,
+.demand-basis-summary,
+.demand-basis-verdict,
+.demand-basis-more {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The table's own horizontal scroll container: at a narrow width
+   the table keeps its natural width and scrolls inside the wrap, so
+   the page never scrolls sideways. */
+.demand-basis-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  margin-top: var(--space-3);
+}
+
+.demand-basis-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.demand-basis-table th,
+.demand-basis-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.demand-basis-table thead th {
+  font-weight: 600;
+  color: var(--color-ink-2);
+  background: var(--color-surface-head);
+}
+
+.demand-basis-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The codes keep to one line; the figures right-align the way the
+   service-curve table's do: the periods as whole numbers with
+   thousands separators, the two wapes as percents to one decimal
+   and the difference in points with its sign. */
+.demand-basis-item,
+.demand-basis-site {
+  white-space: nowrap;
+}
+
+.demand-basis-periods,
+.demand-basis-history,
+.demand-basis-forecast,
+.demand-basis-difference {
+  font-family: var(--font-figures);
+  text-align: right;
+  white-space: nowrap;
+}

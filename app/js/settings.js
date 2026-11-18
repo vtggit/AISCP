@@ -187,6 +187,52 @@
 // is dropped, the typed value kept — and sign-out clears the typed
 // value too. No element of the block carries role="alert", and the
 // block sends no request other than the GET.
+// Below it a seventh card — "Demand basis: history or forecast"
+// ([data-testid="demand-basis"]) — rendered under #settings-root,
+// after the service-curve card (its next element sibling), shows
+// which basis the reorder points stood on and how the stored
+// history compared with the forecast against what sold, fetched
+// separately from GET
+// /api/forecast/accuracy/basis?bucket_index=1. The current line
+// ([data-testid="demand-basis-current"]) reads "Reorder points use
+// the history." when the screen's own GET /api/settings answer
+// (entryByKey) carries the replenishment.demand_basis entry with
+// the value "history" and "Reorder points use the forecast." with
+// "forecast"; without the entry, or with any other value, the card
+// shows no such line. With compared_buckets 0 it shows only the
+// note ([data-testid="demand-basis-none"]) "No period with a
+// stored history quantity has completed yet." and nothing after
+// it; otherwise the summary line
+// ([data-testid="demand-basis-summary"]) "One period ahead, over
+// <compared_buckets, thousands-separated> periods:
+// <history_wape as a percent to one decimal> error on the history,
+// <forecast_wape as a percent to one decimal> on the forecast."
+// and the verdict ([data-testid="demand-basis-verdict"]) — "The
+// forecast was <value_added times 100, absolute, to one decimal>
+// points nearer what sold." for a positive value_added, "The
+// history was <the same> points nearer what sold." for a negative
+// one and "Both were as near as each other." for 0. The table
+// (table.demand-basis-table, [data-testid="demand-basis-table"])
+// inside its own sideways-scroll container
+// (div.demand-basis-table-wrap) reads Item, Site, Periods, History
+// error, Forecast error, Difference and carries one
+// [data-testid="demand-basis-row"] for each of the first 10
+// entries of item_sites, in the answer's order: the codes,
+// compared_buckets thousands-separated, the two wapes as percents
+// to one decimal and value_added times 100 to one decimal with a
+// leading "+" above 0 and the minus sign U+2212 below 0, followed
+// by " pts" — a null or non-numeric value as an em dash. With more
+// than 10 entries the more line
+// ([data-testid="demand-basis-more"]) reads "The 10 item-sites
+// with the most demand of <item_sites.length,
+// thousands-separated>.". A usable answer is an object whose
+// compared_buckets is a whole number of at least 0 and whose
+// item_sites is an array; with compared_buckets above 0 the
+// history_wape, forecast_wape and value_added must be finite
+// numbers as well. Anything else, a non-200 answer or a network
+// failure renders no card and no message, and the card is absent
+// while its read is out — every other card is untouched, and the
+// card sends no request other than its GET.
 //
 // Every call goes through app/js/api.js:
 //   * GET /api/settings — every registered setting with its effective
@@ -214,6 +260,10 @@
 //     cheapest per-class levels reaching a target fill rate (the
 //     current and highest combinations, the suggested one or null
 //     and the holding-cost delta), the suggestion block's own read;
+//   * GET /api/forecast/accuracy/basis?bucket_index=1 — the realised
+//     value of the stored history basis against the forecast (the
+//     compared buckets, the two wapes, the value added and one
+//     measure per item-site), the demand-basis card's own read;
 //   * PUT /api/empirical-adoptions (body {item_code, site_code}) — an
 //     admin adopts one item-site's empirical reorder point;
 //   * DELETE /api/empirical-adoptions?item_code=…&site_code=… — an
@@ -250,6 +300,7 @@
   var IMPACT_PATH = '/api/recommendations/intermittent-impact';
   var CURVE_PATH = '/api/service-levels/curve';
   var SUGGESTION_PATH = '/api/service-levels/suggestion';
+  var BASIS_PATH = '/api/forecast/accuracy/basis?bucket_index=1';
   var ADOPTIONS_PATH = '/api/empirical-adoptions';
   var ME_PATH = '/api/auth/me';
 
@@ -344,6 +395,18 @@
     'Extra cost a year',
     'Fill rate',
   ];
+  // The demand-basis card (issue #1394): its title, the setting the
+  // current line reads from and the two lines it holds, the none
+  // line for a compared_buckets of 0 and the table's columns.
+  var BASIS_TITLE = 'Demand basis: history or forecast';
+  var BASIS_SETTING_KEY = 'replenishment.demand_basis';
+  var BASIS_CURRENT_HISTORY = 'Reorder points use the history.';
+  var BASIS_CURRENT_FORECAST = 'Reorder points use the forecast.';
+  var BASIS_NONE_LINE = 'No period with a stored history quantity has completed yet.';
+  // The table shows the first 10 item-sites of the answer, in the
+  // answer's order; the more line counts the rest.
+  var BASIS_MAX_ROWS = 10;
+  var BASIS_COLUMNS = ['Item', 'Site', 'Periods', 'History error', 'Forecast error', 'Difference'];
   // The inline card message after a failed adopt or withdraw: the
   // request's own message follows the prefix.
   var IMPACT_SAVE_FAILED_PREFIX = 'Could not save: ';
@@ -368,6 +431,7 @@
     budgets: newBudgetsState(), // the purchasing budget card's state
     impact: newImpactState(), // the intermittent-impact card's state
     curve: newCurveState(), // the service-curve card's state
+    basis: newBasisState(), // the demand-basis card's state
   };
   var loadSeq = 0;
   var mappingsLoadSeq = 0;
@@ -376,6 +440,7 @@
   var impactLoadSeq = 0;
   var curveLoadSeq = 0;
   var curveSuggestSeq = 0; // the suggestion block's request sequence
+  var basisLoadSeq = 0; // the demand-basis card's request sequence
   var rootEl = null;
 
   // The ERP code mappings card's state: the rows as served, whether the
@@ -468,6 +533,18 @@
       loading: false,
       data: null,
       suggest: newCurveSuggestState(),
+    };
+  }
+
+  // The demand-basis card's state: the validated payload as served
+  // (the compared buckets, the two wapes, the value added and the
+  // item-site measures) or null — a failed or invalid read renders
+  // no card and no message, and the card is absent while the read
+  // is out.
+  function newBasisState() {
+    return {
+      loading: false,
+      data: null,
     };
   }
 
@@ -610,6 +687,14 @@
     // skeleton while its read is out, the error note on a failed or
     // malformed read, and the per-class blocks otherwise.
     rootEl.appendChild(renderCurveCard());
+    // The seventh card — Demand basis: history or forecast — after
+    // the service-curve card, driven by its own load state: absent
+    // while its read is out and on a failed or malformed read, so
+    // the append is conditional.
+    var basisCard = renderBasisCard();
+    if (basisCard) {
+      rootEl.appendChild(basisCard);
+    }
   }
 
   function cardsFor(entries) {
@@ -2285,6 +2370,103 @@
     return (rate * 100).toFixed(2) + '%';
   }
 
+  // A well-formed demand-basis answer as served: compared_buckets a
+  // whole number of at least 0, item_sites an array of objects and —
+  // with compared_buckets above 0 — the history_wape, forecast_wape
+  // and value_added finite numbers. Anything less is a failure: no
+  // card and no message, as a non-200 answer.
+  function isBasisPayload(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+    if (!isWholeNumber(value.compared_buckets) || value.compared_buckets < 0) {
+      return false;
+    }
+    if (!Array.isArray(value.item_sites)) {
+      return false;
+    }
+    if (value.compared_buckets > 0) {
+      if (!isPlainNumber(value.history_wape) || !isPlainNumber(value.forecast_wape)) {
+        return false;
+      }
+      if (!isPlainNumber(value.value_added)) {
+        return false;
+      }
+    }
+    for (var i = 0; i < value.item_sites.length; i++) {
+      var entry = value.item_sites[i];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // "1,200" — the compared buckets with thousands separators; an
+  // em dash when the value is null or not a finite number.
+  function formatBasisPeriods(value) {
+    if (!isPlainNumber(value)) {
+      return EM_DASH;
+    }
+    return value.toLocaleString('en-US');
+  }
+
+  // "25.0%" — a wape as a percent to one decimal; an em dash when
+  // the value is null or not a finite number.
+  function formatBasisWape(wape) {
+    if (!isPlainNumber(wape)) {
+      return EM_DASH;
+    }
+    return (wape * 100).toFixed(1) + '%';
+  }
+
+  // "+10.0 pts" or "−5.0 pts" — value_added times 100 to one
+  // decimal, a leading "+" above 0, the minus sign U+2212 (not a
+  // hyphen) below, " pts" after; "0.0 pts" for 0; an em dash when
+  // the value is null or not a finite number.
+  function formatBasisDifference(valueAdded) {
+    if (!isPlainNumber(valueAdded)) {
+      return EM_DASH;
+    }
+    var points = Math.abs(valueAdded * 100).toFixed(1);
+    if (valueAdded > 0) {
+      return '+' + points + ' pts';
+    }
+    if (valueAdded < 0) {
+      return '\u2212' + points + ' pts';
+    }
+    return points + ' pts';
+  }
+
+  // The verdict line: the nearer basis and how much nearer — the
+  // value added in points (times 100, absolute, one decimal) — or
+  // the tie.
+  function basisVerdictText(valueAdded) {
+    var points = Math.abs(valueAdded * 100).toFixed(1);
+    if (valueAdded > 0) {
+      return 'The forecast was ' + points + ' points nearer what sold.';
+    }
+    if (valueAdded < 0) {
+      return 'The history was ' + points + ' points nearer what sold.';
+    }
+    return 'Both were as near as each other.';
+  }
+
+  // The current line's text by the screen's own
+  // replenishment.demand_basis entry — null without the entry or
+  // with any value but the two known ones, so the card shows no
+  // such line.
+  function basisCurrentText() {
+    var entry = entryByKey(BASIS_SETTING_KEY);
+    if (entry && entry.value === 'history') {
+      return BASIS_CURRENT_HISTORY;
+    }
+    if (entry && entry.value === 'forecast') {
+      return BASIS_CURRENT_FORECAST;
+    }
+    return null;
+  }
+
   // The target line's text by the answer's service_target — the
   // cycle service level or the fill-rate target; null when the field
   // is missing or carries any other value, so the card shows no such
@@ -2350,6 +2532,115 @@
     }
     card.appendChild(renderCurveSuggest());
     return card;
+  }
+
+  // The card: the heading, the current line (only for the two known
+  // values of the screen's own replenishment.demand_basis entry),
+  // the none line for a compared_buckets of 0 — and nothing after
+  // it — or, with periods compared, the summary line, the verdict,
+  // the item-site table and the more line for more than 10
+  // entries. A failed or malformed read, like the read being out,
+  // renders no card at all, so the caller appends it only when
+  // present.
+  function renderBasisCard() {
+    var basis = state.basis;
+    if (basis.loading || basis.data === null) {
+      return null;
+    }
+    var data = basis.data;
+    var card = el('article', 'card settings-card demand-basis-card');
+    card.setAttribute('data-testid', 'demand-basis');
+    card.setAttribute('aria-label', BASIS_TITLE);
+    card.appendChild(el('h2', 'settings-card-title', BASIS_TITLE));
+    var currentText = basisCurrentText();
+    if (currentText !== null) {
+      var currentLine = el('p', 'demand-basis-current', currentText);
+      currentLine.setAttribute('data-testid', 'demand-basis-current');
+      card.appendChild(currentLine);
+    }
+    if (data.compared_buckets === 0) {
+      var noneLine = el('p', 'demand-basis-none', BASIS_NONE_LINE);
+      noneLine.setAttribute('data-testid', 'demand-basis-none');
+      card.appendChild(noneLine);
+      return card;
+    }
+    var summaryLine = el(
+      'p',
+      'demand-basis-summary',
+      'One period ahead, over ' +
+        data.compared_buckets.toLocaleString('en-US') +
+        ' periods: ' +
+        formatBasisWape(data.history_wape) +
+        ' error on the history, ' +
+        formatBasisWape(data.forecast_wape) +
+        ' on the forecast.'
+    );
+    summaryLine.setAttribute('data-testid', 'demand-basis-summary');
+    card.appendChild(summaryLine);
+    var verdictLine = el('p', 'demand-basis-verdict', basisVerdictText(data.value_added));
+    verdictLine.setAttribute('data-testid', 'demand-basis-verdict');
+    card.appendChild(verdictLine);
+    card.appendChild(renderBasisTable(data));
+    if (data.item_sites.length > BASIS_MAX_ROWS) {
+      var moreLine = el(
+        'p',
+        'demand-basis-more',
+        'The 10 item-sites with the most demand of ' +
+          data.item_sites.length.toLocaleString('en-US') +
+          '.'
+      );
+      moreLine.setAttribute('data-testid', 'demand-basis-more');
+      card.appendChild(moreLine);
+    }
+    return card;
+  }
+
+  // The item-site table inside its own sideways-scroll container:
+  // one row for each of the first 10 entries of item_sites, in the
+  // answer's order.
+  function renderBasisTable(data) {
+    var wrap = el('div', 'demand-basis-table-wrap');
+    var table = el('table', 'demand-basis-table');
+    table.setAttribute('data-testid', 'demand-basis-table');
+    var thead = el('thead');
+    var headRow = el('tr');
+    for (var h = 0; h < BASIS_COLUMNS.length; h++) {
+      headRow.appendChild(el('th', null, BASIS_COLUMNS[h]));
+    }
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    var rows = Math.min(BASIS_MAX_ROWS, data.item_sites.length);
+    for (var i = 0; i < rows; i++) {
+      tbody.appendChild(renderBasisRow(data.item_sites[i]));
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  // One item-site's row: the codes, the compared buckets with
+  // thousands separators, the two wapes as percents to one decimal
+  // and the difference in points — a null or non-numeric value as
+  // an em dash.
+  function renderBasisRow(entry) {
+    var row = el('tr', 'demand-basis-row');
+    row.setAttribute('data-testid', 'demand-basis-row');
+    row.appendChild(el('td', 'demand-basis-item', basisCodeText(entry.item_code)));
+    row.appendChild(el('td', 'demand-basis-site', basisCodeText(entry.site_code)));
+    row.appendChild(el('td', 'demand-basis-periods', formatBasisPeriods(entry.compared_buckets)));
+    row.appendChild(el('td', 'demand-basis-history', formatBasisWape(entry.history_wape)));
+    row.appendChild(el('td', 'demand-basis-forecast', formatBasisWape(entry.forecast_wape)));
+    row.appendChild(el('td', 'demand-basis-difference', formatBasisDifference(entry.value_added)));
+    return row;
+  }
+
+  // A code as text; an em dash when it is missing or not a string.
+  function basisCodeText(value) {
+    if (typeof value !== 'string' || value.trim() === '') {
+      return EM_DASH;
+    }
+    return value;
   }
 
   // One class' block: the heading — the class label, the counted
@@ -2471,6 +2762,43 @@
         }
         curve.loading = false;
         curve.data = null;
+        render();
+      }
+    );
+  }
+
+
+  // The demand-basis card's separate read, the way the curve card
+  // reads its own data: its own state, its own sequence and its own
+  // re-render. A non-200 answer, a network failure or a 200 with a
+  // malformed body all end with no card and no message; an answer
+  // that arrives after a newer load has started (a stale sequence)
+  // is ignored, and sign-out's reset bumps the sequence and clears
+  // the card's state. The card is absent while the read is out.
+  function startBasisLoad() {
+    var basis = state.basis;
+    if (basis.loading) {
+      return;
+    }
+    basis.loading = true;
+    basis.data = null;
+    render();
+    var seq = ++basisLoadSeq;
+    global.Api.get(BASIS_PATH).then(
+      function (payload) {
+        if (seq !== basisLoadSeq) {
+          return;
+        }
+        basis.loading = false;
+        basis.data = isBasisPayload(payload) ? payload : null;
+        render();
+      },
+      function () {
+        if (seq !== basisLoadSeq) {
+          return;
+        }
+        basis.loading = false;
+        basis.data = null;
         render();
       }
     );
@@ -2967,6 +3295,7 @@
     startBudgetsLoad();
     startImpactLoad();
     startCurveLoad();
+    startBasisLoad();
   }
 
   function reset() {
@@ -2977,6 +3306,7 @@
     impactLoadSeq += 1;
     curveLoadSeq += 1;
     curveSuggestSeq += 1;
+    basisLoadSeq += 1;
     state.loading = false;
     state.error = null;
     state.entries = [];
@@ -2986,6 +3316,7 @@
     state.budgets = newBudgetsState();
     state.impact = newImpactState();
     state.curve = newCurveState();
+    state.basis = newBasisState();
     if (rootEl) {
       rootEl.textContent = '';
     }

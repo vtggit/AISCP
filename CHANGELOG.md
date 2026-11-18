@@ -160,6 +160,8 @@ code is the authority for details.
 - Forecast overrides now keep the correction proposed for their period when one is proposed, and
   `GET /api/forecast/overrides/proposals` counts how often the current overrides follow their
   stored proposals (#1365).
+- The Demand screen shows the proposed correction beside the forecast: the reason, and each
+  period's forecast and proposed quantity (#1359).
 
 **Several ERPs**
 - An ERP's sync never overwrites another ERP's item-site or item name: the first holder keeps
@@ -245,8 +247,6 @@ code is the authority for details.
 - The docs check now reports routes, settings, and environment variables that a changed Markdown
   file names but the code does not define (#1175).
 - The order plan's run holds back an order it cannot value (#1301).
-- Forecast corrections B: the Demand screen shows the proposed correction beside the forecast
-  (#1359).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a

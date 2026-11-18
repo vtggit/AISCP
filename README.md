@@ -98,11 +98,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   where the forecast bias exception finds its bias persists: a proposed quantity for each forecast
   period without an override or a demand signal, the forecast scaled by the measured actual over
   forecast, with the figures it rests on and a one-line reason (`backend/app/api/forecast.py`).
-- The Demand screen asks for the correction in its by-key detail read
-  (`include_correction=true`) and shows a "Proposed correction" section after "Forecast
-  periods" when the shown detail carries a correction key, with the reason and a table of
-  forecast and proposed quantities; a null or unusable correction shows "No correction
-  proposed.", and an answer without the key shows no section (`app/js/demand.js`).
+- The Demand screen shows that correction for the chosen item-site in a "Proposed correction"
+  section after "Forecast periods": the reason, and each period's forecast and proposed quantity,
+  or "No correction proposed." (`app/js/demand.js`).
 - Planner overrides of a forecast period, with a required reason, and withdrawals
   (`backend/app/forecast/overrides.py`).
 - Each forecast override keeps the correction proposed for its period when it was stored, if one

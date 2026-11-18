@@ -1,5 +1,7 @@
 """Read-only API for demand statistics per item and site."""
 
+# parity: backend-only demand statistics the forecast and the reorder points read
+
 from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query, status

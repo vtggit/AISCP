@@ -109,6 +109,8 @@ credential only — the dependency behind it never raises and performs
 no check of its own.
 """
 
+# parity: backend-only the OData feed for BI tools and other machine consumers
+
 import base64
 import binascii
 import hmac

@@ -1,5 +1,7 @@
 """Read-only API for demand_events."""
 
+# parity: backend-only raw demand events, the input the forecast reads
+
 from datetime import date
 
 from fastapi import APIRouter, HTTPException, Path, Query, status

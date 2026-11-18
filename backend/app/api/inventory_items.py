@@ -8,6 +8,8 @@ admin gets exactly today's behaviour; the ``GET`` routes stay open to
 any signed-in user.
 """
 
+# parity: backend-only item master data kept in step with the ERP, the system of record
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.erp_mappings import require_admin

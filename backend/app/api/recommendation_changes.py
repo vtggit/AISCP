@@ -1,5 +1,7 @@
 """Read-only API for reorder-point changes between two dates."""
 
+# parity: backend-only reorder-point changes for machine consumers and the CSV export
+
 from datetime import date
 from typing import Literal
 

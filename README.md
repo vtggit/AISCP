@@ -160,7 +160,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - The monthly S&OP review: the horizon's demand, supply, planned receipts, projected on-hand
   and spend by month, with forecast accuracy, demand signals and saved scenarios against the
   plan, on one page. An admin signs the month off, and the sign-off stores the figures agreed
-  (`backend/app/sop/review.py`, `backend/app/api/sop.py`).
+  (`backend/app/sop/review.py`, `backend/app/api/sop.py`). The review proposes signing the
+  month off when no value figure moved more than a set change since the last sign-off (the
+  `sop.signoff_proposal_max_change` setting, 5% by default).
 
 **Supply planning**
 

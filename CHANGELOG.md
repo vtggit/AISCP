@@ -327,6 +327,9 @@ code is the authority for details.
 - The expedite list takes each item's daily demand from the last day the feed has delivered, not
   from today, so days not delivered yet no longer count as zero demand; lateness still counts from
   today, and `GET /api/exceptions` computes the recommendations once (#1424).
+- The order plan's top-ups (`GET /api/supply-plan/top-ups`) now compute the reorder recommendations
+  once per call, so the route and the order-plan release no longer repeat the recommendation
+  computation (#1438).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

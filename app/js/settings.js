@@ -85,7 +85,16 @@
 // reads: the note
 // ([data-testid="purchase-budget-proposals-note"]) reads "Proposed
 // from the plan's committed and planned spend, plus
-// <margin times 100, at most one decimal>%" and one row per used
+// <margin times 100, at most one decimal>%", directly after the note
+// the record line
+// ([data-testid="purchase-budget-proposals-record"]) — while the
+// answer's record.with_proposal is above 0 it reads "Budgets saved
+// at the proposal: <taken> of <with_proposal>", gaining
+// " (<below> below, <above> above)" when below or above is above 0,
+// and with with_proposal at 0 it reads "No budget saved against a
+// proposal yet."; the line is left out when the answer carries no
+// record or its saved, with_proposal, taken, below and above are not
+// all finite numbers — and one row per used
 // month in the answer's order
 // ([data-testid="purchase-budget-proposal", with data-month]) — the
 // month formatted like the stored rows', "Proposed
@@ -305,7 +314,10 @@
 //     number and whose months is an array, a month entry used only
 //     when its month is a YYYY-MM string and its proposed_budget and
 //     total_spend are finite numbers, any other entry skipped, and
-//     with no entry left the proposals left out;
+//     with no entry left the proposals left out; the answer's record
+//     is used for the record line only when its saved, with_proposal,
+//     taken, below and above are all finite numbers — a missing or
+//     unusable record leaves only the line out;
 //   * PUT /api/purchase-budgets/{month} (body {"amount": <number>}) —
 //     an admin stores one month's budget;
 //   * DELETE /api/purchase-budgets/{month} — an admin removes one;
@@ -1648,6 +1660,32 @@
     );
   }
 
+  // The record measure of the proposals answer, as used: an object
+  // whose saved, with_proposal, taken, below and above are all
+  // finite numbers. Anything else — no record at all, a non-object,
+  // or one of the five not a finite number — answers null and the
+  // record line is left out, the rest of the section rendering as
+  // before.
+  function usableRecord(record) {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return null;
+    }
+    var keys = ['saved', 'with_proposal', 'taken', 'below', 'above'];
+    for (var i = 0; i < keys.length; i++) {
+      var value = record[keys[i]];
+      if (typeof value !== 'number' || !isFinite(value)) {
+        return null;
+      }
+    }
+    return {
+      saved: record.saved,
+      with_proposal: record.with_proposal,
+      taken: record.taken,
+      below: record.below,
+      above: record.above,
+    };
+  }
+
   // A usable proposals answer: an object whose margin is a finite
   // number and whose months is an array, with at least one usable
   // month entry. Anything less answers null — the card renders as
@@ -1676,7 +1714,7 @@
     if (months.length === 0) {
       return null;
     }
-    return { margin: body.margin, months: months };
+    return { margin: body.margin, months: months, record: usableRecord(body.record) };
   }
 
   // "5" for 0.05 and "12.5" for 0.125 — the margin as a percent with
@@ -1775,8 +1813,9 @@
     return budgetRow;
   }
 
-  // The proposals section: the note and one row per used month, in
-  // the answer's order. Every node is built with textContent, so no
+  // The proposals section: the note, the record line (while the
+  // answer's record is usable) and one row per used month, in the
+  // answer's order. Every node is built with textContent, so no
   // answer value ever becomes an HTML string. It sits in the card
   // after the stored rows (or the empty note) and before the
   // non-admin note.
@@ -1794,10 +1833,34 @@
     );
     note.setAttribute('data-testid', 'purchase-budget-proposals-note');
     block.appendChild(note);
+    if (proposals.record) {
+      block.appendChild(renderBudgetProposalRecord(proposals.record));
+    }
     for (var i = 0; i < proposals.months.length; i++) {
       block.appendChild(renderBudgetProposalRow(proposals.months[i], isAdmin));
     }
     return block;
+  }
+
+  // The record line, directly after the note: while with_proposal is
+  // above 0 it reads "Budgets saved at the proposal: <taken> of
+  // <with_proposal>", gaining " (<below> below, <above> above)" when
+  // below or above is above 0, and with with_proposal at 0 it reads
+  // "No budget saved against a proposal yet." Built with textContent,
+  // so no record value ever becomes an HTML string.
+  function renderBudgetProposalRecord(record) {
+    var line;
+    if (record.with_proposal > 0) {
+      line = 'Budgets saved at the proposal: ' + record.taken + ' of ' + record.with_proposal;
+      if (record.below > 0 || record.above > 0) {
+        line = line + ' (' + record.below + ' below, ' + record.above + ' above)';
+      }
+    } else {
+      line = 'No budget saved against a proposal yet.';
+    }
+    var node = el('p', 'settings-row-note purchase-budget-proposals-record', line);
+    node.setAttribute('data-testid', 'purchase-budget-proposals-record');
+    return node;
   }
 
   // One proposals row, reusing the stored rows' column template where

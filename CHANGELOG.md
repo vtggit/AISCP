@@ -168,6 +168,8 @@ code is the authority for details.
 - A read-only route, `GET /api/sop/signoffs/proposals`, for any signed-in user, answers how often
   the months admins signed off were proposed, with signed, proposed, not proposed and
   without-proposal counts and one entry per signed month, newest first (#1435).
+- The purchasing budget card on Settings now shows how many of the months with a proposal were last
+  saved at the proposal, with counts below and above it, or that none have been saved yet (#1442).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

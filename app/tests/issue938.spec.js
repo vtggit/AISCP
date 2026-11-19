@@ -370,6 +370,9 @@ async function mockSopApi(page) {
       ctrl.signoffListQueries.push(url.searchParams.get('limit'));
       return route.fulfill({ status: 200, json: [signoffRow1()] });
     }
+    if (path === '/api/sop/signoffs/proposals') {
+      return route.fulfill({ status: 404, json: { detail: 'Not Found' } });
+    }
     if (/^\/api\/sop\/signoffs\/[^/]+$/.test(path)) {
       const id = path.slice('/api/sop/signoffs/'.length);
       ctrl.signoffDetailGets.push(id);

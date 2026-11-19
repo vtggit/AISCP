@@ -244,6 +244,43 @@ class DecisionSummary(BaseModel):
     snoozed: _CountBucket
 
 
+class _DirectionBucket(BaseModel):
+    """One raise/lower direction bucket.
+
+    ``accepted`` counts the current accepted decisions in the
+    direction and ``dismissed`` the current dismissed ones.  A
+    decision whose stored ``current_reorder_point`` equals its
+    ``recommended_reorder_point_units`` counts in neither direction,
+    and a snoozed decision counts in none.
+    """
+
+    accepted: int
+    dismissed: int
+
+
+class DecisionAcceptance(BaseModel):
+    """The response of GET /api/drift/decisions/acceptance.
+
+    ``accepted`` and ``dismissed`` are the current decisions with that
+    decision (count, summed stored ``money_at_stake``, and the count
+    of the null snapshots), ``snoozed`` is ``{count}``, ``rate`` and
+    ``money_rate`` are the accepted share of the counts and of the
+    money (each rounded to 4 decimals, null when its denominator is
+    0), and ``raise`` (the stored ``current_reorder_point`` is null or
+    below the recommended value) and ``lower`` (the stored value above
+    it) each carry the accepted and dismissed counts of that
+    direction.
+    """
+
+    accepted: _MoneyBucket
+    dismissed: _MoneyBucket
+    snoozed: _CountBucket
+    rate: float | None
+    money_rate: float | None
+    raise_: _DirectionBucket = Field(alias="raise")
+    lower: _DirectionBucket
+
+
 @router.get(
     "/decisions/summary",
     response_model=DecisionSummary,
@@ -288,6 +325,105 @@ def decision_summary() -> dict:
         },
         "dismissed": {"count": row["dismissed_count"]},
         "snoozed": {"count": row["snoozed_count"]},
+    }
+
+
+def _money_total(rows: list[dict]) -> float:
+    """The summed stored money at stake of one bucket; a null snapshot
+    adds nothing."""
+    return float(
+        sum(row["money_at_stake"] for row in rows if row["money_at_stake"] is not None)
+    )
+
+
+def _money_bucket(rows: list[dict], total: float) -> dict:
+    """The ``{count, money_at_stake, without_money}`` of one bucket of
+    current decisions."""
+    return {
+        "count": len(rows),
+        "money_at_stake": total,
+        "without_money": sum(1 for row in rows if row["money_at_stake"] is None),
+    }
+
+
+def _is_raise(row: dict) -> bool:
+    """The stored ``current_reorder_point`` is null or below the
+    decision's ``recommended_reorder_point_units``."""
+    current = row["current_reorder_point"]
+    return current is None or current < row["recommended_reorder_point_units"]
+
+
+def _is_lower(row: dict) -> bool:
+    """The stored ``current_reorder_point`` is above the decision's
+    ``recommended_reorder_point_units``."""
+    current = row["current_reorder_point"]
+    return current is not None and current > row["recommended_reorder_point_units"]
+
+
+def _direction(accepted: list[dict], dismissed: list[dict], is_direction) -> dict:
+    """The ``{accepted, dismissed}`` counts of one raise/lower
+    direction over the current decisions of those two kinds only."""
+    return {
+        "accepted": sum(1 for row in accepted if is_direction(row)),
+        "dismissed": sum(1 for row in dismissed if is_direction(row)),
+    }
+
+
+@router.get(
+    "/decisions/acceptance",
+    response_model=DecisionAcceptance,
+    dependencies=[Depends(require_any_authenticated_user)],
+)
+def decision_acceptance() -> dict:
+    """The acceptance view over every item-site's current decision.
+
+    Open to any authenticated user (the same guard as
+    ``GET /api/drift/decisions/summary``) and a pure read: it answers
+    without writing anything.  It reads the current decision of every
+    item-site (the latest by decided_at, id breaking ties) with one
+    call to ``current_decisions()``.
+
+    ``accepted`` and ``dismissed`` are the current decisions with that
+    decision: ``count`` is their number, ``money_at_stake`` sums their
+    stored ``money_at_stake`` (a null adds nothing) and
+    ``without_money`` counts the nulls.  ``snoozed`` is ``{count}``
+    over the current snoozed decisions.
+
+    ``rate`` is ``accepted.count / (accepted.count +
+    dismissed.count)`` rounded to 4 decimals, null when both counts
+    are 0.  ``money_rate`` is ``accepted.money_at_stake /
+    (accepted.money_at_stake + dismissed.money_at_stake)`` rounded to
+    4 decimals, null when that sum is 0.
+
+    A decision is a raise when its stored ``current_reorder_point`` is
+    null or below its ``recommended_reorder_point_units``, and a cut
+    (``lower``) when the stored value is above the recommended one.
+    A decision whose two values are equal counts in neither
+    direction, only in the totals, and a snoozed decision counts in
+    neither.
+    """
+    rows = _repo.current_decisions()
+    accepted = [row for row in rows if row["decision"] == "accepted"]
+    dismissed = [row for row in rows if row["decision"] == "dismissed"]
+    snoozed = [row for row in rows if row["decision"] == "snoozed"]
+
+    accepted_money = _money_total(accepted)
+    dismissed_money = _money_total(dismissed)
+    rate_denominator = len(accepted) + len(dismissed)
+    money_denominator = accepted_money + dismissed_money
+
+    return {
+        "accepted": _money_bucket(accepted, accepted_money),
+        "dismissed": _money_bucket(dismissed, dismissed_money),
+        "snoozed": {"count": len(snoozed)},
+        "rate": (
+            round(len(accepted) / rate_denominator, 4) if rate_denominator else None
+        ),
+        "money_rate": (
+            round(accepted_money / money_denominator, 4) if money_denominator else None
+        ),
+        "raise": _direction(accepted, dismissed, _is_raise),
+        "lower": _direction(accepted, dismissed, _is_lower),
     }
 
 

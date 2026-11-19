@@ -55,6 +55,9 @@ code is the authority for details.
 - A read-only route, `GET /api/drift/decisions/acceptance`, for any authenticated user, answers how
   often current planner decisions accept the recommended reorder point, with accepted, dismissed
   and snoozed counts, money at stake, acceptance rates, and raise/lower direction counts (#1412).
+- The Overview's Reorder points card now shows how often the recommended reorder point is accepted,
+  with accepted and decided counts, the acceptance rate, raise/lower direction counts, and, when
+  measured, the share of money at stake, or that none are measured yet (#1413).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

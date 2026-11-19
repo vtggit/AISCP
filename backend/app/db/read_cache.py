@@ -3,17 +3,18 @@
 The exceptions call (``app.api.exceptions``) gathers its sixteen
 sources in one call, and several of the sources read the very same
 rows — the newest open-purchase snapshot
-(``OpenPurchaseLinePostgresRepository.list_latest``), the reorder
-recommendations (``app.recommend.reorder.recommendations_for_all``)
-with the demand statistics
-(``app.stats.demand.demand_stats_for_all``) and the 30-day history
-buckets (``app.forecast.history.history_for_all``) they load, the
-ranked stockout rows
+(``OpenPurchaseLinePostgresRepository.list_latest``), the demand
+statistics (``app.stats.demand.demand_stats_for_all``) and the
+30-day history buckets
+(``app.forecast.history.history_for_all``) the recommendations load,
+the ranked stockout rows
 (``app.recommend.stockout.stockout_ranked``), the supplier
 performance (``app.recommend.supplier_performance.supplier_performance``)
 and the lead-time observations
-(``LeadTimeObservationPostgresRepository.list_rows``).  The cache
-answers each of those reads once per call: while a ``read_once()``
+(``LeadTimeObservationPostgresRepository.list_rows``).  The
+recommendations keep their own memo
+(``app.recommend.reorder.recommendations_memo``); the cache answers
+each of those reads once per call: while a ``read_once()``
 block is active — held in a ``contextvars.ContextVar`` for the
 block's duration — a function decorated with ``cached_read`` (a
 module function) or ``cached_read_method`` (a method, ``self`` left

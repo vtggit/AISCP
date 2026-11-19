@@ -224,7 +224,6 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 
 from app.db.connection import get_cursor
-from app.db.read_cache import cached_read
 from app.forecast.basis import _window_days, forecast_demand_for
 from app.forecast.history import history_for_all, history_for_pair
 from app.forecast.overrides import counted_overrides
@@ -1728,7 +1727,6 @@ def _attach_loaded(
     )
 
 
-@cached_read
 def recommendations_for_all(as_of: date | None = None) -> list[dict]:
     """Reorder recommendations for every (item_code, site_code) in demand_events.
 

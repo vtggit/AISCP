@@ -355,18 +355,21 @@ plan's resolved as-of when it is the ranking's own default,
 ``app.stats.demand.default_as_of``; the expedite list keeps its own
 default, today): the request never computes the recommendations more
 than once per as-of.  And the gathering runs inside the one
-``app.db.read_cache.read_once`` block the memo carries: every read the
-sources share — the newest open-purchase snapshot
-(``OpenPurchaseLinePostgresRepository.list_latest``), the reorder
-recommendations (``recommendations_for_all``) with the demand
+``app.db.read_cache.read_once`` block and the one
+``app.db.connection.one_connection()`` block the request carries:
+every read the sources share — the newest open-purchase snapshot
+(``OpenPurchaseLinePostgresRepository.list_latest``), the demand
 statistics (``demand_stats_for_all``) and the 30-day history buckets
-(``history_for_all``) they load, the ranked stockout rows
-(``stockout_ranked``), the supplier performance
+(``history_for_all``) the recommendations load, the ranked stockout
+rows (``stockout_ranked``), the supplier performance
 (``supplier_performance``) and the lead-time observations
 (``LeadTimeObservationPostgresRepository.list_rows``) — answers each
 repeated call with the same arguments from the first call's result,
 deep-copied, so one request reads each of them once, whatever the
-number of sources that read it.
+number of sources that read it, and every ``get_cursor()`` of the
+request runs on the one connection of the block.  The answer — the
+as-of date, the rows and their order, and ``sources_failed`` — is the
+same as without the memo and the blocks.
 
 Every row also carries its first-seen date from the
 ``exception_first_seen`` table, read once per call and never written
@@ -506,14 +509,14 @@ from app.api.ddmrp import _stored_system_settings, ddmrp_zone_rows
 from app.api.supply_plan import build_supply_plan
 from app.auth.authorization import require_role
 from app.auth.models import AuthUser
-from app.db.connection import get_cursor
+from app.db.connection import get_cursor, one_connection
 from app.db.read_cache import read_once
 from app.ddmrp.plan import plan_ddmrp
 from app.ddmrp.zones import setting_value
 from app.forecast.accuracy import basis_accuracy, realised_accuracy
 from app.recommend.cross_erp import cross_erp_items
 from app.recommend.expedite import expedite_list
-from app.recommend.reorder import _recommendations_memo, recommendations_memo
+from app.recommend.reorder import recommendations_memo
 from app.recommend.second_source import second_sources
 from app.recommend.stockout import stockout_ranked
 from app.recommend.supplier_risk import supplier_risk
@@ -2179,44 +2182,35 @@ def _collect() -> tuple[date | None, list[ExceptionRow], list[str]]:
     listed while the other sources still answer.
 
     The gathering runs inside one
-    ``app.recommend.reorder.recommendations_memo``: the DDMRP plan,
+    ``app.recommend.reorder.recommendations_memo``, the one
+    ``app.db.read_cache.read_once`` block and the one
+    ``app.db.connection.one_connection()`` block: the DDMRP plan,
     the stockout ranking and the expedite list read their
     ``recommendations_for_all`` through the same memo — the ranking
     is given the plan's resolved as-of when it is the ranking's own
     default (``app.stats.demand.default_as_of``), the expedite list
     keeps its own default (today) — so one request never computes the
-    recommendations more than once per as-of.  And it runs inside the
-    one ``app.db.read_cache.read_once`` block the memo carries: every
-    read the sources share answers each repeated call with the same
-    arguments from the first call's result, deep-copied, so one
-    request reads each of them once, whatever the number of sources
-    that read it (the newest open-purchase snapshot, the
-    recommendations and the demand statistics and 30-day history
-    buckets they load, the ranked stockout rows, the supplier
-    performance and the lead-time observations).  A stand-in memo that
-    a test runs the list through carries no read block with it, and
-    the sources then compute on every call, the way they did before
-    the read cache existed.
+    recommendations more than once per as-of; every read the sources
+    share answers each repeated call with the same arguments from the
+    first call's result, deep-copied, so one request reads each of
+    them once, whatever the number of sources that read it (the
+    newest open-purchase snapshot, the demand statistics and 30-day
+    history buckets the recommendations load, the ranked stockout
+    rows, the supplier performance and the lead-time observations);
+    and every ``get_cursor()`` of the call runs on the one
+    connection of the block.  The answer — the as-of date, the rows
+    and their order, and ``sources_failed`` — is the same as without
+    the memo and the blocks.
     """
-    with recommendations_memo():
-        # The read-cache block goes with the memo: a stand-in memo
-        # (a test that runs the list through its own context
-        # manager) leaves it out with the memo, and the sources
-        # compute on every call, the way they did before the read
-        # cache existed.
-        block = (
-            read_once()
-            if _recommendations_memo.get() is not None
-            else contextlib.nullcontext()
-        )
-        with block:
-            return _gather_sources()
+    with recommendations_memo(), read_once(), one_connection():
+        return _gather_sources()
 
 
 def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
     """The sixteen sources of the exceptions list, each read once,
-    under ``_collect``'s one ``recommendations_memo`` and the one
-    ``app.db.read_cache.read_once`` block it carries.
+    under ``_collect``'s one ``recommendations_memo``, the one
+    ``app.db.read_cache.read_once`` block and the one
+    ``app.db.connection.one_connection()`` block it carries.
 
     Returns the latest as-of date reported by any successful source
     (null when none reports one), the rows — ordered high before

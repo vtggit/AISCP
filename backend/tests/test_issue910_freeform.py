@@ -392,6 +392,7 @@ def test_issue910_freeform(client, monkeypatch) -> None:
         yield
 
     monkeypatch.setattr("app.api.exceptions.recommendations_memo", _memo_disabled)
+    monkeypatch.setattr("app.api.exceptions.read_once", _memo_disabled)
     computed.clear()
     response2 = client.get("/api/exceptions")
     assert response2.status_code == 200, response2.text

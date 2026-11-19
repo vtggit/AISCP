@@ -172,7 +172,12 @@ def test_issue1414_freeform(client, monkeypatch):
     response = client.get(URL)
     assert response.status_code == 200, response.text
     body = response.json()
-    assert set(body) == {"margin", "item_sites_without_unit_cost", "months"}
+    assert set(body) == {
+        "margin",
+        "item_sites_without_unit_cost",
+        "months",
+        "record",
+    }
     assert body["margin"] == 0.05
     assert body["item_sites_without_unit_cost"] == 2
     assert [month["month"] for month in body["months"]] == [
@@ -351,6 +356,7 @@ def test_issue1414_freeform(client, monkeypatch):
         "margin",
         "item_sites_without_unit_cost",
         "months",
+        "record",
     }
     # And the gate is intact: a request without a token still gets 401.
     assert TestClient(app).get(URL).status_code == 401

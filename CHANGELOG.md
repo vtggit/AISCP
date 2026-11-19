@@ -311,6 +311,8 @@ code is the authority for details.
   fixed height, and shows the detail pane at its full height below the list (#1387).
 - The exceptions list now reads each shared input once per call, so `GET /api/exceptions` answers
   faster without changing its rows (#1410).
+- The exceptions list now runs its gathering on one database connection and answers repeated
+  recommendation reads from one memo per as-of date (#1418).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

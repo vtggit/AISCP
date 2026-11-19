@@ -695,6 +695,7 @@ test('issue513 freeform', async ({ page }) => {
     '/api/supply-plan/summary',
     '/api/stockout/proposals',
     '/api/excess/proposals',
+    '/api/drift/decisions/acceptance',
     '/api/exceptions/proposals',
     '/api/forecast/overrides/proposals',
   ]);

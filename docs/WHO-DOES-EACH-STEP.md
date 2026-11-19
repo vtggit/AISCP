@@ -127,7 +127,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
 | Build the review: demand, signals, supply, planned receipts, projected on-hand and spend by month, forecast accuracy, saved scenarios against the plan, and what moved since the last sign-off | AIERP | — | — |
-| Set each month's purchase budget | planner (admin) | The budget is a finance decision that AIERP is told. | AIERP proposing a budget from the committed and planned spend it already projects, measured against the budgets admins set. |
+| Set each month's purchase budget | proposed: AIERP proposes each month's purchase budget from the committed and planned spend; planner (admin) sets it | The budget is a finance decision that AIERP is told. | AIERP proposing a budget from the committed and planned spend it already projects, measured against the budgets admins set. |
 | Suggest which planned orders to defer in a month over budget: the most cover first, never one that would stock out | AIERP | — | — |
 | Defer the orders | planner | A month's release takes every planned order, so no release leaves the suggested ones out. | A release that leaves out the chosen deferrals, under AIERP-D-2. Not built. |
 | Ask what-if questions and save them as scenarios | planner (any signed-in user); AIERP runs the simulation | A scenario is a question a person asks. | AIERP proposing scenarios from its own signals, such as a high-risk supplier or a lasting forecast bias, measured against the scenarios planners save. |

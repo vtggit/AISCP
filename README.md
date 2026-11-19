@@ -161,6 +161,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   planned orders the recommended policy would place (`backend/app/aggregate/projection.py`).
 - Spend against a monthly purchase budget, and deferral candidates for over-budget months
   (`backend/app/aggregate/spend.py`, `deferral.py`, `backend/app/api/purchase_budgets.py`).
+- Proposed monthly purchase budgets (read-only): `GET /api/purchase-budgets/proposals` proposes
+  each month's budget from the projected spend horizon grown by the `sop.budget_proposal_margin`
+  setting, with the stored budget and difference beside it (`backend/app/api/purchase_budgets.py`).
 - The monthly S&OP review: the horizon's demand, supply, planned receipts, projected on-hand
   and spend by month, with forecast accuracy, demand signals and saved scenarios against the
   plan, on one page. An admin signs the month off, and the sign-off stores the figures agreed

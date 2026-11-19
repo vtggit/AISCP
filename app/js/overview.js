@@ -7,6 +7,13 @@
 //     GET /api/drift?limit=1000&include_decided=true,
 //     GET /api/excess?limit=1000&include_decided=true,
 //     GET /api/stockout?limit=1000&include_decided=true, and
+//   * GET /api/drift/decisions/acceptance, the Reorder points
+//     card's "acceptance" block, the card's own read beside its
+//     summary and list reads; a failed read — any status, a network
+//     error, or a body that is not an object whose accepted and
+//     dismissed hold the finite number count and whose rate is a
+//     finite number or null — leaves the block out, the card renders
+//     exactly as before;
 //   * GET /api/stockout/proposals, the Stockout risk card's
 //     "proposed remedy" block, the card's own read beside its
 //     summary and list reads; a failed read — any status, a network
@@ -53,10 +60,12 @@
 //     money + count);
 //   * one region per list card — that kind's summary buckets (accepted
 //     money, applied money, dismissed count) plus the "N to decide"
-//     count of that list; the Stockout risk card carries its
-//     "proposed remedy" block (GET /api/stockout/proposals) and the
-//     Excess and dead stock card its "proposed action" block (GET
-//     /api/excess/proposals), each directly after its figures row and
+//     count of that list; the Reorder points card carries its
+//     "acceptance" block (GET /api/drift/decisions/acceptance), the
+//     Stockout risk card its "proposed remedy" block (GET
+//     /api/stockout/proposals) and the Excess and dead stock card
+//     its "proposed action" block (GET /api/excess/proposals), each
+//     directly after its figures row and
 //     directly before its Open button; a failed read leaves the block
 //     out — the card renders exactly as before, no error text, no
 //     Retry, no new [role="alert"];
@@ -123,6 +132,7 @@
   var OVERRIDES_PROPOSALS_PATH = '/api/forecast/overrides/proposals';
   var STOCKOUT_PROPOSALS_PATH = '/api/stockout/proposals';
   var EXCESS_PROPOSALS_PATH = '/api/excess/proposals';
+  var DRIFT_ACCEPTANCE_PATH = '/api/drift/decisions/acceptance';
 
   var KINDS = [
     {
@@ -502,6 +512,17 @@
         global.Api.get(SUMMARY_PATH),
         global.Api.get(KINDS_BY_KIND[kind].endpoint),
       ];
+      if (kind === 'drift') {
+        // The card's "acceptance" block: its own read beside the
+        // summary and the list, with its own catch that answers
+        // null so a failed read never fails the card — it only
+        // leaves the block out.
+        reads.push(
+          global.Api.get(DRIFT_ACCEPTANCE_PATH).catch(function () {
+            return null;
+          })
+        );
+      }
       if (kind === 'stockout') {
         // The card's "proposed remedy" block: its own read beside
         // the summary and the list, with its own catch that answers
@@ -664,7 +685,7 @@
     );
   }
 
-  function renderCard(kindMeta, summary, list, proposals) {
+  function renderCard(kindMeta, summary, list, ownRead) {
     var kind = kindMeta.kind;
     var buckets =
       summary && typeof summary === 'object' && summary[kind] &&
@@ -698,23 +719,32 @@
       global.location.hash = '#/queue?kind=' + kind;
     });
 
+    // The Reorder points card's "acceptance" block: with a usable
+    // answer, directly after the figures row and directly before the
+    // Open button; a failed read or an unusable body leaves it out
+    // and the card renders exactly as before.
+    if (kind === 'drift' && driftAcceptanceValid(ownRead)) {
+      region
+        .querySelector('.ov-card-figures')
+        .insertAdjacentElement('afterend', driftAcceptanceBlock(ownRead));
+    }
     // The Stockout risk card's "proposed remedy" block: with a
     // usable answer, directly after the figures row and directly
     // before the Open button; a failed read or an unusable body
     // leaves it out and the card renders exactly as before.
-    if (kind === 'stockout' && proposalsAnswerValid(proposals)) {
+    if (kind === 'stockout' && proposalsAnswerValid(ownRead)) {
       region
         .querySelector('.ov-card-figures')
-        .insertAdjacentElement('afterend', proposalsBlock(proposals));
+        .insertAdjacentElement('afterend', proposalsBlock(ownRead));
     }
     // The Excess and dead stock card's "proposed action" block:
     // the same answer shape as the Stockout risk card's read, the
     // same placement; a failed read or an unusable body leaves it
     // out and the card renders exactly as before.
-    if (kind === 'excess' && proposalsAnswerValid(proposals)) {
+    if (kind === 'excess' && proposalsAnswerValid(ownRead)) {
       region
         .querySelector('.ov-card-figures')
-        .insertAdjacentElement('afterend', excessProposalsBlock(proposals));
+        .insertAdjacentElement('afterend', excessProposalsBlock(ownRead));
     }
   }
 
@@ -919,6 +949,118 @@
         countLabel(answer.without_proposal) +
         ' accepted before proposals were kept';
       block.appendChild(note);
+    }
+
+    return block;
+  }
+
+  /* ------------------------ drift acceptance ------------------------ */
+
+  // The Reorder points card's "acceptance" measurement. The answer
+  // is usable only when it is an object whose accepted and dismissed
+  // are objects holding the finite number count and whose rate is a
+  // finite number or null; anything else — the failed read's null,
+  // any status, a network error, a body of another shape — leaves
+  // the block out.
+  function driftAcceptanceValid(answer) {
+    if (!answer || typeof answer !== 'object') {
+      return false;
+    }
+    var accepted = answer.accepted;
+    var dismissed = answer.dismissed;
+    if (!accepted || typeof accepted !== 'object' || !isMoney(accepted.count)) {
+      return false;
+    }
+    if (!dismissed || typeof dismissed !== 'object' || !isMoney(dismissed.count)) {
+      return false;
+    }
+    return answer.rate === null || isMoney(answer.rate);
+  }
+
+  // The block's lines, built node by node with textContent — no API
+  // value goes through innerHTML — in order: the measurement line
+  // ("No reorder-point decisions measured yet." while decided is 0,
+  // otherwise "Recommendation accepted in <accepted> of <decided>
+  // decided rows (<pct>%)" with pct = round(100 * accepted /
+  // decided), and ", <mpct>% of the money at stake" with mpct =
+  // round(100 * money_rate) while money_rate is a finite number) and
+  // the direction line only while decided is above 0 ("Raises <a> of
+  // <n>" for the raise bucket, "Cuts <a> of <n>" for the lower
+  // bucket, each part only while its bucket is an object holding the
+  // finite numbers accepted and dismissed and n = accepted +
+  // dismissed is above 0, joined by " · "; the line is left out
+  // when neither part is left). Every number goes through countLabel,
+  // whole with thousands separators. The block reuses the other
+  // cards' blocks' ov-proposals classes, so the styles come from the
+  // same rules.
+  function driftAcceptanceBlock(answer) {
+    var accepted = answer.accepted.count;
+    var dismissed = answer.dismissed.count;
+    var decided = accepted + dismissed;
+
+    var block = document.createElement('div');
+    block.className = 'ov-proposals';
+    block.setAttribute('data-testid', 'ov-drift-acceptance');
+
+    var line = document.createElement('p');
+    line.className = 'ov-proposals-line';
+    line.setAttribute('data-testid', 'ov-drift-acceptance-line');
+    if (decided > 0) {
+      var pct = Math.round((100 * accepted) / decided);
+      var text =
+        'Recommendation accepted in ' +
+        countLabel(accepted) +
+        ' of ' +
+        countLabel(decided) +
+        ' decided rows (' +
+        countLabel(pct) +
+        '%)';
+      if (isMoney(answer.money_rate)) {
+        text +=
+          ', ' +
+          countLabel(Math.round(100 * answer.money_rate)) +
+          '% of the money at stake';
+      }
+      line.textContent = text;
+    } else {
+      line.textContent = 'No reorder-point decisions measured yet.';
+    }
+    block.appendChild(line);
+
+    if (decided > 0) {
+      var parts = [];
+      [
+        { key: 'raise', label: 'Raises' },
+        { key: 'lower', label: 'Cuts' },
+      ].forEach(function (bucketMeta) {
+        var bucket = answer[bucketMeta.key];
+        if (
+          !bucket ||
+          typeof bucket !== 'object' ||
+          !isMoney(bucket.accepted) ||
+          !isMoney(bucket.dismissed)
+        ) {
+          return;
+        }
+        var total = bucket.accepted + bucket.dismissed;
+        if (total <= 0) {
+          return;
+        }
+        parts.push(
+          bucketMeta.label +
+            ' ' +
+            countLabel(bucket.accepted) +
+            ' of ' +
+            countLabel(total)
+        );
+      });
+      if (parts.length) {
+        var direction = document.createElement('p');
+        direction.className = 'ov-proposals-kinds';
+        direction.setAttribute('data-testid', 'ov-drift-acceptance-direction');
+        direction.textContent = parts.join(' \u00b7 ');
+        block.appendChild(direction);
+      }
     }
 
     return block;

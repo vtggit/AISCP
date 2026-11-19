@@ -8,6 +8,16 @@ quantities (``OnHandPostgresRepository``), the item-site unit costs
 calls ``app.recommend.supplier_performance.supplier_performance``
 once; it writes nothing.
 
+The stale window, the lateness and the stockout projection run off
+the resolved ``as_of`` — the server's current date when the caller
+supplies none. An explicit ``as_of`` goes to the recommendations read
+and the supplier performance call as well; with none supplied they
+keep their own defaults — the recommendations read with
+``recommendations_for_all``'s default, the shared default as-of
+(``app.stats.demand.default_as_of``), so a demand window never counts
+days the feed has not delivered yet, and the supplier performance call
+with its own default, today.
+
 Every open line with ``open_units`` above 0 is considered. A line
 promised more than 90 days before ``as_of`` (the same window
 ``app.recommend.stockout`` uses) is stale, and a line whose
@@ -252,10 +262,16 @@ def expedite_list(as_of: date | None = None) -> dict:
     See the module docstring for the line selection, the
     ``expected_on`` rule, the two flags and the ranking. ``as_of`` is
     the server's current date when None; one after today raises
-    ``ValueError``. The four reads, the suppliers read and the
-    supplier performance call each happen exactly once, and nothing
-    is written.
+    ``ValueError``. The stale window, the lateness and the stockout
+    projection run off it either way; an explicit ``as_of`` goes to
+    the recommendations read and the supplier performance call as
+    well, while with none supplied the recommendations read keeps
+    ``recommendations_for_all``'s default (the shared default as-of)
+    and the supplier performance call keeps its own default, today.
+    The four reads, the suppliers read and the supplier performance
+    call each happen exactly once, and nothing is written.
     """
+    explicit_as_of = as_of is not None
     if as_of is None:
         as_of = _today()
     else:
@@ -273,12 +289,24 @@ def expedite_list(as_of: date | None = None) -> dict:
         (row["item_code"], row["site_code"]): row
         for row in _item_site_repo.list_rows(10**9, 0)
     }
+    if explicit_as_of:
+        # The caller's date goes to both reads, as before.
+        recommendations = recommendations_for_all(as_of)
+        performance = supplier_performance(as_of=as_of)
+    else:
+        # No caller date: the recommendations read keeps its own
+        # default (the shared default as-of, so a demand window never
+        # counts days the feed has not delivered yet) and the
+        # supplier performance call keeps its own default, today,
+        # while the stale window, the lateness and the stockout
+        # projection run off today.
+        recommendations = recommendations_for_all()
+        performance = supplier_performance()
     ok_recommendations = {
         (row["item_code"], row["site_code"]): row
-        for row in recommendations_for_all(as_of)
+        for row in recommendations
         if isinstance(row, dict) and row.get("status") == "ok"
     }
-    performance = supplier_performance(as_of=as_of)
     suppliers_by_code = {
         entry["supplier_code"]: entry
         for entry in performance.get("suppliers", [])

@@ -4421,6 +4421,61 @@
         }
       }
     },
+    "/api/drift/decisions/acceptance": {
+      "get": {
+        "tags": [
+          "planner-decisions"
+        ],
+        "summary": "Decision Acceptance",
+        "description": "The acceptance view over every item-site's current decision.\n\nOpen to any authenticated user (the same guard as\n``GET /api/drift/decisions/summary``) and a pure read: it answers\nwithout writing anything.  It reads the current decision of every\nitem-site (the latest by decided_at, id breaking ties) with one\ncall to ``current_decisions()``.\n\n``accepted`` and ``dismissed`` are the current decisions with that\ndecision: ``count`` is their number, ``money_at_stake`` sums their\nstored ``money_at_stake`` (a null adds nothing) and\n``without_money`` counts the nulls.  ``snoozed`` is ``{count}``\nover the current snoozed decisions.\n\n``rate`` is ``accepted.count / (accepted.count +\ndismissed.count)`` rounded to 4 decimals, null when both counts\nare 0.  ``money_rate`` is ``accepted.money_at_stake /\n(accepted.money_at_stake + dismissed.money_at_stake)`` rounded to\n4 decimals, null when that sum is 0.\n\nA decision is a raise when its stored ``current_reorder_point`` is\nnull or below its ``recommended_reorder_point_units``, and a cut\n(``lower``) when the stored value is above the recommended one.\nA decision whose two values are equal counts in neither\ndirection, only in the totals, and a snoozed decision counts in\nneither.",
+        "operationId": "decision_acceptance_api_drift_decisions_acceptance_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionAcceptance"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/purchase-budgets": {
       "get": {
         "tags": [
@@ -14334,6 +14389,59 @@
         ],
         "title": "DdmrpZoneRow",
         "description": "One designated item-site's DDMRP buffer zones.\n\nThe zone fields (those of ``app.ddmrp.zones.buffer_zones``) are\nnull for a row whose status is not \"ok\".  ``adu_base`` is the\nunadjusted ADU and ``adjustment_factor`` the active adjustment\nfactor on the as-of date (1.0 when no adjustment window covers\nit); ``adu`` is ``adu_base`` times that factor, and the zone\nfields are the ``buffer_zones`` of the adjusted ADU."
+      },
+      "DecisionAcceptance": {
+        "properties": {
+          "accepted": {
+            "$ref": "#/components/schemas/app__api__planner_decisions___MoneyBucket"
+          },
+          "dismissed": {
+            "$ref": "#/components/schemas/app__api__planner_decisions___MoneyBucket"
+          },
+          "snoozed": {
+            "$ref": "#/components/schemas/_CountBucket"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          },
+          "money_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Money Rate"
+          },
+          "raise": {
+            "$ref": "#/components/schemas/_DirectionBucket"
+          },
+          "lower": {
+            "$ref": "#/components/schemas/_DirectionBucket"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "dismissed",
+          "snoozed",
+          "rate",
+          "money_rate",
+          "raise",
+          "lower"
+        ],
+        "title": "DecisionAcceptance",
+        "description": "The response of GET /api/drift/decisions/acceptance.\n\n``accepted`` and ``dismissed`` are the current decisions with that\ndecision (count, summed stored ``money_at_stake``, and the count\nof the null snapshots), ``snoozed`` is ``{count}``, ``rate`` and\n``money_rate`` are the accepted share of the counts and of the\nmoney (each rounded to 4 decimals, null when its denominator is\n0), and ``raise`` (the stored ``current_reorder_point`` is null or\nbelow the recommended value) and ``lower`` (the stored value above\nit) each carry the accepted and dismissed counts of that\ndirection."
       },
       "DecisionBody": {
         "properties": {
@@ -25658,6 +25766,25 @@
         ],
         "title": "_CountBucket",
         "description": "A summary bucket that only carries a count."
+      },
+      "_DirectionBucket": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "dismissed": {
+            "type": "integer",
+            "title": "Dismissed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "dismissed"
+        ],
+        "title": "_DirectionBucket",
+        "description": "One raise/lower direction bucket.\n\n``accepted`` counts the current accepted decisions in the\ndirection and ``dismissed`` the current dismissed ones.  A\ndecision whose stored ``current_reorder_point`` equals its\n``recommended_reorder_point_units`` counts in neither direction,\nand a snoozed decision counts in none."
       },
       "app__api__decision_summary___MoneyBucket": {
         "properties": {

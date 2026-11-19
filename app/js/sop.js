@@ -41,6 +41,27 @@
 // Every percentage is the value times 100 to one decimal and every
 // value is escaped.
 //
+// The sign-off record line
+// ([data-testid="sop-signoff-record"]), in the status card directly
+// after the proposal line — or where the proposal line would be
+// when there is none — reads how many of the sign-offs compared
+// with a proposal were signed while proposed: the screen sends
+// GET /api/sop/signoffs/proposals through app/js/api.js once with
+// each load of the review, under its own request-sequence guard, so
+// only the newest answer renders, and a sign-out advances the guard
+// and clears the answer. A usable body is an object whose signoffs,
+// proposed, not_proposed and without_proposal are finite numbers
+// of the number type — a numeric string is not a finite number; a
+// failed read (any status or a network error) or an unusable body
+// leaves the line out and the screen renders exactly as before.
+// While proposed + not_proposed is above 0 the line reads "Signed
+// while proposed: <proposed> of <proposed + not_proposed> compared
+// sign-offs", with every number a whole number with thousands
+// separators; with proposed + not_proposed at 0 it reads "No
+// sign-off compared with a proposal yet." It is set as
+// textContent, never as markup, the colours come only from
+// tokens.css, and at 390x844 the page does not scroll sideways.
+//
 // The sign-off control under the status line: the view sends
 // GET /api/auth/me once per activation, and the viewer is an admin
 // when user.roles includes "admin", the way the Aggregate view reads
@@ -286,6 +307,7 @@
   var SCENARIOS_PATH = '/api/sop/scenarios';
   var SIGNALS_PATH = '/api/demand-signals';
   var FORECAST_SIGNALS_PATH = '/api/forecast/accuracy/signals';
+  var PROPOSAL_STATS_PATH = '/api/sop/signoffs/proposals';
   var ROOT_ID = 'sop-root';
   var VIEW_ID = 'view-sop';
   var APP_ID = 'app';
@@ -369,6 +391,7 @@
     signalsLoaded: false, // an answer has landed at least once
     signalsPending: false, // a demand-signals request is out
     forecastSignals: null, // the newest forecast-signals answer (fetched with the review)
+    proposalStats: null, // the newest usable signoffs-proposals answer (fetched with the review)
   };
 
   // The request-sequence guard: only the newest fetch's answer renders.
@@ -406,6 +429,10 @@
   // it, so an answer arriving after sign-out is discarded.
   var forecastSignalsSeq = 0;
 
+  // The signoffs-proposals request's own sequence: sign-out
+  // advances it, so an answer arriving after sign-out is discarded.
+  var proposalStatsSeq = 0;
+
   /* ------------------------------ helpers ------------------------------ */
 
   function esc(value) {
@@ -436,6 +463,14 @@
 
   function isUsable(value) {
     return isFinite(asNumber(value));
+  }
+
+  // A finite number of the number type: a numeric string ("4") is
+  // not a finite number, and neither is NaN or Infinity. The
+  // signoffs-proposals gate and the record line's text require the
+  // number type.
+  function isFiniteNumber(value) {
+    return typeof value === 'number' && isFinite(value);
   }
 
   // Whole units with separators (221273 -> "221,273"); an em dash
@@ -578,6 +613,7 @@
     state.error = null;
     render();
     loadForecastSignals(); // once with each load of the review: its own guard
+    loadProposalStats(); // once with each load of the review: its own guard
     global.Api.get(LIST_PATH + '?months=' + encodeURIComponent(state.months)).then(
       function (payload) {
         if (mySeq !== seq) {
@@ -631,6 +667,52 @@
           return;
         }
         state.forecastSignals = null;
+        render();
+      }
+    );
+  }
+
+  // A usable signoffs-proposals body: an object whose signoffs,
+  // proposed, not_proposed and without_proposal are finite numbers
+  // of the number type — a numeric string is not a finite number;
+  // anything else is unusable and leaves the line out.
+  function usableProposalStats(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return false;
+    }
+    return (
+      isFiniteNumber(payload.signoffs) &&
+      isFiniteNumber(payload.proposed) &&
+      isFiniteNumber(payload.not_proposed) &&
+      isFiniteNumber(payload.without_proposal)
+    );
+  }
+
+  // How the sign-offs compared with a proposal stand:
+  // GET /api/sop/signoffs/proposals once with each load of the
+  // review, through app/js/api.js, under its own request-sequence
+  // guard so only the newest answer renders. The answer is cleared
+  // while a request is out — nothing to say while loading — and on
+  // a failed read (any status or a network error) or an unusable
+  // body, so the line is left out and the screen renders exactly as
+  // before in every one of those cases.
+  function loadProposalStats() {
+    proposalStatsSeq += 1;
+    var mySeq = proposalStatsSeq;
+    state.proposalStats = null;
+    global.Api.get(PROPOSAL_STATS_PATH).then(
+      function (payload) {
+        if (mySeq !== proposalStatsSeq) {
+          return; // signed out in the meantime: the answer is discarded
+        }
+        state.proposalStats = usableProposalStats(payload) ? payload : null;
+        render();
+      },
+      function () {
+        if (mySeq !== proposalStatsSeq) {
+          return;
+        }
+        state.proposalStats = null;
         render();
       }
     );
@@ -998,6 +1080,12 @@
         noteEl.value = state.signoffNote;
       }
     }
+    // The record line's text is set as textContent: the placeholder
+    // in the status card carries no text of its own.
+    var recordEl = rootEl.querySelector('[data-testid="sop-signoff-record"]');
+    if (recordEl) {
+      recordEl.textContent = signoffRecordText();
+    }
   }
 
   function shellHtml() {
@@ -1075,6 +1163,7 @@
       '<p class="sop-status" data-testid="sop-status">' + esc(status) + '</p>' +
       signoffHtml +
       signoffProposalHtml(data) +
+      signoffRecordHtml() +
       signoffOpenHtml(data) +
       '</section>'
     );
@@ -1144,6 +1233,46 @@
       '<p class="sop-signoff-proposal" data-testid="sop-signoff-proposal">' +
       esc(notProposedText) + '</p>'
     );
+  }
+
+  // The sign-off record line: how many of the sign-offs compared
+  // with a proposal were signed while proposed, from the answer
+  // fetched with the review. It sits in the status card directly
+  // after the proposal line — or where the proposal line would be
+  // when there is none. The placeholder carries no text: render()
+  // sets it as textContent, so no answer value ever reaches the
+  // markup. With no usable answer the line is not in the page.
+  function signoffRecordHtml() {
+    if (!state.proposalStats) {
+      return '';
+    }
+    return '<p class="sop-signoff-record" data-testid="sop-signoff-record"></p>';
+  }
+
+  // The record line's text: while proposed + not_proposed is above
+  // 0 it reads "Signed while proposed: <proposed> of <proposed +
+  // not_proposed> compared sign-offs"; with proposed + not_proposed
+  // at 0 it reads "No sign-off compared with a proposal yet." Every
+  // number is a whole number with thousands separators; the figures
+  // are read as finite numbers of the number type, so a numeric
+  // string is not a figure of the line.
+  function signoffRecordText() {
+    var stats = state.proposalStats;
+    var proposed = isFiniteNumber(stats.proposed) ? stats.proposed : NaN;
+    var notProposed = isFiniteNumber(stats.not_proposed)
+      ? stats.not_proposed
+      : NaN;
+    var compared = proposed + notProposed;
+    if (compared > 0) {
+      return (
+        'Signed while proposed: ' +
+        wholeNumber(proposed) +
+        ' of ' +
+        wholeNumber(compared) +
+        ' compared sign-offs'
+      );
+    }
+    return 'No sign-off compared with a proposal yet.';
   }
 
   // The forecast line: the overall wape leads; the one-month-ahead
@@ -2011,6 +2140,7 @@
     scenariosSeq += 1; // ... and so does any comparison answer
     signalsSeq += 1; // ... and so does any demand-signals answer
     forecastSignalsSeq += 1; // ... and so does any forecast-signals answer
+    proposalStatsSeq += 1; // ... and so does any signoffs-proposals answer
     isAdmin = null;
     state.data = null;
     state.loading = false;
@@ -2035,6 +2165,7 @@
     state.signalsLoaded = false;
     state.signalsPending = false;
     state.forecastSignals = null;
+    state.proposalStats = null;
     render();
   }
 

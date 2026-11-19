@@ -366,6 +366,7 @@ const EXPECTED_API_PATHS = new Set([
   '/api/forecast/overrides/proposals',
   '/api/sop/review',
   '/api/forecast/accuracy/signals',
+  '/api/sop/signoffs/proposals',
 ]);
 
 // Mock every /api/* call the app makes, the way

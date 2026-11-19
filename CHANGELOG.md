@@ -321,9 +321,9 @@ code is the authority for details.
   query, so `GET /api/exceptions` answers faster (#1418).
 - The exceptions list copies the rows it reads more cheaply, so `GET /api/exceptions` answers
   faster again; the rows it answers are unchanged (#1420).
-- The expedite list now reads its recommendations at the shared default as-of when no as-of is
-  supplied, so one exceptions call computes them once while its lateness still counts from today
-  (#1424).
+- The expedite list takes each item's daily demand from the last day the feed has delivered, not
+  from today, so days not delivered yet no longer count as zero demand; lateness still counts from
+  today, and `GET /api/exceptions` computes the recommendations once (#1424).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

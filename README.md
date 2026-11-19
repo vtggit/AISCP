@@ -164,6 +164,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   planned orders the recommended policy would place (`backend/app/aggregate/projection.py`).
 - Spend against a monthly purchase budget, and deferral candidates for over-budget months
   (`backend/app/aggregate/spend.py`, `deferral.py`, `backend/app/api/purchase_budgets.py`).
+- Proposed monthly purchase budgets: `GET /api/purchase-budgets/proposals` proposes each month's
+  budget as the plan's committed and planned spend plus the `sop.budget_proposal_margin` share
+  (5% by default), rounded up to three significant figures, beside the stored budget
+  (`backend/app/api/purchase_budgets.py`).
 - The monthly S&OP review: the horizon's demand, supply, planned receipts, projected on-hand
   and spend by month, with forecast accuracy, demand signals and saved scenarios against the
   plan, on one page. An admin signs the month off, and the sign-off stores the figures agreed
@@ -425,7 +429,7 @@ any write to an ERP. Personal settings and saved scenarios are open to any signe
 | Scenarios | `/api/scenarios` |
 | Aggregate | `/api/aggregate` (projection, spend, deferrals, release, release audit, releases) |
 | S&OP | `/api/sop` (review, scenarios, sign-offs) |
-| Purchase budgets | `/api/purchase-budgets` |
+| Purchase budgets | `/api/purchase-budgets` (also the proposals) |
 | Supply plan | `/api/supply-plan` (plan, summary, top-ups, release, transfers, transfer release and its audit), `/api/supplier-order-minimums` |
 | Suppliers | `/api/suppliers/performance`, `/api/supplier-risk`, `/api/second-sources`, `/api/expedite` |
 | DDMRP | `/api/ddmrp` (buffers, zones, plan, candidates, adjustments, performance) |

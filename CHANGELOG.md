@@ -157,6 +157,9 @@ code is the authority for details.
 - The S&OP status card shows the sign-off proposal, saying whether the month is proposed for
   sign-off and, when it is not, which value figure moved most since the last sign-off or that none
   can be compared (#1407).
+- Each month's proposed purchase budget (`GET /api/purchase-budgets/proposals`): the plan's
+  committed and planned spend plus the `sop.budget_proposal_margin` share (5% by default),
+  rounded up to three significant figures, beside the stored budget (#1414).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

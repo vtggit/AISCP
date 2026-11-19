@@ -216,7 +216,6 @@ itself are unchanged either way.
 from __future__ import annotations
 
 import contextvars
-import copy
 import math
 import os
 import statistics
@@ -224,6 +223,7 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 
 from app.db.connection import get_cursor
+from app.db.read_cache import copy_tree
 from app.forecast.basis import _window_days, forecast_demand_for
 from app.forecast.history import history_for_all, history_for_pair
 from app.forecast.overrides import counted_overrides
@@ -304,10 +304,10 @@ def recommendations_memo():
 
     Inside, ``recommendations_for_all`` computes its rows once per
     distinct resolved as-of and answers every later call with the
-    same as-of in the same context with a deep copy of those rows —
-    a caller that changes its rows therefore never changes another
-    caller's.  The memo is cleared when the context manager exits,
-    including on an exception.  Nested use is allowed and reuses the
+    same as-of in the same context with a copy of those rows built
+    by ``copy_tree`` — a caller that changes its rows therefore
+    never changes another caller's.  The memo is cleared when the
+    context manager exits, including on an exception.  Nested use is allowed and reuses the
     outer memo.  Outside the context manager,
     ``recommendations_for_all`` behaves exactly as without it,
     computing on every call.
@@ -1780,23 +1780,24 @@ def recommendations_for_all(as_of: date | None = None) -> list[dict]:
     Inside ``recommendations_memo`` the rows of the first call for a
     resolved as-of are memoized for the rest of the context: every
     later call for the same as-of in the same context answers with a
-    deep copy of those rows without recomputing (a caller changing its
-    rows therefore never changes another caller's), and calls for
-    different as-ofs never share a computation.  Outside the memo the
-    function computes on every call, exactly as before.
+    copy of those rows built by ``copy_tree`` without recomputing (a
+    caller changing its rows therefore never changes another
+    caller's), and calls for different as-ofs never share a
+    computation.  Outside the memo the function computes on every
+    call, exactly as before.
     """
     resolved_as_of = _resolve_as_of(as_of)
     memo = _recommendations_memo.get()
     if memo is not None:
         cached = memo.get(resolved_as_of)
         if cached is not None:
-            return copy.deepcopy(cached)
+            return copy_tree(cached)
     results = _compute_recommendations(resolved_as_of)
     if memo is not None:
         # The memo keeps its own copy: the caller's rows are the
         # freshly computed ones, and mutating them never changes the
         # memo's or another caller's rows.
-        memo[resolved_as_of] = copy.deepcopy(results)
+        memo[resolved_as_of] = copy_tree(results)
     return results
 
 
@@ -1811,8 +1812,8 @@ def _compute_recommendations(resolved_as_of: date) -> list[dict]:
     classes and the forecast basis, and ``_attach_loaded`` for every
     item-site.  Inside a ``recommendations_memo`` context it runs
     once per distinct resolved as-of (the memo answers later
-    same-as-of calls with a deep copy); outside the memo it runs once
-    per call.
+    same-as-of calls with a copy built by ``copy_tree``); outside the
+    memo it runs once per call.
     """
     stored_settings = _stored_system_settings()
     service_level = _service_level_for(stored_settings)

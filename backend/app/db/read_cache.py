@@ -20,8 +20,9 @@ block's duration — a function decorated with ``cached_read`` (a
 module function) or ``cached_read_method`` (a method, ``self`` left
 out of the key so the instances of one repository class share the
 entries) answers every repeated call with the same arguments from
-the first call's result — a ``copy.deepcopy`` of it, so a caller
-that changes what it was given changes nothing another caller sees —
+the first call's result — a copy built by ``copy_tree``, so a
+caller that changes what it was given changes nothing another
+caller sees —
 and runs the function itself on the first call for an argument
 combination.  The key of a call is the function's module and
 qualified name plus its positional and keyword arguments, the
@@ -40,6 +41,8 @@ from __future__ import annotations
 
 import contextvars
 import copy
+import datetime
+import decimal
 import functools
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -61,8 +64,8 @@ def read_once() -> Generator[None, None, None]:
     While the block is active the cache is held in the ``_read_cache``
     context variable: a decorated function answers every repeated
     call with the same arguments from the first call's result, a
-    deep copy of it, and runs the function itself on the first call
-    for an argument combination.  A nested block shares the outer
+    copy built by ``copy_tree``, and runs the function itself on
+    the first call for an argument combination.  A nested block shares the outer
     block's cache, the cache is gone when the outermost block exits
     (an exception included), and outside any block a decorated
     function calls through, exactly as without this module.
@@ -90,16 +93,62 @@ def _key(func, args: tuple, kwargs: dict) -> tuple:
     )
 
 
+def copy_tree(value):
+    """A copy of the tree a cached read answers.
+
+    For the trees the cached reads answer — the read cache and the
+    recommendations memo — which hold no shared or cyclic
+    references: a value whose type is exactly ``dict`` becomes a new
+    ``dict`` with the same keys, each value copied by ``copy_tree``,
+    one whose type is exactly ``list`` a new ``list`` and one whose
+    type is exactly ``tuple`` a new ``tuple``, each item copied by
+    ``copy_tree``, and one whose type is exactly ``set`` or
+    ``frozenset`` a new one of the same type with the same items.
+    The immutable scalars — ``None``, ``bool``, ``int``, ``float``,
+    ``str``, ``bytes``, ``decimal.Decimal``, ``datetime.date``,
+    ``datetime.datetime``, ``datetime.time`` and
+    ``datetime.timedelta`` — are returned as they are.  Any other
+    value, a subclass of those containers included, is copied with
+    ``copy.deepcopy``.
+    """
+    if type(value) is dict:
+        return {key: copy_tree(item) for key, item in value.items()}
+    if type(value) is list:
+        return [copy_tree(item) for item in value]
+    if type(value) is tuple:
+        return tuple(copy_tree(item) for item in value)
+    if type(value) in (set, frozenset):
+        return type(value)(copy_tree(item) for item in value)
+    if value is None or isinstance(
+        value,
+        (
+            bool,
+            int,
+            float,
+            str,
+            bytes,
+            decimal.Decimal,
+            datetime.date,
+            datetime.datetime,
+            datetime.time,
+            datetime.timedelta,
+        ),
+    ):
+        return value
+    return copy.deepcopy(value)
+
+
 def _cached_call(func, self, args: tuple, kwargs: dict):
     """One call of a decorated function, through the active cache.
 
     Outside any ``read_once()`` block, or with any argument that is
     not hashable, the call goes straight to the function, uncached.
     Inside, the first call for an argument combination runs the
-    function and stores a deep copy of its result, and every later
-    call for it answers a deep copy of the stored result — a caller
-    that changes what it was given changes nothing another caller
-    sees.  A call that raises stores nothing, so the next call calls
+    function and stores a copy of its result built by
+    ``copy_tree``, and every later call for it answers a copy of
+    the stored result built with ``copy_tree`` — a caller that
+    changes what it was given changes nothing another caller sees.
+    A call that raises stores nothing, so the next call calls
     through.
     """
     if self is None:
@@ -118,12 +167,12 @@ def _cached_call(func, self, args: tuple, kwargs: dict):
     key = _key(func, args, kwargs)
     try:
         if key in cache:
-            return copy.deepcopy(cache[key])
+            return copy_tree(cache[key])
     except TypeError:
         # An unhashable argument: this call is never cached.
         return call()
     result = call()
-    cache[key] = copy.deepcopy(result)
+    cache[key] = copy_tree(result)
     return result
 
 
@@ -134,8 +183,9 @@ def cached_read(func):
     answers every repeated call with the same positional and keyword
     arguments — the keyword arguments in sorted order, the key the
     function's module and qualified name plus the arguments — from
-    the first call's result, a ``copy.deepcopy`` of it, and runs the
-    function itself on the first call for an argument combination.
+    the first call's result, a copy built by ``copy_tree``, and
+    runs the function itself on the first call for an argument
+    combination.
     A call with any argument that is not hashable calls through,
     uncached, and a call that raises stores nothing, so the next call
     calls through again.  Outside any block the decorated function
@@ -155,8 +205,9 @@ def cached_read_method(method):
     Like ``cached_read`` for a method, with ``self`` left out of the
     key: the instances of one repository class share the entries, so
     every instance answers a repeated call with the same arguments
-    from the first call's result, a ``copy.deepcopy`` of it, while a
-    distinct method of another class keeps its own entries.  A call
+    from the first call's result, a copy built by ``copy_tree``,
+    while a distinct method of another class keeps its own
+    entries.  A call
     with any argument that is not hashable calls through, uncached,
     and a call that raises stores nothing, so the next call calls
     through again.  Outside any ``read_once()`` block the decorated

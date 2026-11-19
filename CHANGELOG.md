@@ -52,6 +52,9 @@ code is the authority for details.
 - The Overview's Excess and dead stock card now shows how proposed actions fared, with the
   accepted decisions that took an action, by action kind, and accepted decisions before proposals
   were kept (#1338).
+- A read-only route, `GET /api/drift/decisions/acceptance`, for any authenticated user, answers how
+  often current planner decisions accept the recommended reorder point, with accepted, dismissed
+  and snoozed counts, money at stake, acceptance rates, and raise/lower direction counts (#1412).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

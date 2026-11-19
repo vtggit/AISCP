@@ -160,9 +160,9 @@ code is the authority for details.
 - Each month's proposed purchase budget (`GET /api/purchase-budgets/proposals`): the plan's
   committed and planned spend plus the `sop.budget_proposal_margin` share (5% by default),
   rounded up to three significant figures, beside the stored budget (#1414).
-- The purchasing budget card on Settings now shows each month's proposed budget beside the stored
-  rows, with the proposed and total spend amounts and, for an admin, a Use button that fills the
-  set form without sending a request (#1430).
+- The purchasing budget card on Settings now shows each month's proposed budget and the month's
+  spend beside the stored rows and, for an admin, a Use button that fills the set form without
+  sending a request (#1430).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

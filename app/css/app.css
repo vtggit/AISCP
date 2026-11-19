@@ -2600,6 +2600,33 @@ input {
   color: var(--color-ink-3);
 }
 
+/* The proposals section, below the stored rows (or the empty note):
+   the note and one row per used month. The rows reuse the stored
+   rows' column template — the month, the amount and the line cells —
+   so the cells inherit the same widths and the same narrow-width
+   stacking, and the page never scrolls sideways for them. */
+.purchase-budget-proposals {
+  margin-top: var(--space-4);
+}
+
+.purchase-budget-proposals-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+
+.purchase-budget-proposal {
+  margin-top: var(--space-2);
+}
+
+.purchase-budget-use {
+  flex: 0 0 auto;
+  /* The free space of the line gathers before the Use, so it sits at
+     the right end of the same line as the values, as the Delete does. */
+  margin-left: auto;
+}
+
 /* Narrow: the header is hidden and the row stacks its values
    left-aligned, the Delete under them. */
 @media (max-width: 900px) {
@@ -2609,6 +2636,10 @@ input {
   }
 
   .purchase-budget-delete {
+    margin-left: 0;
+  }
+
+  .purchase-budget-use {
     margin-left: 0;
   }
 

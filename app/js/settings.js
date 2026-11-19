@@ -78,7 +78,36 @@
 // /api/purchase-budgets/{month} and reloads the list. For a non-admin
 // the card is read-only — no form and no Delete — and reads "Only an
 // admin can change this." A failed load shows an inline error with a
-// Retry. Below it a fifth card — "Intermittent and lumpy items"
+// Retry. Below the stored rows (or the empty note), the proposals
+// section ([data-testid="purchase-budget-proposals"]) shows the
+// plan's proposed budgets, read from
+// GET /api/purchase-budgets/proposals beside the card's other load
+// reads: the note
+// ([data-testid="purchase-budget-proposals-note"]) reads "Proposed
+// from the plan's committed and planned spend, plus
+// <margin times 100, at most one decimal>%" and one row per used
+// month in the answer's order
+// ([data-testid="purchase-budget-proposal", with data-month]) — the
+// month formatted like the stored rows', "Proposed
+// $<proposed_budget>" and "Spend $<total_spend>" in the stored
+// rows' amount format — reusing the stored rows' column template
+// where it fits, so at 390x844 the page does not scroll sideways.
+// For an admin each row also carries a Use button
+// ([data-testid="purchase-budget-use"]) that sets the set form's
+// month and amount to the row's month and proposed budget, sends no
+// request and leaves the form showing them; for a non-admin there is
+// no Use button. The answer is usable only when it is an object
+// whose margin is a finite number and whose months is an array; a
+// month entry is used only when its month is a YYYY-MM string and
+// its proposed_budget and total_spend are finite numbers — any other
+// entry is skipped, and with no entry left the section is left out.
+// A failed read (any status or a network error) or an unusable body
+// leaves the proposals out and the card renders exactly as before:
+// the read runs under its own catch, which answers null, beside the
+// roles read and the budgets read, and it is re-read with every
+// reload of the card, after a save or a delete too. Below it a fifth
+// card —
+// "Intermittent and lumpy items"
 // ([data-testid="intermittent-impact"]) — rendered under #settings-root,
 // after the purchasing budget card, shows the dollar impact of the
 // empirical reorder points, fetched separately from
@@ -264,6 +293,19 @@
 //     target_code}) — an admin stores one mapping;
 //   * DELETE /api/erp-mappings/{id} — an admin removes one;
 //   * GET /api/purchase-budgets — the stored per-month budgets;
+//   * GET /api/purchase-budgets/proposals — the proposed budgets of
+//     the projected spend horizon (the margin and one entry per
+//     month), the purchasing budget card's proposals read, sent
+//     beside the card's other load reads (the roles read and the
+//     budgets read) and re-sent on every reload of the card, after a
+//     save or a delete too; it has its own catch that answers null,
+//     so a failed read (any status or a network error) or an
+//     unusable body leaves the proposals out and the card renders
+//     as before; a usable body is an object whose margin is a finite
+//     number and whose months is an array, a month entry used only
+//     when its month is a YYYY-MM string and its proposed_budget and
+//     total_spend are finite numbers, any other entry skipped, and
+//     with no entry left the proposals left out;
 //   * PUT /api/purchase-budgets/{month} (body {"amount": <number>}) —
 //     an admin stores one month's budget;
 //   * DELETE /api/purchase-budgets/{month} — an admin removes one;
@@ -314,6 +356,7 @@
   var LIST_PATH = '/api/settings';
   var MAPPINGS_PATH = '/api/erp-mappings';
   var BUDGETS_PATH = '/api/purchase-budgets';
+  var PROPOSALS_PATH = '/api/purchase-budgets/proposals';
   var IMPACT_PATH = '/api/recommendations/intermittent-impact';
   var CURVE_PATH = '/api/service-levels/curve';
   var SUGGESTION_PATH = '/api/service-levels/suggestion';
@@ -502,16 +545,19 @@
     };
   }
 
-  // The purchasing budget card's state: the rows as served, whether
-  // the viewer is an admin (the same GET /api/auth/me roles check),
-  // one in-flight flag shared by the save and the delete, and the set
-  // form's draft — kept across re-loads so a view switch does not
-  // lose what the planner typed.
+  // The purchasing budget card's state: the rows as served, the
+  // validated proposals answer (null while the read is out, after a
+  // failed or unusable read and after a reset), whether the viewer is
+  // an admin (the same GET /api/auth/me roles check), one in-flight
+  // flag shared by the save and the delete, and the set form's draft
+  // — kept across re-loads so a view switch does not lose what the
+  // planner typed.
   function newBudgetsState() {
     return {
       loading: false,
       error: null,
       rows: [],
+      proposals: null,
       isAdmin: false,
       busy: false,
       saveError: null,
@@ -1585,6 +1631,64 @@
     return 'Updated';
   }
 
+  // One month entry of the proposals answer, as used: the month a
+  // YYYY-MM string (the API's own month pattern) and the proposed
+  // budget and the total spend finite numbers. Any other entry is
+  // skipped by the caller.
+  function isProposalMonth(value) {
+    return (
+      !!value &&
+      typeof value === 'object' &&
+      typeof value.month === 'string' &&
+      /^\d{4}-(0[1-9]|1[0-2])$/.test(value.month) &&
+      typeof value.proposed_budget === 'number' &&
+      isFinite(value.proposed_budget) &&
+      typeof value.total_spend === 'number' &&
+      isFinite(value.total_spend)
+    );
+  }
+
+  // A usable proposals answer: an object whose margin is a finite
+  // number and whose months is an array, with at least one usable
+  // month entry. Anything less answers null — the card renders as
+  // before, with no proposals section.
+  function usableProposals(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return null;
+    }
+    if (typeof body.margin !== 'number' || !isFinite(body.margin)) {
+      return null;
+    }
+    if (!Array.isArray(body.months)) {
+      return null;
+    }
+    var months = [];
+    for (var i = 0; i < body.months.length; i++) {
+      var entry = body.months[i];
+      if (isProposalMonth(entry)) {
+        months.push({
+          month: entry.month,
+          proposed_budget: entry.proposed_budget,
+          total_spend: entry.total_spend,
+        });
+      }
+    }
+    if (months.length === 0) {
+      return null;
+    }
+    return { margin: body.margin, months: months };
+  }
+
+  // "5" for 0.05 and "12.5" for 0.125 — the margin as a percent with
+  // at most one decimal (no trailing .0).
+  function proposalMarginPercent(margin) {
+    var text = (margin * 100).toFixed(1);
+    if (text.charAt(text.length - 2) === '.' && text.charAt(text.length - 1) === '0') {
+      return text.slice(0, -2);
+    }
+    return text;
+  }
+
   function renderBudgetsCard() {
     var budgets = state.budgets;
     var card = el('article', 'card settings-card purchase-budgets-card');
@@ -1629,6 +1733,9 @@
     if (budgets.rows.length === 0) {
       card.appendChild(el('p', 'settings-row-note purchase-budgets-empty', BUDGETS_EMPTY_NOTE));
     }
+    if (budgets.proposals) {
+      card.appendChild(renderBudgetProposals(budgets.isAdmin));
+    }
     if (!budgets.isAdmin) {
       card.appendChild(el('p', 'settings-row-note', ADMIN_NOTE));
     }
@@ -1666,6 +1773,61 @@
       budgetRow.appendChild(deleteButton);
     }
     return budgetRow;
+  }
+
+  // The proposals section: the note and one row per used month, in
+  // the answer's order. Every node is built with textContent, so no
+  // answer value ever becomes an HTML string. It sits in the card
+  // after the stored rows (or the empty note) and before the
+  // non-admin note.
+  function renderBudgetProposals(isAdmin) {
+    var proposals = state.budgets.proposals;
+
+    var block = el('div', 'purchase-budget-proposals');
+    block.setAttribute('data-testid', 'purchase-budget-proposals');
+    var note = el(
+      'p',
+      'settings-row-note purchase-budget-proposals-note',
+      "Proposed from the plan's committed and planned spend, plus " +
+        proposalMarginPercent(proposals.margin) +
+        '%.'
+    );
+    note.setAttribute('data-testid', 'purchase-budget-proposals-note');
+    block.appendChild(note);
+    for (var i = 0; i < proposals.months.length; i++) {
+      block.appendChild(renderBudgetProposalRow(proposals.months[i], isAdmin));
+    }
+    return block;
+  }
+
+  // One proposals row, reusing the stored rows' column template where
+  // it fits: the month formatted like the stored rows', the proposed
+  // budget and the total spend in the stored rows' amount format, and
+  // — for an admin — the Use button where the Delete sits.
+  function renderBudgetProposalRow(entry, isAdmin) {
+    var budgets = state.budgets;
+
+    var proposalRow = el('div', 'settings-row purchase-budget-row purchase-budget-proposal');
+    proposalRow.setAttribute('data-testid', 'purchase-budget-proposal');
+    proposalRow.setAttribute('data-month', entry.month);
+
+    proposalRow.appendChild(el('span', 'purchase-budget-month', formatBudgetMonth(entry.month)));
+    proposalRow.appendChild(
+      el('span', 'purchase-budget-amount', 'Proposed ' + formatBudgetAmount(entry.proposed_budget))
+    );
+    proposalRow.appendChild(
+      el('span', 'purchase-budget-updated', 'Spend ' + formatBudgetAmount(entry.total_spend))
+    );
+
+    if (isAdmin) {
+      var useButton = el('button', 'btn btn-secondary purchase-budget-use', 'Use');
+      useButton.type = 'button';
+      useButton.setAttribute('data-testid', 'purchase-budget-use');
+      useButton.setAttribute('data-month', entry.month);
+      useButton.disabled = budgets.busy;
+      proposalRow.appendChild(useButton);
+    }
+    return proposalRow;
   }
 
   function renderBudgetsForm() {
@@ -1747,7 +1909,19 @@
         return false;
       }
     );
-    Promise.all([meCall, global.Api.get(BUDGETS_PATH)]).then(
+    // The proposals' own read, beside the roles read and the budgets
+    // read: its own catch answers null, so a failed read (any status
+    // or a network error) or an unusable body leaves the proposals
+    // out and the card renders as before.
+    var proposalsCall = global.Api.get(PROPOSALS_PATH).then(
+      function (body) {
+        return usableProposals(body);
+      },
+      function () {
+        return null;
+      }
+    );
+    Promise.all([meCall, global.Api.get(BUDGETS_PATH), proposalsCall]).then(
       function (results) {
         if (seq !== budgetsLoadSeq) {
           return;
@@ -1761,6 +1935,7 @@
         }
         budgets.isAdmin = results[0];
         budgets.rows = valid;
+        budgets.proposals = results[2];
         budgets.loading = false;
         render();
       },
@@ -1854,6 +2029,25 @@
         render();
       }
     );
+  }
+
+  // The Use button of a proposals row: it sets the set form's month
+  // and amount to the row's month and proposed budget and re-renders,
+  // so the form shows them. It sends no request.
+  function useBudgetProposal(month) {
+    var budgets = state.budgets;
+    if (!budgets.isAdmin || !budgets.proposals) {
+      return;
+    }
+    for (var i = 0; i < budgets.proposals.months.length; i++) {
+      var entry = budgets.proposals.months[i];
+      if (entry.month === month) {
+        budgets.draft.month = entry.month;
+        budgets.draft.amount = String(entry.proposed_budget);
+        render();
+        return;
+      }
+    }
   }
 
   // The inline card message after a failed save or delete: the
@@ -3441,6 +3635,10 @@
       }
       if (button.classList.contains('purchase-budget-delete')) {
         deleteBudget(button.getAttribute('data-month'));
+        return;
+      }
+      if (button.classList.contains('purchase-budget-use')) {
+        useBudgetProposal(button.getAttribute('data-month'));
         return;
       }
       if (button.classList.contains('ii-adopt')) {

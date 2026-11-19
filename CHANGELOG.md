@@ -165,6 +165,9 @@ code is the authority for details.
   sending a request (#1430).
 - Saving a purchase budget now records the proposal that stood at that moment, and the proposals
   read reports how many months were last saved at the proposal, below it or above it (#1432).
+- A read-only route, `GET /api/sop/signoffs/proposals`, for any signed-in user, answers how often
+  the months admins signed off were proposed, with signed, proposed, not proposed and
+  without-proposal counts and one entry per signed month, newest first (#1435).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

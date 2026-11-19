@@ -184,6 +184,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   `sop.signoff_proposal_max_change` setting, 5% by default). The S&OP screen's status card
   shows the proposal, or which value figure moved most since the last sign-off
   (`app/js/sop.js`).
+- `GET /api/sop/signoffs/proposals` reports the stored sign-off proposal of the latest sign-off of each
+  signed month, counting the months as proposed, not proposed, or without a proposal
+  (`backend/app/api/sop.py`).
 
 **Supply planning**
 

@@ -172,6 +172,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   (or the empty note): a margin note and one row per month with the proposed budget and spend;
   an admin's Use button fills the set form with that month and proposed budget without sending
   a request (`app/js/settings.js`).
+- Each budget save records the proposal that stood at that moment, in the append-only
+  `purchase_budget_proposals` table, and `GET /api/purchase-budgets/proposals` reports how many
+  months were last saved at the proposal, below it or above it
+  (`backend/app/api/purchase_budgets.py`).
 - The monthly S&OP review: the horizon's demand, supply, planned receipts, projected on-hand
   and spend by month, with forecast accuracy, demand signals and saved scenarios against the
   plan, on one page. An admin signs the month off, and the sign-off stores the figures agreed

@@ -163,6 +163,8 @@ code is the authority for details.
 - The purchasing budget card on Settings now shows each month's proposed budget and the month's
   spend beside the stored rows and, for an admin, a Use button that fills the set form without
   sending a request (#1430).
+- Saving a purchase budget now records the proposal that stood at that moment, and the proposals
+  read reports how many months were last saved at the proposal, below it or above it (#1432).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

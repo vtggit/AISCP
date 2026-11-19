@@ -84,7 +84,18 @@ up; ``top_up_value`` is the top-ups' values summed (0 with none),
 at least the minimum, and ``still_short`` the minimum minus the two
 when that is above 0, else 0 — the money serialized the way the plan
 serializes the group's ``total_value``, rounded to two places half up.
-The route is read-only.
+The route is read-only.  The builder's body runs inside one
+``with`` statement — one
+``app.recommend.reorder.recommendations_memo`` block, one
+``app.db.read_cache.read_once`` block and one
+``app.db.connection.one_connection`` block: the two order
+plans' ``recommendations_for_all`` calls and the excess
+ranking's own read share the one memo, so the recommendations
+are computed once per as-of, each read the cached readers serve
+is read once, and the call's cursors ride the one connection;
+a caller already inside any of the blocks shares the outer one
+(the nested use each already allows), so the answer — for the
+route and for the release — is the same as without the blocks.
 
 ``POST /api/supply-plan/release`` takes ``{"horizon_days": 7,
 "supplier_codes": ["..."], "confirm": false}`` — ``horizon_days``
@@ -226,7 +237,8 @@ from app.api.aggregate import (
 from app.api.ddmrp import _stored_system_settings
 from app.api.erp_mappings import require_admin
 from app.auth.models import AuthUser
-from app.db.connection import get_cursor
+from app.db.connection import get_cursor, one_connection
+from app.db.read_cache import read_once
 from app.ddmrp.zones import setting_value
 from app.feed.acumatica_client import (
     AcumaticaAuthError,
@@ -1181,91 +1193,112 @@ def top_ups_by_supplier(horizon_days: int, as_of: date | None = None) -> dict:
     as_of)`` — ``as_of`` None letting the builder resolve the as-of —
     and the look-ahead plan is built for ``lookahead_days`` at the
     horizon plan's as-of, both through this module's own
-    ``build_supply_plan`` and ``excess_ranked`` names.  Read-only.
+    ``build_supply_plan`` and ``excess_ranked`` names.
+
+    The body runs inside one ``with`` statement — one
+    ``app.recommend.reorder.recommendations_memo`` block, one
+    ``app.db.read_cache.read_once`` block and one
+    ``app.db.connection.one_connection`` block: the two order plans'
+    ``recommendations_for_all`` calls and the excess ranking's own
+    read share the one memo, so the recommendations are computed once
+    per as-of, each read the cached readers serve is read once, and
+    the call's cursors ride the one connection.  A caller already
+    inside any of the blocks shares the outer one (the nested use
+    each already allows), so the answer — for the route
+    ``GET /api/supply-plan/top-ups`` and for the release
+    (``app.supply.release``) — is the same as without the blocks.
+    Read-only.
     """
-    plan = build_supply_plan(horizon_days, as_of)
-    as_of = plan["as_of"]
-    stored = _stored_system_settings()
-    lookahead_days = _top_up_lookahead_days_for(stored)
-    holding_rate = _holding_rate_for(stored)
-    lookahead_plan = build_supply_plan(lookahead_days, as_of=as_of)
-    excess_pairs = {
-        (row.get("item_code"), row.get("site_code")) for row in excess_ranked(as_of)
-    }
+    with recommendations_memo(), read_once(), one_connection():
+        plan = build_supply_plan(horizon_days, as_of)
+        as_of = plan["as_of"]
+        stored = _stored_system_settings()
+        lookahead_days = _top_up_lookahead_days_for(stored)
+        holding_rate = _holding_rate_for(stored)
+        lookahead_plan = build_supply_plan(lookahead_days, as_of=as_of)
+        excess_pairs = {
+            (row.get("item_code"), row.get("site_code")) for row in excess_ranked(as_of)
+        }
 
-    suppliers: list[dict] = []
-    for group in plan["suppliers"]:
-        minimum = group["minimum"]
-        shortfall = group["shortfall"]
-        if minimum is None or shortfall is None or not shortfall > 0:
-            continue
-        key = (group["supplier_code"], group["source_system"])
-        candidates = [
-            line
-            for plan_group in lookahead_plan["suppliers"]
-            if (
-                plan_group["supplier_code"],
-                plan_group["source_system"],
+        suppliers: list[dict] = []
+        for group in plan["suppliers"]:
+            minimum = group["minimum"]
+            shortfall = group["shortfall"]
+            if minimum is None or shortfall is None or not shortfall > 0:
+                continue
+            key = (group["supplier_code"], group["source_system"])
+            candidates = [
+                line
+                for plan_group in lookahead_plan["suppliers"]
+                if (
+                    plan_group["supplier_code"],
+                    plan_group["source_system"],
+                )
+                == key
+                for line in plan_group["lines"]
+                if line["due_in_days"] > horizon_days
+                and line["value"] is not None
+                and (line["item_code"], line["site_code"]) not in excess_pairs
+            ]
+            candidates.sort(
+                key=lambda line: (
+                    line["due_in_days"],
+                    line["item_code"],
+                    line["site_code"],
+                )
             )
-            == key
-            for line in plan_group["lines"]
-            if line["due_in_days"] > horizon_days
-            and line["value"] is not None
-            and (line["item_code"], line["site_code"]) not in excess_pairs
-        ]
-        candidates.sort(
-            key=lambda line: (line["due_in_days"], line["item_code"], line["site_code"])
-        )
-        top_ups: list[dict] = []
-        top_up_value = Decimal(0)
-        for line in candidates:
-            top_ups.append(line)
-            top_up_value += line["value"]
-            if top_up_value >= shortfall:
-                break
+            top_ups: list[dict] = []
+            top_up_value = Decimal(0)
+            for line in candidates:
+                top_ups.append(line)
+                top_up_value += line["value"]
+                if top_up_value >= shortfall:
+                    break
 
-        total_value = group["total_value"]
-        top_up_value = top_up_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        still_short = minimum - total_value - top_up_value
-        suppliers.append(
-            {
-                "supplier_code": group["supplier_code"],
-                "source_system": group["source_system"],
-                "vendor_code": group["vendor_code"],
-                "name": group["name"],
-                "minimum": minimum,
-                "total_value": total_value,
-                "shortfall": shortfall,
-                "top_ups": [
-                    {
-                        "item_code": line["item_code"],
-                        "site_code": line["site_code"],
-                        "due_in_days": line["due_in_days"],
-                        "order_by": line["order_by"],
-                        "quantity": line["quantity"],
-                        "unit_cost": line["unit_cost"],
-                        "value": line["value"],
-                        "holding_cost": _top_up_holding_cost(
-                            line["value"], holding_rate, line["due_in_days"]
-                        ),
-                    }
-                    for line in top_ups
-                ],
-                "top_up_value": top_up_value,
-                "reaches_minimum": total_value + top_up_value >= minimum,
-                "still_short": (
-                    still_short if still_short > 0 else Decimal(0)
-                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-            }
-        )
+            total_value = group["total_value"]
+            top_up_value = top_up_value.quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            still_short = minimum - total_value - top_up_value
+            suppliers.append(
+                {
+                    "supplier_code": group["supplier_code"],
+                    "source_system": group["source_system"],
+                    "vendor_code": group["vendor_code"],
+                    "name": group["name"],
+                    "minimum": minimum,
+                    "total_value": total_value,
+                    "shortfall": shortfall,
+                    "top_ups": [
+                        {
+                            "item_code": line["item_code"],
+                            "site_code": line["site_code"],
+                            "due_in_days": line["due_in_days"],
+                            "order_by": line["order_by"],
+                            "quantity": line["quantity"],
+                            "unit_cost": line["unit_cost"],
+                            "value": line["value"],
+                            "holding_cost": _top_up_holding_cost(
+                                line["value"], holding_rate, line["due_in_days"]
+                            ),
+                        }
+                        for line in top_ups
+                    ],
+                    "top_up_value": top_up_value,
+                    "reaches_minimum": total_value + top_up_value >= minimum,
+                    "still_short": (
+                        still_short if still_short > 0 else Decimal(0)
+                    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                }
+            )
 
-    return {
-        "as_of": as_of,
-        "horizon_days": horizon_days,
-        "lookahead_days": lookahead_days,
-        "holding_rate": holding_rate,
-        "suppliers": suppliers,
-    }
+        return {
+            "as_of": as_of,
+            "horizon_days": horizon_days,
+            "lookahead_days": lookahead_days,
+            "holding_rate": holding_rate,
+            "suppliers": suppliers,
+        }
 
 
 @router.get("/top-ups", response_model=SupplyPlanTopUpsResponse)

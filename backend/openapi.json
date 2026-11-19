@@ -10494,6 +10494,61 @@
         }
       }
     },
+    "/api/sop/signoffs/proposals": {
+      "get": {
+        "tags": [
+          "sop"
+        ],
+        "summary": "Signoff Proposals",
+        "description": "The stored sign-off proposal of every signed month.\n\nOpen to any signed-in user, read-only \u2014 one query that reads only\nthe stored ``signoff_proposal`` key of the latest sign-off of each\nmonth (``created_at`` newest first, the ``id`` breaking ties), and\nit writes nothing.  ``months`` carries one ``{month, proposed}``\nentry per signed month, newest month first: ``proposed`` true or\nfalse when the stored ``figures -> 'signoff_proposal'``'s\n``proposed`` is true or false, else null \u2014 the key absent, the\nvalue stored as null, or the stored proposal an object missing\n``proposed`` (a month signed before the proposal existed, or one\nwith no earlier sign-off to compare) \u2014 and beside them\n``signoffs``, the number of signed months, ``proposed`` and\n``not_proposed``, the months whose stored proposal's ``proposed``\nis true and false, and ``without_proposal``, the months whose\nstored figures carry no proposal (a month still counted in\n``signoffs``).",
+        "operationId": "signoff_proposals_api_sop_signoffs_proposals_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SopSignoffsProposals"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sop/signoffs/{signoff_id}": {
       "get": {
         "tags": [
@@ -23544,6 +23599,32 @@
         "title": "SopSignoffIn",
         "description": "The sign-off body.\n\n``month`` is the review month to sign (``YYYY-MM``), ``note`` an\noptional note (at most 500 characters, no NUL bytes \u2014 a blank one\nis stored as null) and ``months`` the review's horizon, default 3,\nbounded 1 to 12 inclusive.  Any extra field is refused with 422,\nlike every other body in the app."
       },
+      "SopSignoffProposalMonth": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "proposed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "proposed"
+        ],
+        "title": "SopSignoffProposalMonth",
+        "description": "The stored proposal of one signed month's latest sign-off.\n\n``proposed`` is true or false when the stored\n``figures -> 'signoff_proposal'``'s ``proposed`` is true or false,\nelse null \u2014 the key absent, the value stored as null, or the\nstored proposal an object missing ``proposed``."
+      },
       "SopSignoffRow": {
         "properties": {
           "id": {
@@ -23596,6 +23677,43 @@
         ],
         "title": "SopSignoffRow",
         "description": "A stored sign-off without its figures."
+      },
+      "SopSignoffsProposals": {
+        "properties": {
+          "signoffs": {
+            "type": "integer",
+            "title": "Signoffs"
+          },
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed"
+          },
+          "not_proposed": {
+            "type": "integer",
+            "title": "Not Proposed"
+          },
+          "without_proposal": {
+            "type": "integer",
+            "title": "Without Proposal"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/SopSignoffProposalMonth"
+            },
+            "type": "array",
+            "title": "Months"
+          }
+        },
+        "type": "object",
+        "required": [
+          "signoffs",
+          "proposed",
+          "not_proposed",
+          "without_proposal",
+          "months"
+        ],
+        "title": "SopSignoffsProposals",
+        "description": "The stored sign-off proposals of every signed month, newest\nmonth first."
       },
       "SpendAgainstBudget": {
         "properties": {

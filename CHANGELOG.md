@@ -319,6 +319,8 @@ code is the authority for details.
   faster without changing its rows (#1410).
 - The exceptions list now runs its reads on one database connection per call instead of one per
   query, so `GET /api/exceptions` answers faster (#1418).
+- The exceptions list copies the rows it reads more cheaply, so `GET /api/exceptions` answers
+  faster again; the rows it answers are unchanged (#1420).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

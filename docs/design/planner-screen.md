@@ -161,6 +161,7 @@ The tokens are in `app/css/tokens.css`; use them, never raw values.
 | Stockout rows | `GET /api/stockout` |
 | Each row's `decision` | read from those lists, which already return it |
 | Value tiles and list cards | `GET /api/decisions/summary` |
+| Reorder points card's acceptance block | `GET /api/drift/decisions/acceptance` |
 | Stockout risk card's proposed remedy block | `GET /api/stockout/proposals` |
 | Excess and dead stock card's proposed action block | `GET /api/excess/proposals` |
 | Exceptions today card and its measure line | `GET /api/exceptions`; `GET /api/exceptions/proposals` |

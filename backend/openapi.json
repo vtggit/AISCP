@@ -4535,6 +4535,73 @@
         }
       }
     },
+    "/api/purchase-budgets/proposals": {
+      "get": {
+        "tags": [
+          "purchase-budgets"
+        ],
+        "summary": "Budget Proposals",
+        "description": "Propose a budget for each month of the projected spend.\n\nOpen to any signed-in user, like ``GET /api/purchase-budgets``;\nthe router's include-time gate answers 401 without a valid Bearer\ntoken.  ``months`` runs from 1 to 12 and defaults to 6; a value\noutside that range answers 422 before anything is read.\n\nThe spend is read once through\n``spend_against_budget(months=months)`` and the stored system\nsettings once through ``app.sop.review._stored_system_settings``;\nthe margin is ``sop.budget_proposal_margin`` of them, resolved with\n``app.ddmrp.zones.setting_value`` (the registry default 0.05 while\nnothing is stored).  The answer is ``{margin,\nitem_sites_without_unit_cost, months}``: one entry per month of\nthe spend answer, in its order, with ``month``,\n``committed_spend``, ``planned_spend``, ``total_spend`` and\n``budget`` (the stored budget, or null) copied from it,\n``proposed_budget`` ``propose_budget``'s round-up of the total\nspend grown by the margin and ``difference`` the stored budget\nminus the proposal, null without a budget.  Read-only: it writes\nnothing.",
+        "operationId": "budget_proposals_api_purchase_budgets_proposals_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "months",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "default": 6,
+              "title": "Months"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetProposals"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/purchase-budgets/{month}": {
       "put": {
         "tags": [
@@ -12743,6 +12810,33 @@
         "title": "BasisAccuracyResult",
         "description": "The realised value of the stored history basis.\n\nOnly completed snapshot buckets (``bucket_end`` on or before\n``as_of`` \u2014 the shared default as-of date when absent) with a\nstored ``history_quantity`` are compared with the actual demand\nof their range, the same way ``GET /api/forecast/accuracy``\ncompares; a bucket whose history is null is left out.\n``item_sites`` carries one entry per item-site with the same\nmeasures, ordered by ``actual_total`` descending, then\n``item_code`` and ``site_code``."
       },
+      "BudgetProposals": {
+        "properties": {
+          "margin": {
+            "type": "number",
+            "title": "Margin"
+          },
+          "item_sites_without_unit_cost": {
+            "type": "integer",
+            "title": "Item Sites Without Unit Cost"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalMonth"
+            },
+            "type": "array",
+            "title": "Months"
+          }
+        },
+        "type": "object",
+        "required": [
+          "margin",
+          "item_sites_without_unit_cost",
+          "months"
+        ],
+        "title": "BudgetProposals",
+        "description": "The proposed budgets of the projected spend horizon."
+      },
       "ChangeContributions": {
         "properties": {
           "demand_level": {
@@ -20156,6 +20250,64 @@
         ],
         "title": "ProjectionGroupKey",
         "description": "The grouping dimension and its code."
+      },
+      "ProposalMonth": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "committed_spend": {
+            "type": "number",
+            "title": "Committed Spend"
+          },
+          "planned_spend": {
+            "type": "number",
+            "title": "Planned Spend"
+          },
+          "total_spend": {
+            "type": "number",
+            "title": "Total Spend"
+          },
+          "proposed_budget": {
+            "type": "number",
+            "title": "Proposed Budget"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "committed_spend",
+          "planned_spend",
+          "total_spend",
+          "proposed_budget",
+          "budget",
+          "difference"
+        ],
+        "title": "ProposalMonth",
+        "description": "One month of the proposals: the spend beside its proposed budget."
       },
       "PurchaseBudgetIn": {
         "properties": {

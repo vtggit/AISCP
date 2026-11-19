@@ -505,6 +505,18 @@ register(
 
 register(
     Setting(
+        key="sop.budget_proposal_margin",
+        scope="system",
+        type="number",
+        default=0.05,
+        description="The share added to a month's projected purchase spend, committed plus planned, to propose that month's budget (0.05 = 5%).",
+        min=0,
+        max=1,
+    )
+)
+
+register(
+    Setting(
         key="sop.signoff_proposal_max_change",
         scope="system",
         type="number",

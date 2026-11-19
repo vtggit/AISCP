@@ -4541,7 +4541,7 @@
           "purchase-budgets"
         ],
         "summary": "Budget Proposals",
-        "description": "Propose a budget for each month of the projected spend.\n\nOpen to any signed-in user, like ``GET /api/purchase-budgets``;\nthe router's include-time gate answers 401 without a valid Bearer\ntoken.  ``months`` runs from 1 to 12 and defaults to 6; a value\noutside that range answers 422 before anything is read.\n\nThe spend is read once through\n``spend_against_budget(months=months)`` and the stored system\nsettings once through ``app.sop.review._stored_system_settings``;\nthe margin is ``sop.budget_proposal_margin`` of them, resolved with\n``app.ddmrp.zones.setting_value`` (the registry default 0.05 while\nnothing is stored).  The answer is ``{margin,\nitem_sites_without_unit_cost, months}``: one entry per month of\nthe spend answer, in its order, with ``month``,\n``committed_spend``, ``planned_spend``, ``total_spend`` and\n``budget`` (the stored budget, or null) copied from it,\n``proposed_budget`` ``propose_budget``'s round-up of the total\nspend grown by the margin and ``difference`` the stored budget\nminus the proposal, null without a budget.  Read-only: it writes\nnothing.",
+        "description": "Propose a budget for each month of the projected spend.\n\nOpen to any signed-in user, like ``GET /api/purchase-budgets``;\nthe router's include-time gate answers 401 without a valid Bearer\ntoken.  ``months`` runs from 1 to 12 and defaults to 6; a value\noutside that range answers 422 before anything is read.\n\nThe spend is read once through\n``spend_against_budget(months=months)`` and the stored system\nsettings once through ``app.sop.review._stored_system_settings``;\nthe margin is ``sop.budget_proposal_margin`` of them, resolved with\n``app.ddmrp.zones.setting_value`` (the registry default 0.05 while\nnothing is stored).  The answer is ``{margin,\nitem_sites_without_unit_cost, months, record}``: one entry per\nmonth of the spend answer, in its order, with ``month``,\n``committed_spend``, ``planned_spend``, ``total_spend`` and\n``budget`` (the stored budget, or null) copied from it,\n``proposed_budget`` ``propose_budget``'s round-up of the total\nspend grown by the margin and ``difference`` the stored budget\nminus the proposal, null without a budget, and ``record`` the\nmeasure ``_record_count`` of the record rows the saves append:\nover the latest record row of each month that still has a stored\nbudget, ``saved`` counts those rows, ``with_proposal`` those\nwhose ``proposed_amount`` is not null, and of those, ``taken``\nthe amount within 0.005 of the proposal, ``below`` the amount\nunder it by more and ``above`` the amount over it by more \u2014 so\n``taken + below + above = with_proposal``.  Read-only: it writes\nnothing.",
         "operationId": "budget_proposals_api_purchase_budgets_proposals_get",
         "security": [
           {
@@ -4608,7 +4608,7 @@
           "purchase-budgets"
         ],
         "summary": "Upsert Budget",
-        "description": "Store one month's budget; needs the admin role (403 otherwise).\n\nA new month inserts a row; an existing one updates its amount,\nupdated_at and updated_by \u2014 ``updated_by`` is the caller's\nusername \u2014 instead of creating a duplicate.  The month in the path\nmust be ``YYYY-MM`` with a month of 01 to 12 and the body's\n``amount`` a finite number between 0 and 1,000,000,000,000\ninclusive; anything else answers 422 before anything is written.\nReturns the stored row.",
+        "description": "Store one month's budget, with its record row; needs the admin\nrole (403 otherwise).\n\nA new month inserts a budget row; an existing one updates its\namount, updated_at and updated_by \u2014 ``updated_by`` is the\ncaller's username \u2014 instead of creating a duplicate.  Beside the\nbudget it appends one row of ``purchase_budget_proposals``, in\nthe same database transaction: the saved amount and the caller's\nusername, the month's proposal at that moment (the way\n``GET /api/purchase-budgets/proposals`` computes it, over a\n12-month horizon \u2014 ``propose_budget`` of the month's\n``total_spend`` of ``spend_against_budget(months=12)`` grown by\nthe ``sop.budget_proposal_margin`` margin, the margin stored\ntoo), a null proposal with a null margin when the month is\noutside that horizon, or when the spend read raises.  A failed\nappend rolls the budget save back and answers 500, so a budget is\nnever stored without its record row.  The month in the path must\nbe ``YYYY-MM`` with a month of 01 to 12 and the body's ``amount``\na finite number between 0 and 1,000,000,000,000 inclusive;\nanything else answers 422 before anything is written.  Returns\nthe stored budget row, exactly as before the record.",
         "operationId": "upsert_budget_api_purchase_budgets__month__put",
         "security": [
           {
@@ -12810,6 +12810,40 @@
         "title": "BasisAccuracyResult",
         "description": "The realised value of the stored history basis.\n\nOnly completed snapshot buckets (``bucket_end`` on or before\n``as_of`` \u2014 the shared default as-of date when absent) with a\nstored ``history_quantity`` are compared with the actual demand\nof their range, the same way ``GET /api/forecast/accuracy``\ncompares; a bucket whose history is null is left out.\n``item_sites`` carries one entry per item-site with the same\nmeasures, ordered by ``actual_total`` descending, then\n``item_code`` and ``site_code``."
       },
+      "BudgetProposalRecord": {
+        "properties": {
+          "saved": {
+            "type": "integer",
+            "title": "Saved"
+          },
+          "with_proposal": {
+            "type": "integer",
+            "title": "With Proposal"
+          },
+          "taken": {
+            "type": "integer",
+            "title": "Taken"
+          },
+          "below": {
+            "type": "integer",
+            "title": "Below"
+          },
+          "above": {
+            "type": "integer",
+            "title": "Above"
+          }
+        },
+        "type": "object",
+        "required": [
+          "saved",
+          "with_proposal",
+          "taken",
+          "below",
+          "above"
+        ],
+        "title": "BudgetProposalRecord",
+        "description": "The record measure of the proposals' answer.\n\nOver the latest record row of each month that still has a stored\nbudget: ``saved`` counts those rows, ``with_proposal`` those\nwhose ``proposed_amount`` is not null, and of those, ``taken``\nthe amount within 0.005 of the proposal, ``below`` the amount\nunder it by more and ``above`` the amount over it by more \u2014 so\n``taken + below + above = with_proposal``."
+      },
       "BudgetProposals": {
         "properties": {
           "margin": {
@@ -12826,16 +12860,20 @@
             },
             "type": "array",
             "title": "Months"
+          },
+          "record": {
+            "$ref": "#/components/schemas/BudgetProposalRecord"
           }
         },
         "type": "object",
         "required": [
           "margin",
           "item_sites_without_unit_cost",
-          "months"
+          "months",
+          "record"
         ],
         "title": "BudgetProposals",
-        "description": "The proposed budgets of the projected spend horizon."
+        "description": "The proposed budgets of the projected spend horizon.\n\n``record`` measures the record rows the saves of\n``PUT /api/purchase-budgets/{month}`` append beside the stored\nbudgets, the way ``_record_count`` counts them."
       },
       "ChangeContributions": {
         "properties": {

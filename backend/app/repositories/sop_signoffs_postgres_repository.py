@@ -12,7 +12,11 @@ answer the row without its figures and order by ``created_at DESC,
 id DESC`` so equal-timestamp rows list deterministically (the higher
 id first); ``get_by_id`` and ``latest_with_figures`` are the reads
 that answer the figures (``latest_with_figures`` the newest row of
-any month under the same order).
+any month under the same order); ``latest_proposals_per_month``
+answers, for the latest sign-off of each month under that same
+order, the month and the stored ``figures -> 'signoff_proposal'``
+(``None`` when the key is absent) in one query that reads no other
+part of the figures.
 """
 
 import json
@@ -141,3 +145,23 @@ class SopSignoffsPostgresRepository:
             )
             row = cur.fetchone()
         return None if row is None else _row_to_dict(row)
+
+    def latest_proposals_per_month(self) -> list[dict]:
+        """The latest stored sign-off of each signed month, as one
+        ``{month, proposal}`` entry per month, newest month first.
+
+        The latest sign-off of a month is the first row of the month
+        under ``created_at DESC, id DESC`` — the ``id`` breaking equal
+        timestamps.  ``proposal`` is the stored ``figures ->
+        'signoff_proposal'``: ``None`` when the key is absent or
+        stored as null, the stored object otherwise.  One query — and
+        it reads only that key of the figures, never the rest.
+        """
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT ON (month) month, "
+                "figures -> 'signoff_proposal' AS proposal "
+                "FROM sop_signoffs "
+                "ORDER BY month DESC, created_at DESC, id DESC"
+            )
+            return [dict(row) for row in cur.fetchall()]

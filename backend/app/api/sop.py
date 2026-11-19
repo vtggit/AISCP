@@ -95,6 +95,23 @@ stored rows newest first (``created_at DESC, id DESC``) without their
 figures, and ``GET /api/sop/signoffs/{id}`` answers one stored row
 with its figures, 404 for an unknown id and 422 for a non-integer id.
 Both read routes are open to any signed-in user.
+
+``GET /api/sop/signoffs/proposals`` (declared before the dynamic
+``GET /api/sop/signoffs/{id}`` so it is reachable) answers the stored
+sign-off proposal of every signed month: for the latest sign-off of
+each month (``created_at`` newest first, the ``id`` breaking ties) one
+``{month, proposed}`` entry in ``months``, newest month first —
+``proposed`` true or false when the stored ``figures ->
+'signoff_proposal'``'s ``proposed`` is true or false, else null: the
+key absent, the value stored as null, or the stored proposal an object
+missing ``proposed`` — a month signed before the proposal existed, or
+one with no earlier sign-off to compare — beside ``signoffs`` (the
+number of signed months), ``proposed`` and ``not_proposed`` (the months
+whose stored proposal's ``proposed`` is true and false) and
+``without_proposal`` (the months whose stored figures carry no
+proposal).  It runs one query that reads only the stored
+``signoff_proposal`` key of the latest row of each month, writes
+nothing, makes no ERP call, and is open to any signed-in user.
 """
 
 import re
@@ -205,6 +222,30 @@ class SopSignoff(SopSignoffRow):
     the route computed on the server at sign-off time."""
 
     figures: dict
+
+
+class SopSignoffProposalMonth(BaseModel):
+    """The stored proposal of one signed month's latest sign-off.
+
+    ``proposed`` is true or false when the stored
+    ``figures -> 'signoff_proposal'``'s ``proposed`` is true or false,
+    else null — the key absent, the value stored as null, or the
+    stored proposal an object missing ``proposed``.
+    """
+
+    month: str
+    proposed: bool | None
+
+
+class SopSignoffsProposals(BaseModel):
+    """The stored sign-off proposals of every signed month, newest
+    month first."""
+
+    signoffs: int
+    proposed: int
+    not_proposed: int
+    without_proposal: int
+    months: list[SopSignoffProposalMonth]
 
 
 class SopSignoffIn(BaseModel):
@@ -431,6 +472,53 @@ def list_signoffs(
     if month is not None and not _MONTH.fullmatch(month):
         raise HTTPException(status_code=422, detail="month must match YYYY-MM")
     return _signoffs_repo.list_newest(month=month, limit=limit)
+
+
+@router.get("/signoffs/proposals", response_model=SopSignoffsProposals)
+def signoff_proposals(
+    current_user: AuthUser = Depends(require_any_authenticated_user),
+) -> dict:
+    """The stored sign-off proposal of every signed month.
+
+    Open to any signed-in user, read-only — one query that reads only
+    the stored ``signoff_proposal`` key of the latest sign-off of each
+    month (``created_at`` newest first, the ``id`` breaking ties), and
+    it writes nothing.  ``months`` carries one ``{month, proposed}``
+    entry per signed month, newest month first: ``proposed`` true or
+    false when the stored ``figures -> 'signoff_proposal'``'s
+    ``proposed`` is true or false, else null — the key absent, the
+    value stored as null, or the stored proposal an object missing
+    ``proposed`` (a month signed before the proposal existed, or one
+    with no earlier sign-off to compare) — and beside them
+    ``signoffs``, the number of signed months, ``proposed`` and
+    ``not_proposed``, the months whose stored proposal's ``proposed``
+    is true and false, and ``without_proposal``, the months whose
+    stored figures carry no proposal (a month still counted in
+    ``signoffs``).
+    """
+    proposed = 0
+    not_proposed = 0
+    without_proposal = 0
+    months = []
+    for entry in _signoffs_repo.latest_proposals_per_month():
+        stored = entry["proposal"]
+        value = None
+        if isinstance(stored, dict) and isinstance(stored.get("proposed"), bool):
+            value = stored["proposed"]
+            if value:
+                proposed += 1
+            else:
+                not_proposed += 1
+        else:
+            without_proposal += 1
+        months.append({"month": entry["month"], "proposed": value})
+    return {
+        "signoffs": len(months),
+        "proposed": proposed,
+        "not_proposed": not_proposed,
+        "without_proposal": without_proposal,
+        "months": months,
+    }
 
 
 @router.get("/signoffs/{signoff_id}", response_model=SopSignoff)

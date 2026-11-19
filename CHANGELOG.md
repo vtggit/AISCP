@@ -160,10 +160,11 @@ code is the authority for details.
 - Each month's proposed purchase budget (`GET /api/purchase-budgets/proposals`): the plan's
   committed and planned spend plus the `sop.budget_proposal_margin` share (5% by default),
   rounded up to three significant figures, beside the stored budget (#1414).
-- Saving a purchase budget now appends a record of the proposal computed at that moment, and `GET
-  /api/purchase-budgets/proposals` adds a `record` measure of the latest saved-budget record for
-  each month that still has a stored budget, counting `saved`, `with_proposal`, `taken`, `below`
-  and `above` (#1432).
+- The purchasing budget card on Settings now shows each month's proposed budget and the month's
+  spend beside the stored rows and, for an admin, a Use button that fills the set form without
+  sending a request (#1430).
+- Saving a purchase budget now records the proposal that stood at that moment, and the proposals
+  read reports how many months were last saved at the proposal, below it or above it (#1432).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

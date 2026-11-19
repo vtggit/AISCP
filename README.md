@@ -168,9 +168,13 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   budget as the plan's committed and planned spend plus the `sop.budget_proposal_margin` share
   (5% by default), rounded up to three significant figures, beside the stored budget
   (`backend/app/api/purchase_budgets.py`).
-- Each save of a monthly purchase budget appends a record row with the saved amount, the caller's username,
-  the proposal and margin at that moment, and `GET /api/purchase-budgets/proposals` answers a `record`
-  measure of the latest record row of each month that still has a stored budget
+- The Settings screen's Purchasing budget card shows the proposed budgets below the stored rows
+  (or the empty note): a margin note and one row per month with the proposed budget and spend;
+  an admin's Use button fills the set form with that month and proposed budget without sending
+  a request (`app/js/settings.js`).
+- Each budget save records the proposal that stood at that moment, in the append-only
+  `purchase_budget_proposals` table, and `GET /api/purchase-budgets/proposals` reports how many
+  months were last saved at the proposal, below it or above it
   (`backend/app/api/purchase_budgets.py`).
 - The monthly S&OP review: the horizon's demand, supply, planned receipts, projected on-hand
   and spend by month, with forecast accuracy, demand signals and saved scenarios against the

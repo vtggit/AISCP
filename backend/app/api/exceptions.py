@@ -352,9 +352,10 @@ The DDMRP plan, the stockout ranking and the expedite list read their
 ``app.recommend.reorder.recommendations_for_all`` through one
 ``recommendations_memo`` per request (the stockout ranking is given the
 plan's resolved as-of when it is the ranking's own default,
-``app.stats.demand.default_as_of``; the expedite list keeps its own
-default, today): the request never computes the recommendations more
-than once per as-of.  And the gathering runs inside the one
+``app.stats.demand.default_as_of``; the expedite list reads the
+recommendations at the shared default, so one exceptions call computes
+them once, while its lateness still counts from today): the request
+never computes the recommendations more than once per as-of.  And the gathering runs inside the one
 ``app.db.read_cache.read_once`` block and the one
 ``app.db.connection.one_connection()`` block the request carries:
 every read the sources share — the newest open-purchase snapshot
@@ -2189,8 +2190,10 @@ def _collect() -> tuple[date | None, list[ExceptionRow], list[str]]:
     ``recommendations_for_all`` through the same memo — the ranking
     is given the plan's resolved as-of when it is the ranking's own
     default (``app.stats.demand.default_as_of``), the expedite list
-    keeps its own default (today) — so one request never computes the
-    recommendations more than once per as-of; every read the sources
+    reads the recommendations at the shared default, so one exceptions
+    call computes them once, while its lateness still counts from
+    today — so one request never computes the recommendations more
+    than once per as-of; every read the sources
     share answers each repeated call with the same arguments from the
     first call's result, deep-copied, so one request reads each of
     them once, whatever the number of sources that read it (the
@@ -2251,8 +2254,10 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
         # is the ranking's own default (
         # ``app.stats.demand.default_as_of``): the memo then answers
         # the ranking from the plan's computation.  The expedite list
-        # below keeps its own default (today) — its ``days_late`` must
-        # read against today, never against the plan's as-of.
+        # below reads the recommendations at the shared default, so
+        # one exceptions call computes them once, while its lateness
+        # still counts from today — its ``days_late`` must read
+        # against today, never against the plan's as-of.
         with get_cursor() as cur:
             stockout_as_of = (
                 plan_as_of

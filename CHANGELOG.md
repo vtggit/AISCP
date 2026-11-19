@@ -306,6 +306,8 @@ code is the authority for details.
   standing grant #<id> instead of the actor (#1310).
 - On narrow screens the Demand screen now scrolls its view vertically, keeps the forecast list at a
   fixed height, and shows the detail pane at its full height below the list (#1387).
+- The exceptions list now reads each shared input once per call, so `GET /api/exceptions` answers
+  faster without changing its rows (#1410).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

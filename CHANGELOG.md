@@ -361,6 +361,9 @@ code is the authority for details.
 - A clipboard copy on the Expedite screen that settles after the open draft has changed is
   dropped, so it no longer updates the status, focus, or selection of the draft that is open when
   it settles (#1322).
+- Spec 638, the Work queue's proving test, no longer fails now and then under load: its checks of
+  the item/site cell and the detail pane retry until they read the row the list re-rendered; the
+  product is unchanged (#1470).
 
 ### Security
 - `opentelemetry-api` is pinned to 1.45.2, which fixes CVE-2026-126360 (#1180).

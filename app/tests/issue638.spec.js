@@ -449,30 +449,32 @@ test('issue638 freeform', async ({ page }) => {
     // item/site cell; the cell is a flex column (the row's grid keeps
     // its five tracks — no new grid column); the colour is the
     // secondary ink token.
-    expect(
-      await paper.evaluate((rowEl) => {
-        const site = rowEl.querySelector('.q-item-site');
-        const cell = site.parentElement;
-        const desc = cell.querySelector('.q-item-desc');
-        return {
-          cellClass: cell.getAttribute('class'),
-          descIsSibling: !!(desc && desc.parentElement === cell && desc !== site),
-          cellDisplay: getComputedStyle(cell).display,
-          cellDirection: getComputedStyle(cell).flexDirection,
-          tracks: getComputedStyle(rowEl)
-            .gridTemplateColumns.split(' ')
-            .filter(Boolean).length,
-          descColor: getComputedStyle(desc).color,
-        };
-      }),
-    ).toEqual({
-      cellClass: 'q-item-cell',
-      descIsSibling: true,
-      cellDisplay: 'flex',
-      cellDirection: 'column',
-      tracks: 5,
-      descColor: 'rgb(51, 65, 78)',
-    });
+    await expect(async () => {
+      expect(
+        await paper.evaluate((rowEl) => {
+          const site = rowEl.querySelector('.q-item-site');
+          const cell = site.parentElement;
+          const desc = cell.querySelector('.q-item-desc');
+          return {
+            cellClass: cell.getAttribute('class'),
+            descIsSibling: !!(desc && desc.parentElement === cell && desc !== site),
+            cellDisplay: getComputedStyle(cell).display,
+            cellDirection: getComputedStyle(cell).flexDirection,
+            tracks: getComputedStyle(rowEl)
+              .gridTemplateColumns.split(' ')
+              .filter(Boolean).length,
+            descColor: getComputedStyle(desc).color,
+          };
+        }),
+      ).toEqual({
+        cellClass: 'q-item-cell',
+        descIsSibling: true,
+        cellDisplay: 'flex',
+        cellDirection: 'column',
+        tracks: 5,
+        descColor: 'rgb(51, 65, 78)',
+      });
+    }).toPass();
 
     // A row with a null description renders no .q-item-desc.
     const plain = page.locator('.q-row[data-item="PLAINBOX"][data-site="154"]');
@@ -485,14 +487,16 @@ test('issue638 freeform', async ({ page }) => {
     await paper.click();
     await expect(page.locator('.q-detail-title')).toHaveText('CONPAPERST');
     await expect(page.locator('.q-detail-desc')).toHaveText(DESC);
-    expect(
-      await page
-        .locator('.q-detail-title')
-        .evaluate((titleEl) => {
-          const next = titleEl.nextElementSibling;
-          return next ? next.getAttribute('class') : null;
-        }),
-    ).toBe('q-detail-desc');
+    await expect(async () => {
+      expect(
+        await page
+          .locator('.q-detail-title')
+          .evaluate((titleEl) => {
+            const next = titleEl.nextElementSibling;
+            return next ? next.getAttribute('class') : null;
+          }),
+      ).toBe('q-detail-desc');
+    }).toPass();
 
     // ... and a row without a description shows no .q-detail-desc.
     await plain.click();

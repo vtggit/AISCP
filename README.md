@@ -60,6 +60,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   decision controls; the Reorder points tab does not.
 - CSV exports of the drift, excess, stockout and change lists, and a planning sheet with the
   recommended and current parameters of every item-site (`backend/app/recommend/export.py`).
+- A data stamp for the reorder recommendations: one version per input table in
+  `data_versions`, bumped by statement triggers on the eleven tables the recommendations
+  read, and read in one query by `data_stamp()` (`backend/app/db/data_stamp.py`,
+  `backend/migrations/versions/0052_data_versions.py`).
 
 **Planner decisions**
 

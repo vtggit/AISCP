@@ -222,6 +222,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   (`backend/app/ddmrp/`, `backend/app/api/ddmrp.py`).
 - Suggested buffer candidates, planned adjustment factors for seasonal or promotional ramps,
   and each buffer's time in each zone from a daily status snapshot.
+- Proposed DDMRP adjustment factors for forecast periods whose forecast daily demand differs
+  from a buffer's average daily usage by the `ddmrp.adjustment_proposal_threshold` share,
+  read-only (`GET /api/ddmrp/adjustments/proposals`, `backend/app/api/ddmrp.py`).
 
 **Exceptions**
 
@@ -448,7 +451,7 @@ any write to an ERP. Personal settings and saved scenarios are open to any signe
 | Purchase budgets | `/api/purchase-budgets` (also the proposals) |
 | Supply plan | `/api/supply-plan` (plan, summary, top-ups, release, transfers, transfer release and its audit), `/api/supplier-order-minimums` |
 | Suppliers | `/api/suppliers/performance`, `/api/supplier-risk`, `/api/second-sources`, `/api/expedite` |
-| DDMRP | `/api/ddmrp` (buffers, zones, plan, candidates, adjustments, performance) |
+| DDMRP | `/api/ddmrp` (buffers, zones, plan, candidates, adjustments, adjustment proposals, performance) |
 | Exceptions | `/api/exceptions` (the list, acknowledgements and proposal counts) |
 | Several ERPs | `/api/erp-sources`, `/api/erp-mappings` (with suggested matches), `/api/cross-erp/items`, `/api/erp-currencies` |
 | ERP actions | `/api/replenishment/actions/draft-po`, `/api/parameter-writeback` (preview, confirm, history) |

@@ -228,7 +228,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   and each buffer's time in each zone from a daily status snapshot.
 - Proposed DDMRP adjustment factors for forecast periods whose forecast daily demand differs
   from a buffer's average daily usage by the `ddmrp.adjustment_proposal_threshold` share,
-  read-only (`GET /api/ddmrp/adjustments/proposals`, `backend/app/api/ddmrp.py`).
+  read-only (`GET /api/ddmrp/adjustments/proposals`, `backend/app/api/ddmrp.py`). The Buffers
+  screen shows them in the Planned adjustments section, and an admin can use one to fill the
+  add form without sending a request (`app/js/buffers.js`).
 
 **Exceptions**
 
@@ -414,7 +416,8 @@ views are:
 - **Push to ERP**: accepted reorder points and buffer levels the ERP does not hold yet, the
   push, and the history of every write.
 - **Buffers**: the DDMRP buffers with their zones, net flow, order signals and on-hand alerts,
-  suggested buffers, planned adjustments and buffer performance.
+  suggested buffers, planned adjustments with proposed adjustment factors an admin can use to
+  fill the add form, and buffer performance.
 - **Decision log**: every recorded decision across the three lists, newest first.
 - **Settings**: system and personal settings, ERP code mappings with suggested matches,
   purchase budgets, the intermittent and lumpy items with their adoption, and the cost of

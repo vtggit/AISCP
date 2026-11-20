@@ -81,6 +81,9 @@ code is the authority for details.
 - Proposed planned adjustment factors, read-only (`GET /api/ddmrp/adjustments/proposals`): one for each
   buffered item-site and coming forecast period whose forecast daily demand differs from the buffer's
   average daily usage by `ddmrp.adjustment_proposal_threshold` (25% by default) or more (#1459).
+- The Buffers screen's Planned adjustments section now lists proposed adjustment factors from the
+  forecast, showing the forecast and base daily usage and, when present, the current factor, and an
+  admin can use a proposal to fill the adjustment add form without sending a request (#1468).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,

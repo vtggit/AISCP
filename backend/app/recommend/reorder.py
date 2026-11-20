@@ -211,6 +211,29 @@ and every row whose order quantity is not recommendable — keeps the
 cycle computation with its ``service_level_source.source``
 unchanged.  Every key of every recommendation and the order quantity
 itself are unchanged either way.
+
+``recommendations_for_all`` also keeps a process-wide cache of the
+rows it has computed (issue #1464): at most four entries, an
+``OrderedDict`` of key to rows held under a ``threading.Lock``, used
+unless the ``AIERP_RECOMMENDATIONS_CACHE`` environment variable is
+``0``, ``false`` or ``off``, read at call time.  The key is the
+resolved as-of date, the data stamp ``app.db.data_stamp.data_stamp()``
+answers at call time — a committed write to any of the eleven input
+tables moves the stamp, so it changes the key — and the values of the
+environment variables the computation reads at call time,
+``AIERP_SERVICE_LEVEL``, ``AIERP_ORDER_COST`` and
+``AIERP_HOLDING_RATE`` — read once for the call and shared by the key
+and the computation, so the key's values and the computation's
+values can never diverge (a writer of the variables that runs after
+the read, or during the computation, changes neither).  The call
+checks the cache after the
+request's ``recommendations_memo``: a hit answers a copy of the
+stored rows built by ``copy_tree`` without computing, and it is also
+stored in the active request memo the way a computed answer is; a
+miss computes, stores a copy of the computed rows built by
+``copy_tree``, evicting the least recently used entries beyond four,
+and answers the computed rows.  With the switch off the call computes
+on every call, exactly as without the cache.
 """
 
 from __future__ import annotations
@@ -219,10 +242,13 @@ import contextvars
 import math
 import os
 import statistics
+import threading
+from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import date, timedelta
 
 from app.db.connection import get_cursor
+from app.db.data_stamp import data_stamp
 from app.db.read_cache import copy_tree
 from app.forecast.basis import _window_days, forecast_demand_for
 from app.forecast.history import history_for_all, history_for_pair
@@ -231,9 +257,18 @@ from app.forecast.signals import counted_signals
 from app.recommend.empirical import METHOD as EMPIRICAL_METHOD
 from app.recommend.empirical import empirical_reorder_point
 from app.recommend.order_quantity import (
-    holding_rate_from_env,
-    order_cost_from_env,
+    DEFAULT_HOLDING_RATE,
+    DEFAULT_ORDER_COST,
+    HOLDING_RATE_ENV,
+    ORDER_COST_ENV,
+    _positive_finite_number,
     recommend_order_quantity,
+)
+from app.recommend.order_quantity import (
+    holding_rate_from_env as _holding_rate_from_env_source,
+)
+from app.recommend.order_quantity import (
+    order_cost_from_env as _order_cost_from_env_source,
 )
 from app.repositories.empirical_adoptions_postgres_repository import (
     EmpiricalAdoptionPostgresRepository,
@@ -298,6 +333,21 @@ _recommendations_memo: contextvars.ContextVar[dict[date, list[dict]] | None] = (
 )
 
 
+# The raw values of the three environment variables the computation
+# reads — ``AIERP_SERVICE_LEVEL``, ``AIERP_ORDER_COST`` and
+# ``AIERP_HOLDING_RATE`` — read once by ``recommendations_for_all``
+# for the call and held here: the one read shared by the call's cache
+# key and the call's computation, so the key's values and the
+# computation's values can never diverge — a writer of the variables
+# that runs after the read (between the key and the computation, or
+# during the computation) changes neither.  ``None`` (the default)
+# means no call captured one: the readers then read the variables at
+# call time, as without the cache.
+_compute_env_snapshot: contextvars.ContextVar[
+    tuple[str | None, str | None, str | None] | None
+] = contextvars.ContextVar("aierp_recommendations_compute_env", default=None)
+
+
 @contextmanager
 def recommendations_memo():
     """The context in which ``recommendations_for_all`` memoizes its rows.
@@ -309,8 +359,9 @@ def recommendations_memo():
     never changes another caller's.  The memo is cleared when the
     context manager exits, including on an exception.  Nested use is allowed and reuses the
     outer memo.  Outside the context manager,
-    ``recommendations_for_all`` behaves exactly as without it,
-    computing on every call.
+    ``recommendations_for_all`` behaves as without the memo: it
+    consults the process-wide cache (``AIERP_RECOMMENDATIONS_CACHE``
+    on) and computes on every call while the switch is off.
     """
     memo = _recommendations_memo.get()
     if memo is None:
@@ -320,6 +371,108 @@ def recommendations_memo():
         yield
     finally:
         _recommendations_memo.reset(token)
+
+
+# The process-wide cache of the rows ``recommendations_for_all`` has
+# already computed (issue #1464): at most
+# ``RECOMMENDATIONS_CACHE_MAX`` entries, an ``OrderedDict`` of key to
+# rows held under ``_recommendations_cache_lock``.  The cache outlives
+# any request and any memo context: two requests — or two threads —
+# for the same key share one computation, and a committed write to
+# any input table moves the data stamp and so the key, so a written
+# table always takes the answer's key with it and the next call
+# computes.
+RECOMMENDATIONS_CACHE_ENV = "AIERP_RECOMMENDATIONS_CACHE"
+RECOMMENDATIONS_CACHE_MAX = 4
+RECOMMENDATIONS_CACHE_OFF = frozenset({"0", "false", "off"})
+
+_recommendations_cache: OrderedDict[tuple, list[dict]] = OrderedDict()
+_recommendations_cache_lock = threading.Lock()
+
+
+def _recommendations_cache_enabled() -> bool:
+    """Whether the process-wide cache answers one call.
+
+    The switch is the ``AIERP_RECOMMENDATIONS_CACHE`` environment
+    variable, read at call time: the cache is used unless its value
+    is ``0``, ``false`` or ``off`` (case-insensitive, surrounding
+    whitespace ignored) — an unset variable, or any other value,
+    keeps the cache on.
+    """
+    raw = os.environ.get(RECOMMENDATIONS_CACHE_ENV)
+    return not (raw is not None and raw.strip().lower() in RECOMMENDATIONS_CACHE_OFF)
+
+
+def _compute_env_values() -> tuple[str | None, str | None, str | None]:
+    """The raw values of the three computation environment variables.
+
+    ``AIERP_SERVICE_LEVEL``, ``AIERP_ORDER_COST`` and
+    ``AIERP_HOLDING_RATE``, ``None`` while unset — the one read
+    ``recommendations_for_all`` shares between its cache key and its
+    computation, so the key's values and the computation's values can
+    never diverge.
+    """
+    return (
+        os.environ.get(SERVICE_LEVEL_ENV),
+        os.environ.get(ORDER_COST_ENV),
+        os.environ.get(HOLDING_RATE_ENV),
+    )
+
+
+def _recommendations_cache_key(
+    resolved_as_of: date, env: tuple[str | None, str | None, str | None]
+) -> tuple:
+    """The key of one resolved as-of in the process-wide cache.
+
+    The resolved as-of date, the data stamp
+    ``app.db.data_stamp.data_stamp()`` answers at call time — a
+    committed write to any of the eleven input tables moves the stamp
+    and so the key — and the call's read of the environment variables
+    the computation reads, ``AIERP_SERVICE_LEVEL``,
+    ``AIERP_ORDER_COST`` and ``AIERP_HOLDING_RATE`` (their raw
+    values, ``None`` while unset): the same read the computation
+    uses, so the key's values and the computation's values can never
+    diverge.
+    """
+    return (
+        resolved_as_of,
+        data_stamp(),
+        env[0],
+        env[1],
+        env[2],
+    )
+
+
+def _recommendations_cache_lookup(key: tuple) -> list[dict] | None:
+    """The stored rows for one cache key, else None.
+
+    A stored entry is moved to the most recently used position and
+    answered as a copy built by ``copy_tree`` — a caller that changes
+    the rows changes nothing another caller sees; a missing entry
+    answers None.  The step runs under the cache lock.
+    """
+    with _recommendations_cache_lock:
+        rows = _recommendations_cache.get(key)
+        if rows is not None:
+            _recommendations_cache.move_to_end(key)
+    return copy_tree(rows) if rows is not None else None
+
+
+def _recommendations_cache_store(key: tuple, rows: list[dict]) -> None:
+    """Store ``rows`` under ``key`` in the process-wide cache.
+
+    The cache keeps its own copy of the rows built by ``copy_tree`` —
+    the caller's rows may be changed afterwards without changing what
+    the cache stores — and the entry is moved to the most recently
+    used position, evicting the least recently used entries beyond
+    ``RECOMMENDATIONS_CACHE_MAX``.  The step runs under the cache
+    lock.
+    """
+    with _recommendations_cache_lock:
+        _recommendations_cache[key] = copy_tree(rows)
+        _recommendations_cache.move_to_end(key)
+        while len(_recommendations_cache) > RECOMMENDATIONS_CACHE_MAX:
+            _recommendations_cache.popitem(last=False)
 
 
 def active_demand_basis() -> str:
@@ -609,14 +762,13 @@ def _resolve_as_of(as_of: date | None) -> date:
         return default_as_of(cur)
 
 
-def service_level_from_env() -> float:
-    """Read the service level from ``AIERP_SERVICE_LEVEL`` at call time.
+def service_level_from_raw(raw: str | None) -> float:
+    """The service level one raw ``AIERP_SERVICE_LEVEL`` value gives.
 
-    Defaults to 0.95 when the variable is unset. A non-numeric value or
-    a value outside the open interval 0.5 to 0.9999 raises
-    ``ValueError`` naming the variable.
+    Defaults to 0.95 when the value is ``None`` (the variable unset).
+    A non-numeric value or a value outside the open interval 0.5 to
+    0.9999 raises ``ValueError`` naming the variable.
     """
-    raw = os.environ.get(SERVICE_LEVEL_ENV)
     if raw is None:
         return DEFAULT_SERVICE_LEVEL
     try:
@@ -632,6 +784,89 @@ def service_level_from_env() -> float:
             f"{MIN_SERVICE_LEVEL} and {MAX_SERVICE_LEVEL}"
         )
     return value
+
+
+def service_level_from_env() -> float:
+    """The service level the active call's computation reads.
+
+    The call's captured ``AIERP_SERVICE_LEVEL`` value — the value the
+    call's cache key carries, so the key's value and the
+    computation's value can never diverge — when the active call
+    captured one, else the variable at call time.  Defaults to 0.95
+    when the value is unset. A non-numeric value or a value outside
+    the open interval 0.5 to 0.9999 raises ``ValueError`` naming the
+    variable.
+    """
+    snapshot = _compute_env_snapshot.get()
+    if snapshot is not None:
+        return service_level_from_raw(snapshot[0])
+    return service_level_from_raw(os.environ.get(SERVICE_LEVEL_ENV))
+
+
+def _order_cost_from_raw(raw: str | None) -> float:
+    """The per-order cost one raw ``AIERP_ORDER_COST`` value gives.
+
+    ``float(raw)`` when it parses to a finite number greater than 0,
+    else ``DEFAULT_ORDER_COST`` (the value ``None``, empty,
+    non-numeric, non-finite or not positive all fall back).
+    """
+    if raw is None:
+        return DEFAULT_ORDER_COST
+    value = _positive_finite_number(raw)
+    return value if value is not None else DEFAULT_ORDER_COST
+
+
+def order_cost_from_env() -> float:
+    """The per-order cost the active call's computation reads.
+
+    The call's captured ``AIERP_ORDER_COST`` value — the value the
+    call's cache key carries, so the key's value and the
+    computation's value can never diverge — when the active call
+    captured one, else
+    ``app.recommend.order_quantity.order_cost_from_env()`` exactly as
+    before (``float(AIERP_ORDER_COST)`` when it parses to a finite
+    number greater than 0, else ``DEFAULT_ORDER_COST``).
+    """
+    snapshot = _compute_env_snapshot.get()
+    if snapshot is not None:
+        return _order_cost_from_raw(snapshot[1])
+    return _order_cost_from_env_source()
+
+
+def _holding_rate_from_raw(raw: str | None) -> float:
+    """The annual holding rate one raw ``AIERP_HOLDING_RATE`` value
+    gives.
+
+    ``float(raw)`` when it parses to a finite number with 0 < x <= 1,
+    else ``DEFAULT_HOLDING_RATE`` (the value ``None``, empty,
+    non-numeric, non-finite, 0 or above 1 all fall back).
+    """
+    if raw is None:
+        return DEFAULT_HOLDING_RATE
+    try:
+        value = float(raw)
+    except (ValueError, OverflowError):
+        return DEFAULT_HOLDING_RATE
+    if not math.isfinite(value) or not (0 < value <= 1):
+        return DEFAULT_HOLDING_RATE
+    return value
+
+
+def holding_rate_from_env() -> float:
+    """The annual holding rate the active call's computation reads.
+
+    The call's captured ``AIERP_HOLDING_RATE`` value — the value the
+    call's cache key carries, so the key's value and the
+    computation's value can never diverge — when the active call
+    captured one, else
+    ``app.recommend.order_quantity.holding_rate_from_env()`` exactly
+    as before (``float(AIERP_HOLDING_RATE)`` when it parses to a
+    finite number with 0 < x <= 1, else ``DEFAULT_HOLDING_RATE``).
+    """
+    snapshot = _compute_env_snapshot.get()
+    if snapshot is not None:
+        return _holding_rate_from_raw(snapshot[2])
+    return _holding_rate_from_env_source()
 
 
 def _usable_lead_time_days(value: object) -> float | None:
@@ -1783,8 +2018,29 @@ def recommendations_for_all(as_of: date | None = None) -> list[dict]:
     copy of those rows built by ``copy_tree`` without recomputing (a
     caller changing its rows therefore never changes another
     caller's), and calls for different as-ofs never share a
-    computation.  Outside the memo the function computes on every
-    call, exactly as before.
+    computation.  After the memo — which is checked first — the call
+    consults the process-wide cache, used unless the
+    ``AIERP_RECOMMENDATIONS_CACHE`` environment variable is ``0``,
+    ``false`` or ``off`` at call time (at most four entries, held
+    under a ``threading.Lock``): the key is the resolved as-of date,
+    the data stamp ``app.db.data_stamp.data_stamp()`` answers at call
+    time — a committed write to any of the eleven input tables moves
+    the stamp, so it changes the key — and the values of the
+    environment variables the computation reads at call time,
+    ``AIERP_SERVICE_LEVEL``, ``AIERP_ORDER_COST`` and
+    ``AIERP_HOLDING_RATE`` — read once for the call and shared by the
+    key and the computation, so the key's values and the
+    computation's values can never diverge (a writer of the
+    variables that runs after the read, or during the computation,
+    changes neither).  A hit answers a copy of the stored rows
+    built by ``copy_tree`` without computing, and it is also stored
+    in the active request memo the way a computed answer is (a
+    caller changing its rows therefore never changes another
+    caller's); a miss computes, stores a copy of the computed rows
+    built by ``copy_tree``, evicting the least recently used entries
+    beyond four, and answers the computed rows.  With the switch off
+    the function computes on every call, exactly as without the
+    cache.
     """
     resolved_as_of = _resolve_as_of(as_of)
     memo = _recommendations_memo.get()
@@ -1792,6 +2048,38 @@ def recommendations_for_all(as_of: date | None = None) -> list[dict]:
         cached = memo.get(resolved_as_of)
         if cached is not None:
             return copy_tree(cached)
+    if _recommendations_cache_enabled():
+        # The one read of the three computation environment variables
+        # the call shares: the cache key carries these values and the
+        # computation reads them through the call's snapshot, so the
+        # key's values and the computation's can never diverge — a
+        # writer of the variables that runs after this read (between
+        # the key and the computation, or during the computation)
+        # changes neither.
+        env = _compute_env_values()
+        key = _recommendations_cache_key(resolved_as_of, env)
+        token = _compute_env_snapshot.set(env)
+        try:
+            rows = _recommendations_cache_lookup(key)
+            if rows is not None:
+                # The hit is stored in the active request memo the
+                # way a computed answer is: the memo keeps its own
+                # copy, and a caller changing the rows changes
+                # nothing the memo, the cache or another caller sees.
+                if memo is not None:
+                    memo[resolved_as_of] = copy_tree(rows)
+                return rows
+            rows = _compute_recommendations(resolved_as_of)
+            _recommendations_cache_store(key, rows)
+            if memo is not None:
+                # The memo keeps its own copy: the caller's rows are
+                # the freshly computed ones, and mutating them never
+                # changes the memo's, the cache's or another
+                # caller's rows.
+                memo[resolved_as_of] = copy_tree(rows)
+            return rows
+        finally:
+            _compute_env_snapshot.reset(token)
     results = _compute_recommendations(resolved_as_of)
     if memo is not None:
         # The memo keeps its own copy: the caller's rows are the
@@ -1810,10 +2098,19 @@ def _compute_recommendations(resolved_as_of: date) -> list[dict]:
     settings read, the demand and lead-time statistics, the
     item_sites / on_hand / open-purchase / transfer reads, the ABC
     classes and the forecast basis, and ``_attach_loaded`` for every
-    item-site.  Inside a ``recommendations_memo`` context it runs
+    item-site.  The three environment variables it reads —
+    ``AIERP_SERVICE_LEVEL``, ``AIERP_ORDER_COST`` and
+    ``AIERP_HOLDING_RATE`` — are the active call's captured values
+    when one was captured (the cache path of
+    ``recommendations_for_all``), so the values the call's cache key
+    carries are the values the computation uses; without a captured
+    read they are the variables at call time.  Inside a
+    ``recommendations_memo`` context it runs
     once per distinct resolved as-of (the memo answers later
     same-as-of calls with a copy built by ``copy_tree``); outside the
-    memo it runs once per call.
+    memo it runs on every call the process-wide cache does not
+    answer — a cache hit for the call's key answers with a copy
+    built by ``copy_tree`` instead.
     """
     stored_settings = _stored_system_settings()
     service_level = _service_level_for(stored_settings)

@@ -60,6 +60,9 @@ code is the authority for details.
   measured, the share of money at stake, or that none are measured yet (#1413).
 - A data stamp for the reorder recommendations, read in one query, reports the version of each input
   table, so a computed list can be told stale from current (#1463).
+- The reorder recommendations are kept across requests in a process-wide cache keyed by the as-of
+  date and the data stamp, so a repeated read whose inputs have not changed answers without
+  computing (#1464).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica
@@ -308,7 +311,6 @@ code is the authority for details.
   file names but the code does not define (#1175).
 - The order plan's run holds back an order it cannot value (#1301).
 - The nine backend-only API modules are marked with a comment naming the data each serves (#1374).
-- Keep the reorder recommendations across requests, keyed by the as-of date and the data stamp (#1464).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a

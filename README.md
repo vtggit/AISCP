@@ -187,6 +187,11 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - `GET /api/sop/signoffs/proposals` reports the stored sign-off proposal of the latest sign-off of each
   signed month, counting the months as proposed, not proposed, or without a proposal
   (`backend/app/api/sop.py`).
+- The S&OP screen's status card shows how often signed months were signed while proposed: after
+  the sign-off proposal line (or where that line would be when there is none), a record line
+  reads how many of the sign-offs compared with a proposal were signed while proposed, or that
+  none have been compared yet; a failed read or an unusable body leaves the line out
+  (`app/js/sop.js`).
 
 **Supply planning**
 
@@ -439,7 +444,7 @@ any write to an ERP. Personal settings and saved scenarios are open to any signe
 | Forecast | `/api/forecast` (forecasts, snapshots, accuracy, overrides), `/api/demand-signals` |
 | Scenarios | `/api/scenarios` |
 | Aggregate | `/api/aggregate` (projection, spend, deferrals, release, release audit, releases) |
-| S&OP | `/api/sop` (review, scenarios, sign-offs) |
+| S&OP | `/api/sop` (review, scenarios, sign-offs, sign-off proposal stats) |
 | Purchase budgets | `/api/purchase-budgets` (also the proposals) |
 | Supply plan | `/api/supply-plan` (plan, summary, top-ups, release, transfers, transfer release and its audit), `/api/supplier-order-minimums` |
 | Suppliers | `/api/suppliers/performance`, `/api/supplier-risk`, `/api/second-sources`, `/api/expedite` |

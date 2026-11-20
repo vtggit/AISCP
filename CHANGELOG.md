@@ -170,6 +170,8 @@ code is the authority for details.
   without-proposal counts and one entry per signed month, newest first (#1435).
 - The purchasing budget card on Settings now shows how many of the months with a proposal were last
   saved at the proposal, with counts below and above it, or that none have been saved yet (#1442).
+- The S&OP status card now shows how many of the sign-offs compared with a proposal were signed
+  while proposed, or that none have been compared yet (#1448).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

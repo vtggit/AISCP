@@ -58,6 +58,8 @@ code is the authority for details.
 - The Overview's Reorder points card now shows how often the recommended reorder point is accepted,
   with accepted and decided counts, the acceptance rate, raise/lower direction counts, and, when
   measured, the share of money at stake, or that none are measured yet (#1413).
+- A data stamp for the reorder recommendations, read in one query, reports the version of each input
+  table, so a computed list can be told stale from current (#1463).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

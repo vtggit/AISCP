@@ -52,7 +52,7 @@ _TESTS_DIR = Path(_BACKEND_ROOT, "tests")
 _MIGRATIONS_DIR = os.path.join(_BACKEND_ROOT, "migrations")
 
 # The one and only literal pin of the migration head in the suite.
-HEAD_LITERAL = "0052_data_versions"
+HEAD_LITERAL = "0053_ddmrp_adjustment_proposals"
 _QUOTED_HEAD_LITERAL = f'"{HEAD_LITERAL}"'
 _IMPORT_LINE = "from tests.migration_head import CURRENT_HEAD"
 _PROOF_FILE = "test_issue803_freeform.py"

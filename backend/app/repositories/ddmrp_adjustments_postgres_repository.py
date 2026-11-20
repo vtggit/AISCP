@@ -15,6 +15,18 @@ created_by stores the token subject and created_by_name the
 caller's display name (null when the caller has none), the way
 ddmrp_buffers records designated_by and designated_by_name.
 created_at is left to the column's server default (now()).
+
+Every stored adjustment also appends one row of
+``ddmrp_adjustment_proposals`` (issue #1475) beside it — the
+append-only record of the proposals read that ran when the save
+ran: the row's ``adjustment_id`` is the new adjustment's id (no
+foreign key, so the record stays when the adjustment is deleted),
+and it carries the adjustment's codes, window and factor, the
+``proposed_factor`` and ``threshold`` the save computed (null when
+it did not) and ``saved_by`` the adjustment's ``created_by``.  The
+append and the store hold one transaction, so a failed append rolls
+the adjustment back with it, and an overlapping window (the 409)
+writes neither row.
 """
 
 import hashlib
@@ -144,6 +156,8 @@ class DdmrpAdjustmentPostgresRepository:
         note: str | None,
         created_by: str,
         created_by_name: str | None,
+        proposed_factor: float | None = None,
+        threshold: float | None = None,
     ) -> dict:
         """Store one adjustment unless a stored window of the same
         scope overlaps [start_on, end_on] (start_on and end_on
@@ -156,6 +170,15 @@ class DdmrpAdjustmentPostgresRepository:
         on the lock, so the check can never race the insert and the
         windows of one scope never overlap — across processes, not
         just within one.
+
+        Beside the adjustment it stores, the same cursor appends one
+        row of ``ddmrp_adjustment_proposals`` before the commit: the
+        new adjustment's id, its codes, its window and its factor,
+        then ``proposed_factor`` and ``threshold`` (the proposals
+        read the save ran, null when it did not) and ``saved_by``
+        the adjustment's ``created_by``.  One transaction: a failed
+        record insert rolls the adjustment back with it, and an
+        overlapping window writes neither row.
 
         Returns the stored row, and raises
         ``OverlappingAdjustmentError`` — carrying the stored
@@ -209,6 +232,24 @@ class DdmrpAdjustmentPostgresRepository:
                     ),
                 )
                 row = cur.fetchone()
+                cur.execute(
+                    "INSERT INTO ddmrp_adjustment_proposals "
+                    "(adjustment_id, item_code, site_code, start_on, "
+                    "end_on, factor, proposed_factor, threshold, "
+                    "saved_by) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        row["id"],
+                        item_code,
+                        site_code,
+                        start_on,
+                        end_on,
+                        factor,
+                        proposed_factor,
+                        threshold,
+                        created_by,
+                    ),
+                )
             conn.commit()
             return dict(row)
         except Exception:

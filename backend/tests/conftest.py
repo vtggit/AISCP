@@ -80,6 +80,12 @@ def _test_database() -> Generator[None, None, None]:
     # dev token must match the fixtures at the bottom of this file.
     os.environ["AUTH_MODE"] = "development"
     os.environ["AUTH_DEV_TOKEN"] = "dev-secret-token"
+    # The reorder recommendations compute on every call in the suite (#1464). The
+    # cross-request cache is keyed by the data stamp, and the cleanup after each test
+    # truncates every table (data_versions too, which reseeds it at version 0), so two
+    # tests could reach the same stamp with different rows. A test that wants the
+    # cache turns it on itself.
+    os.environ["AIERP_RECOMMENDATIONS_CACHE"] = "0"
 
     backend_root = os.path.join(os.path.dirname(__file__), "..")
     cfg = AlembicConfig(os.path.join(backend_root, "alembic.ini"))

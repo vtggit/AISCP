@@ -76,6 +76,9 @@ code is the authority for details.
   status snapshot, on the Buffers screen (#778, #779, #780, #784).
 - Buffer levels (top of yellow and top of green) pushed through the parameter write-back
   (#762).
+- Proposed planned adjustment factors, read-only (`GET /api/ddmrp/adjustments/proposals`): one for each
+  buffered item-site and coming forecast period whose forecast daily demand differs from the buffer's
+  average daily usage by `ddmrp.adjustment_proposal_threshold` (25% by default) or more (#1459).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,

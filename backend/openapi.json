@@ -3670,7 +3670,7 @@
           "ddmrp"
         ],
         "summary": "Create Ddmrp Adjustment",
-        "description": "Store one DDMRP adjustment factor.\n\nAdmin only.  With both codes given the pair must be a row of\nitem_sites (a pair that is not in item_sites answers 404); with\nboth absent the factor applies to every stored buffer.  The\nwindow [start_on, end_on] is inclusive and may not overlap a\nstored adjustment of the same scope \u2014 the same item-site pair, or\nboth all-buffer (a shared boundary date overlaps) \u2014 which answers\n409 with a stable machine-readable detail; the overlap check and\nthe store hold one transaction, serialized per scope, so a\nconcurrent same-scope window can never slip through the check.\nThe factor is a decimal strictly above 0 and at most 10; a\nfactor outside (0, 10], end_on before start_on, one code without\nthe other, an empty code or a NUL byte in any field answers 422.\nThe stored row records created_by as the token subject and\ncreated_by_name its display name.  Answers 201 with the stored\nrow.",
+        "description": "Store one DDMRP adjustment factor.\n\nAdmin only.  With both codes given the pair must be a row of\nitem_sites (a pair that is not in item_sites answers 404); with\nboth absent the factor applies to every stored buffer.  The\nwindow [start_on, end_on] is inclusive and may not overlap a\nstored adjustment of the same scope \u2014 the same item-site pair, or\nboth all-buffer (a shared boundary date overlaps) \u2014 which answers\n409 with a stable machine-readable detail; the overlap check and\nthe store hold one transaction, serialized per scope, so a\nconcurrent same-scope window can never slip through the check.\nThe factor is a decimal strictly above 0 and at most 10; a\nfactor outside (0, 10], end_on before start_on, one code without\nthe other, an empty code or a NUL byte in any field answers 422.\nThe stored row records created_by as the token subject and\ncreated_by_name its display name.  Beside it, one row of\n``ddmrp_adjustment_proposals`` is appended in the same\ntransaction (the record): the new adjustment's id, its codes,\nits window and its factor, the ``proposed_factor`` of the\nproposals read \u2014 for a body with both codes, the ``factor`` of\nthe proposal of ``adjustment_proposals(periods=12)`` whose\n``item_code``, ``site_code``, ``start_on`` and ``end_on`` all\nequal the body's \u2014 with the read's ``threshold`` stored too;\nboth are null for an all-buffer body, when no proposal matched\nthe window, or when the proposals read raised, and a matched\nproposal whose ``factor`` is null or below 0 stores a null\n``proposed_factor``.  A failed append rolls the save back, and\nan overlapping window appends neither row.  Answers 201 with\nthe stored row.",
         "operationId": "create_ddmrp_adjustment_api_ddmrp_adjustments_post",
         "security": [
           {
@@ -3785,6 +3785,61 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DdmrpAdjustmentProposalsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ddmrp/adjustments/record": {
+      "get": {
+        "tags": [
+          "ddmrp"
+        ],
+        "summary": "Get Ddmrp Adjustment Record",
+        "description": "The measure of the ``ddmrp_adjustment_proposals`` record.\n\nOpen to any authenticated user (the router is mounted behind the\napp's authentication gate), like ``GET /api/ddmrp/adjustments``.\nOver every row of ``ddmrp_adjustment_proposals`` \u2014 the record\nrow appended beside every stored adjustment \u2014 the answer is\n``{saved, with_proposal, taken, below, above}``: ``saved``\ncounts the rows, ``with_proposal`` those whose\n``proposed_factor`` is not null, and of those ``taken`` the rows\nwhose ``factor`` is within 0.005 of ``proposed_factor``,\n``below`` those lower by more and ``above`` those higher by\nmore, so ``taken + below + above = with_proposal``.  Nothing is\nwritten.",
+        "operationId": "get_ddmrp_adjustment_record_api_ddmrp_adjustments_record_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DdmrpAdjustmentRecord"
                 }
               }
             }
@@ -13766,6 +13821,40 @@
         ],
         "title": "DdmrpAdjustmentProposalsResponse",
         "description": "The planned DDMRP adjustment factors, as of one date.\n\n``threshold`` is the ``ddmrp.adjustment_proposal_threshold``\nshare that applied and ``periods`` the number of forecast periods\nscanned per buffered item-site."
+      },
+      "DdmrpAdjustmentRecord": {
+        "properties": {
+          "saved": {
+            "type": "integer",
+            "title": "Saved"
+          },
+          "with_proposal": {
+            "type": "integer",
+            "title": "With Proposal"
+          },
+          "taken": {
+            "type": "integer",
+            "title": "Taken"
+          },
+          "below": {
+            "type": "integer",
+            "title": "Below"
+          },
+          "above": {
+            "type": "integer",
+            "title": "Above"
+          }
+        },
+        "type": "object",
+        "required": [
+          "saved",
+          "with_proposal",
+          "taken",
+          "below",
+          "above"
+        ],
+        "title": "DdmrpAdjustmentRecord",
+        "description": "The measure of the ``ddmrp_adjustment_proposals`` record.\n\nOver every record row: ``saved`` counts the rows,\n``with_proposal`` those whose ``proposed_factor`` is not null,\nand of those ``taken`` the rows whose ``factor`` is within 0.005\nof ``proposed_factor``, ``below`` those lower by more and\n``above`` those higher by more \u2014 so\n``taken + below + above = with_proposal``."
       },
       "DdmrpBuffer": {
         "properties": {

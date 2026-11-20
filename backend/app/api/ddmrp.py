@@ -35,6 +35,32 @@ created_by the token subject and created_by_name its display name;  ``DELETE
 /api/ddmrp/adjustments/{id}`` (admin only) removes one: 204 when a
 stored adjustment was removed, 404 when there is no such
 adjustment.
+Every store of ``POST /api/ddmrp/adjustments`` appends one row of
+``ddmrp_adjustment_proposals`` beside the adjustment it stores, in
+the same transaction (issue #1475): the new adjustment's id, its
+codes, its window and its factor, the ``proposed_factor`` the
+proposals read proposed for exactly that window at that moment — for
+a body with both codes, the ``factor`` of the proposal of
+``adjustment_proposals(periods=12)`` whose ``item_code``,
+``site_code``, ``start_on`` and ``end_on`` all equal the body's —
+with the ``threshold`` of that read stored too.  Both are null for
+an all-buffer body (both codes absent), when no proposal matched the
+window, or when the proposals read raised; a matched proposal whose
+``factor`` is null or below 0 stores a null ``proposed_factor``.
+A failed append rolls the save back, so an adjustment is never
+stored without its record row, and an overlapping window (the 409)
+appends neither row.  The rows are append-only — never updated and
+never deleted: ``DELETE /api/ddmrp/adjustments/{id}`` removes the
+adjustment and leaves every record row, and ``adjustment_id`` has
+no foreign key to ``ddmrp_adjustments`` on purpose, so the row
+stays when its adjustment is deleted.
+``GET /api/ddmrp/adjustments/record`` (any authenticated user)
+answers, over every row of the record, ``{saved, with_proposal,
+taken, below, above}``: ``saved`` counts the rows, ``with_proposal``
+those whose ``proposed_factor`` is not null, and of those ``taken``
+the rows whose ``factor`` is within 0.005 of ``proposed_factor``,
+``below`` those lower by more and ``above`` those higher by more, so
+``taken + below + above = with_proposal``.  Nothing is written.
 ``GET /api/ddmrp/adjustments/proposals?periods=3`` (any authenticated
 user) answers, as of the same default as-of date, with the planned
 adjustment factors of the coming forecast periods: for each buffered
@@ -1247,6 +1273,116 @@ def get_ddmrp_adjustment_proposals(
     return adjustment_proposals(periods)
 
 
+class DdmrpAdjustmentRecord(BaseModel):
+    """The measure of the ``ddmrp_adjustment_proposals`` record.
+
+    Over every record row: ``saved`` counts the rows,
+    ``with_proposal`` those whose ``proposed_factor`` is not null,
+    and of those ``taken`` the rows whose ``factor`` is within 0.005
+    of ``proposed_factor``, ``below`` those lower by more and
+    ``above`` those higher by more — so
+    ``taken + below + above = with_proposal``.
+    """
+
+    saved: int
+    with_proposal: int
+    taken: int
+    below: int
+    above: int
+
+
+@router.get("/adjustments/record", response_model=DdmrpAdjustmentRecord)
+def get_ddmrp_adjustment_record() -> dict:
+    """The measure of the ``ddmrp_adjustment_proposals`` record.
+
+    Open to any authenticated user (the router is mounted behind the
+    app's authentication gate), like ``GET /api/ddmrp/adjustments``.
+    Over every row of ``ddmrp_adjustment_proposals`` — the record
+    row appended beside every stored adjustment — the answer is
+    ``{saved, with_proposal, taken, below, above}``: ``saved``
+    counts the rows, ``with_proposal`` those whose
+    ``proposed_factor`` is not null, and of those ``taken`` the rows
+    whose ``factor`` is within 0.005 of ``proposed_factor``,
+    ``below`` those lower by more and ``above`` those higher by
+    more, so ``taken + below + above = with_proposal``.  Nothing is
+    written.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT "
+            "COUNT(*) AS saved, "
+            "COUNT(*) FILTER (WHERE proposed_factor IS NOT NULL) "
+            "AS with_proposal, "
+            "COUNT(*) FILTER (WHERE proposed_factor IS NOT NULL "
+            "AND abs(factor - proposed_factor) <= 0.005) AS taken, "
+            "COUNT(*) FILTER (WHERE proposed_factor IS NOT NULL "
+            "AND factor < proposed_factor - 0.005) AS below, "
+            "COUNT(*) FILTER (WHERE proposed_factor IS NOT NULL "
+            "AND factor > proposed_factor + 0.005) AS above "
+            "FROM ddmrp_adjustment_proposals"
+        )
+        row = cur.fetchone()
+    return dict(row)
+
+
+def _proposal_day(value: object) -> date | None:
+    """One window date of a proposals answer, as a ``date``.
+
+    The proposals answer carries ``start_on`` and ``end_on`` as
+    dates (or ISO date strings); anything that is neither — null or
+    malformed — answers None, so it matches no body.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _proposal_at_save(
+    item_code: str | None,
+    site_code: str | None,
+    start_on: date,
+    end_on: date,
+) -> tuple[float | None, float | None]:
+    """The (proposed_factor, threshold) of the save's record row.
+
+    For a body with both codes: ``adjustment_proposals(periods=12)``
+    is called once — ``threshold`` is the answer's threshold and
+    ``proposed_factor`` the factor of the proposal whose
+    ``item_code``, ``site_code``, ``start_on`` and ``end_on`` all
+    equal the body's, null when no proposal matched.  For an
+    all-buffer body (both codes absent) nothing is called and both
+    are null.  When the proposals read raises — or answers with a
+    matched proposal whose factor is null or below 0 — the failure
+    is the null ``proposed_factor``, and the save goes on.
+    """
+    if item_code is None or site_code is None:
+        return None, None
+    try:
+        answer = adjustment_proposals(periods=12)
+        threshold = answer.get("threshold")
+        for proposal in answer.get("proposals") or []:
+            if (
+                proposal.get("item_code") == item_code
+                and proposal.get("site_code") == site_code
+                and _proposal_day(proposal.get("start_on")) == start_on
+                and _proposal_day(proposal.get("end_on")) == end_on
+            ):
+                factor = proposal.get("factor")
+                if factor is not None and factor >= 0:
+                    return float(factor), threshold
+                return None, threshold
+        return None, threshold
+    except Exception:
+        return None, None
+
+
 @router.post(
     "/adjustments",
     status_code=201,
@@ -1279,12 +1415,27 @@ def create_ddmrp_adjustment(
     factor outside (0, 10], end_on before start_on, one code without
     the other, an empty code or a NUL byte in any field answers 422.
     The stored row records created_by as the token subject and
-    created_by_name its display name.  Answers 201 with the stored
-    row.
+    created_by_name its display name.  Beside it, one row of
+    ``ddmrp_adjustment_proposals`` is appended in the same
+    transaction (the record): the new adjustment's id, its codes,
+    its window and its factor, the ``proposed_factor`` of the
+    proposals read — for a body with both codes, the ``factor`` of
+    the proposal of ``adjustment_proposals(periods=12)`` whose
+    ``item_code``, ``site_code``, ``start_on`` and ``end_on`` all
+    equal the body's — with the read's ``threshold`` stored too;
+    both are null for an all-buffer body, when no proposal matched
+    the window, or when the proposals read raised, and a matched
+    proposal whose ``factor`` is null or below 0 stores a null
+    ``proposed_factor``.  A failed append rolls the save back, and
+    an overlapping window appends neither row.  Answers 201 with
+    the stored row.
     """
     _require_storable_designated_by(user)
     if body.item_code is not None:
         _require_item_site(body.item_code, body.site_code)
+    proposed_factor, threshold = _proposal_at_save(
+        body.item_code, body.site_code, body.start_on, body.end_on
+    )
     try:
         return _adjustments_repo.insert_if_disjoint(
             id=str(uuid4()),
@@ -1296,6 +1447,8 @@ def create_ddmrp_adjustment(
             note=body.note,
             created_by=user.sub,
             created_by_name=display_name(user),
+            proposed_factor=proposed_factor,
+            threshold=threshold,
         )
     except OverlappingAdjustmentError as conflict:
         raise _overlap_conflict(conflict.conflict)

@@ -65,6 +65,32 @@
 //     line ([data-testid="buffers-adjust-delete"]) that, after the
 //     inline "Delete this adjustment?", sends the DELETE with the
 //     id. Any other failure shows "The change could not be saved.".
+//     Directly after the stored lines (or their empty note), and
+//     before the add form, a proposals block
+//     ([data-testid="buffers-adjust-proposals"]) — GET
+//     /api/ddmrp/adjustments/proposals, fetched with the sections on
+//     activation and Refresh under its own request-sequence guard
+//     (proposalsSeq, advanced by the sign-out reset) and with no
+//     note and no loading placeholder: a failed read (any status or
+//     a network error) or any body that is not an object whose
+//     "proposals" is an array with at least one well-formed line
+//     (string item_code, site_code, start_on and end_on; finite
+//     factor, forecast_daily and adu_base) leaves the block out and
+//     the section renders exactly as before. Shown, the block leads
+//     "Proposed from the forecast" and lists one line per proposal
+//     ([data-testid="buffers-adjust-proposal"]) in the answer's
+//     order, reusing the adjustments' list classes: the pair, the
+//     window "<start_on> – <end_on>", "×<factor>", "forecast
+//     <forecast_daily>/day against <adu_base>/day" (one decimal
+//     each) and, when existing_factor is not null, "now
+//     ×<existing_factor>". For an admin each line ends with a
+//     "Use" button ([data-testid="buffers-adjust-use"]) that types
+//     the proposal into the add form's draft — item and site,
+//     start and end dates, the factor as String(factor) and the note
+//     "Proposed from the forecast: <forecast_daily>/day against
+//     <adu_base>/day" — and clears a previous add error, without
+//     sending anything; the admin saves with "Add adjustment" as
+//     before.
 //   * "Buffer performance (last 90 days)"
 //     ([data-testid="buffers-performance"]) — GET
 //     /api/ddmrp/performance: one row per buffer (item / site, days
@@ -91,6 +117,7 @@
   var BUFFERS_PATH = '/api/ddmrp/buffers';
   var CANDIDATES_PATH = '/api/ddmrp/candidates';
   var ADJUSTMENTS_PATH = '/api/ddmrp/adjustments';
+  var PROPOSALS_PATH = '/api/ddmrp/adjustments/proposals';
   var PERFORMANCE_PATH = '/api/ddmrp/performance';
   var ME_PATH = '/api/auth/me';
 
@@ -109,6 +136,7 @@
   var UNSIZED_TITLE = 'Unsized buffers';
   var CANDIDATES_TITLE = 'Suggested buffers';
   var ADJUSTMENTS_TITLE = 'Planned adjustments';
+  var PROPOSALS_LEAD = 'Proposed from the forecast';
   var PERFORMANCE_TITLE = 'Buffer performance (last 90 days)';
   var CANDIDATES_EMPTY =
     'No suggestions: every A and B item-site with a lead time of a week or more is already buffered, or none qualifies.';
@@ -169,6 +197,7 @@
       adjustError: null, // the last failed adjustment add's message
       confirmAdjustDelete: null, // { id } the open adjustment delete confirm
       adjustDeleteError: null, // the last failed adjustment delete's message
+      proposals: null, // the newest usable proposals answer (well-formed lines)
     };
   }
 
@@ -204,6 +233,7 @@
   var candidatesSeq = 0;
   var adjustmentsSeq = 0;
   var performanceSeq = 0;
+  var proposalsSeq = 0;
 
   /* ------------------------------ helpers ------------------------------ */
 
@@ -636,6 +666,7 @@
     loadCandidates();
     loadAdjustments();
     loadPerformance();
+    loadProposals();
   }
 
   function loadCandidates() {
@@ -744,6 +775,39 @@
         state.performanceError = PERFORMANCE_LOAD_ERROR;
         state.performanceLoading = false;
         render();
+      }
+    );
+  }
+
+  // The proposals' read, beside the sections' own reads: unlike them
+  // it carries no note and no loading placeholder — a failed read
+  // (any status or a network error) or any body that is not an
+  // object whose "proposals" is an array with at least one
+  // well-formed line simply leaves the block out, and the section
+  // renders exactly as before. Its own sequence guard keeps a stale
+  // answer from rendering into a newer load.
+  function loadProposals() {
+    proposalsSeq += 1;
+    var mySeq = proposalsSeq;
+    global.Api.get(PROPOSALS_PATH).then(
+      function (payload) {
+        if (mySeq !== proposalsSeq) {
+          return; // a newer read is out: this answer is stale
+        }
+        var usable = usableProposals(payload);
+        if (state.proposals !== usable) {
+          state.proposals = usable;
+          render();
+        }
+      },
+      function () {
+        if (mySeq !== proposalsSeq) {
+          return;
+        }
+        if (state.proposals !== null) {
+          state.proposals = null;
+          render();
+        }
       }
     );
   }
@@ -1084,6 +1148,11 @@
     if (target.closest('[data-testid="buffers-adjust-delete-cancel"]')) {
       cancelAdjustDeleteConfirm();
     }
+    var useProposal = target.closest('[data-testid="buffers-adjust-use"]');
+    if (useProposal) {
+      useProposalAdjustment(useProposal.getAttribute('data-index'));
+      return;
+    }
   }
 
   function onRootSubmit(event) {
@@ -1120,6 +1189,37 @@
       draft[fields[i]] = input && typeof input.value === 'string' ? input.value : '';
     }
     state.adjustDraft = draft;
+  }
+
+  // A proposals line's Use button: it types the proposal into the
+  // add form's draft — item and site, the window, the factor as
+  // String(factor) and the note with the line's one-decimal figures
+  // — and clears a previous add error. It renders and sends
+  // nothing; the admin saves with "Add adjustment" as before.
+  function useProposalAdjustment(index) {
+    if (!state.isAdmin || !state.proposals) {
+      return;
+    }
+    var proposal = state.proposals[Number(index)];
+    if (!isUsableProposal(proposal)) {
+      return; // a line that no longer exists cannot be used
+    }
+    state.adjustDraft = {
+      item_code: proposal.item_code,
+      site_code: proposal.site_code,
+      start_on: proposal.start_on,
+      end_on: proposal.end_on,
+      factor: String(proposal.factor),
+      note:
+        PROPOSALS_LEAD +
+        ': ' +
+        proposal.forecast_daily.toFixed(1) +
+        '/day against ' +
+        proposal.adu_base.toFixed(1) +
+        '/day',
+    };
+    state.adjustError = null;
+    render();
   }
 
   /* ------------------------------ rendering ---------------------------- */
@@ -1587,6 +1687,134 @@
     );
   }
 
+  // A well-formed proposal line: an object with string item_code,
+  // site_code, start_on and end_on and finite factor, forecast_daily
+  // and adu_base (existing_factor is free to be null or a figure).
+  function isUsableProposal(entry) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return false;
+    }
+    if (
+      typeof entry.item_code !== 'string' ||
+      entry.item_code === '' ||
+      typeof entry.site_code !== 'string' ||
+      entry.site_code === '' ||
+      typeof entry.start_on !== 'string' ||
+      entry.start_on === '' ||
+      typeof entry.end_on !== 'string' ||
+      entry.end_on === ''
+    ) {
+      return false;
+    }
+    return (
+      isFiniteNumber(entry.factor) &&
+      isFiniteNumber(entry.forecast_daily) &&
+      isFiniteNumber(entry.adu_base)
+    );
+  }
+
+  // A usable proposals answer: an object whose "proposals" is an
+  // array with at least one well-formed line; anything less — a
+  // bare list, an object without the array, or an array with no
+  // usable line — answers null and the block stays out.
+  function usableProposals(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return null;
+    }
+    if (!Array.isArray(body.proposals)) {
+      return null;
+    }
+    var lines = [];
+    for (var i = 0; i < body.proposals.length; i++) {
+      if (isUsableProposal(body.proposals[i])) {
+        lines.push(body.proposals[i]);
+      }
+    }
+    return lines.length === 0 ? null : lines;
+  }
+
+  // The proposals block, inside the "Planned adjustments" section,
+  // directly after the stored lines (or their empty note) and before
+  // the add form: the lead line, then one line per well-formed
+  // proposal in the answer's order, reusing the adjustments' list
+  // classes — the pair, the window, "×<factor>", "forecast
+  // <f>/day against <a>/day" (one decimal each) and, when
+  // existing_factor is not null, "now ×<existing_factor>". Every
+  // value is inserted as text, never as markup.
+  function proposalsBlockHtml() {
+    var lines = [];
+    for (var i = 0; i < state.proposals.length; i++) {
+      lines.push(proposalLineHtml(state.proposals[i], i));
+    }
+    return (
+      '<div class="bf-adjust-proposals" data-testid="buffers-adjust-proposals">' +
+      '<p class="bf-note" data-testid="buffers-adjust-proposals-lead">' +
+      esc(PROPOSALS_LEAD) +
+      '</p>' +
+      '<ul class="bf-adjust-list">' +
+      lines.join('') +
+      '</ul>' +
+      '</div>'
+    );
+  }
+
+  function proposalLineHtml(proposal, index) {
+    return (
+      '<li class="bf-adjust-line" data-testid="buffers-adjust-proposal" data-index="' +
+      String(index) +
+      '">' +
+      '<span class="bf-pair">' +
+      esc(pairText(proposal.item_code, proposal.site_code)) +
+      '</span>' +
+      '<span class="bf-adjust-window">' +
+      esc(proposal.start_on + ' ' + EN_DASH + ' ' + proposal.end_on) +
+      '</span>' +
+      '<span class="bf-adjust-factor">' +
+      esc(TIMES + factorText(proposal.factor)) +
+      '</span>' +
+      '<span class="bf-adjust-note">' +
+      esc(
+        'forecast ' +
+          proposal.forecast_daily.toFixed(1) +
+          '/day against ' +
+          proposal.adu_base.toFixed(1) +
+          '/day'
+      ) +
+      '</span>' +
+      existingFactorSpanHtml(proposal.existing_factor) +
+      (state.isAdmin ? proposalUseButtonHtml(index) : '') +
+      '</li>'
+    );
+  }
+
+  // The "now ×<existing_factor>" span: only when existing_factor
+  // is not null and carries a usable figure.
+  function existingFactorSpanHtml(existing) {
+    if (existing === null || existing === undefined) {
+      return '';
+    }
+    if (typeof existing === 'string') {
+      existing = existing === '' ? NaN : Number(existing);
+    }
+    if (!isFiniteNumber(existing)) {
+      return '';
+    }
+    return (
+      '<span class="bf-adjust-factor">' +
+      esc('now ' + TIMES + factorText(existing)) +
+      '</span>'
+    );
+  }
+
+  function proposalUseButtonHtml(index) {
+    return (
+      '<button type="button" class="btn btn-secondary bf-adjust-use" ' +
+      'data-testid="buffers-adjust-use" data-index="' +
+      String(index) +
+      '">Use</button>'
+    );
+  }
+
   function adjustmentsSectionHtml() {
     var inner;
     if (state.adjustmentsError) {
@@ -1596,11 +1824,14 @@
         '</p>';
     } else if (state.adjustments) {
       var rows = adjustmentRows();
+      var proposals =
+        state.proposals && state.proposals.length > 0 ? proposalsBlockHtml() : '';
       if (rows.length === 0) {
         inner =
           '<p class="bf-section-empty" data-testid="buffers-adjustments-empty">' +
           esc(ADJUSTMENTS_EMPTY) +
           '</p>' +
+          proposals +
           (state.isAdmin ? adjustFormHtml() : '');
       } else {
         var lines = [];
@@ -1615,6 +1846,7 @@
           '<ul class="bf-adjust-list">' +
           lines.join('') +
           '</ul>' +
+          proposals +
           (state.isAdmin ? adjustFormHtml() : '');
       }
     } else {
@@ -1871,6 +2103,7 @@
     candidatesSeq += 1;
     adjustmentsSeq += 1;
     performanceSeq += 1;
+    proposalsSeq += 1;
     state = freshState();
     render();
   }

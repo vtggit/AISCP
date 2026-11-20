@@ -64,6 +64,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   `data_versions`, bumped by statement triggers on the eleven tables the recommendations
   read, and read in one query by `data_stamp()` (`backend/app/db/data_stamp.py`,
   `backend/migrations/versions/0052_data_versions.py`).
+- The reorder recommendation rows are kept across requests in a process-wide cache of at most four entries,
+  keyed by the resolved as-of date, the data stamp and the values of `AIERP_SERVICE_LEVEL`,
+  `AIERP_ORDER_COST` and `AIERP_HOLDING_RATE`, and used unless `AIERP_RECOMMENDATIONS_CACHE` is `0`, `false`
+  or `off` at call time (`backend/app/recommend/reorder.py`).
 
 **Planner decisions**
 
@@ -511,7 +515,7 @@ are committed.
   `ODOO_TIMEOUT_SECONDS`, `ODOO_ALLOW_INSECURE`, `ODOO_ALLOW_WRITES`.
 - **Calculation:** `AIERP_SERVICE_LEVEL`, `AIERP_ORDER_COST`, `AIERP_HOLDING_RATE`,
   `EXCESS_COVER_MONTHS`.
-- **Other:** `CORS_ORIGINS`, `LOG_LEVEL`, `LOG_FORMAT`.
+- **Other:** `CORS_ORIGINS`, `LOG_LEVEL`, `LOG_FORMAT`, `AIERP_RECOMMENDATIONS_CACHE`.
 
 Database migrations live in `backend/migrations/versions/` (Alembic).
 

@@ -308,6 +308,7 @@ code is the authority for details.
   file names but the code does not define (#1175).
 - The order plan's run holds back an order it cannot value (#1301).
 - The nine backend-only API modules are marked with a comment naming the data each serves (#1374).
+- Keep the reorder recommendations across requests, keyed by the as-of date and the data stamp (#1464).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a

@@ -364,6 +364,7 @@ def test_issue502_freeform(client):
     assert page.status_code == 200
     entries = page.json()
     assert {entry["key"] for entry in entries} == {
+        "ddmrp.adjustment_proposal_threshold",
         "ddmrp.adu_window_days",
         "ddmrp.lead_time_factor_long",
         "ddmrp.lead_time_factor_medium",

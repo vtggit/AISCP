@@ -35,6 +35,27 @@ created_by the token subject and created_by_name its display name;  ``DELETE
 /api/ddmrp/adjustments/{id}`` (admin only) removes one: 204 when a
 stored adjustment was removed, 404 when there is no such
 adjustment.
+``GET /api/ddmrp/adjustments/proposals?periods=3`` (any authenticated
+user) answers, as of the same default as-of date, with the planned
+adjustment factors of the coming forecast periods: for each buffered
+item-site whose zone row (``ddmrp_zone_rows``) is "ok" and whose
+``adu_base`` is above 0, and each of the first ``periods`` periods
+(1 to 12, default 3; anything else answers 422) of its forecast row
+(``app.forecast.listing.forecast_rows`` at the same as-of), a period
+is proposed only when its factor — the period's
+``effective_quantity`` over its ``bucket_start`` to ``bucket_end``
+days (inclusive) divided by the buffer's ``adu_base`` — differs from
+1 by at least the ``ddmrp.adjustment_proposal_threshold`` share
+(default 0.25): each proposal carries the pair, the period's
+``bucket_start`` and ``bucket_end`` as ``start_on`` and ``end_on``,
+the buffer's ``adu_base``, the period's forecast daily demand, the
+factor rounded to 2 decimals and held between 0.05 and 10, and
+``existing_factor``, the factor of the stored adjustment that covers
+``start_on`` (the pair's own adjustment first, else the all-buffer
+one, else null).  The proposals are ordered by ``start_on``, then the
+larger ``abs(factor - 1)``, then item_code and site_code, and the
+answer is ``{"as_of", "threshold", "periods", "proposals"}``.
+Nothing is written.
 ``GET /api/ddmrp/zones`` (any authenticated user) answers, as of the
 demand statistics' default as-of date, with one row per stored
 designation ordered by item_code then site_code: the item-site's
@@ -136,6 +157,7 @@ from app.ddmrp.zones import (
     buffer_zones,
     setting_value,
 )
+from app.forecast.listing import forecast_rows
 from app.recommend.abc import abc_for_all
 from app.recommend.reorder import recommendations_for_all
 from app.repositories.ddmrp_adjustments_postgres_repository import (
@@ -176,6 +198,11 @@ _FACTOR_DECIMAL_SCHEMA = {
 #: time in days reaches this many: a buffer shorter than a week
 #: of lead time rarely pays for itself.
 MIN_CANDIDATE_DLT_DAYS = 7
+
+#: The share by which a period's forecast daily demand must differ
+#: from a buffer's average daily usage before the period is proposed
+#: for a planned adjustment factor.
+ADJUSTMENT_PROPOSAL_THRESHOLD_KEY = "ddmrp.adjustment_proposal_threshold"
 
 
 class DdmrpBuffer(BaseModel):
@@ -600,6 +627,124 @@ def ddmrp_zone_rows(as_of: date | None = None) -> tuple[date, list[dict]]:
         rows.append(row)
 
     return context["as_of"], rows
+
+
+def _covering_adjustment_factor(
+    adjustments: list[dict],
+    item_code: str,
+    site_code: str,
+    day: date,
+) -> float | None:
+    """The factor of the stored adjustment that covers ``day``.
+
+    From the one read of the stored adjustments: the item-site's own
+    adjustment whose window contains ``day`` first, else the
+    all-buffer one (both codes null) whose window contains it, else
+    None.  The windows of one scope never overlap (the API answers
+    409), so each scope holds at most one row covering a date.
+    """
+    all_buffer: float | None = None
+    for adjustment in adjustments:
+        if not (adjustment["start_on"] <= day <= adjustment["end_on"]):
+            continue
+        if (
+            adjustment["item_code"] == item_code
+            and adjustment["site_code"] == site_code
+        ):
+            return float(adjustment["factor"])
+        if adjustment["item_code"] is None and adjustment["site_code"] is None:
+            all_buffer = float(adjustment["factor"])
+    return all_buffer
+
+
+def adjustment_proposals(periods: int = 3) -> dict:
+    """The planned adjustment factors of the coming forecast periods.
+
+    The shared answer of ``GET /api/ddmrp/adjustments/proposals``: as
+    of the demand statistics' default as-of date, one proposal per
+    buffered item-site and forecast period whose forecast diverges
+    from the buffer's average daily usage by at least the
+    ``ddmrp.adjustment_proposal_threshold`` share.
+
+    The buffered item-sites' zone rows are read once
+    (``ddmrp_zone_rows``) for their ``adu_base``, status and as-of;
+    the forecast rows (``app.forecast.listing.forecast_rows``,
+    imported by name) and the stored adjustments are read once each
+    at the same as-of.  For each buffered item-site whose zone row's
+    status is "ok" and whose ``adu_base`` is above 0, and each of the
+    first ``periods`` periods of its forecast row: ``forecast_daily``
+    is the period's ``effective_quantity`` divided by its days from
+    ``bucket_start`` to ``bucket_end`` (inclusive) and the factor is
+    ``forecast_daily`` over ``adu_base``.  A period is proposed only
+    when ``abs(factor - 1)`` is at least the threshold setting; its
+    factor is then rounded to 2 decimals and held between 0.05 and
+    10.  Each proposal is ``{item_code, site_code, start_on, end_on,
+    adu_base, forecast_daily, factor, existing_factor}``, ``start_on``
+    and ``end_on`` the period's ``bucket_start`` and ``bucket_end``,
+    ``existing_factor`` the factor of the stored adjustment that
+    covers ``start_on`` (the item-site's own adjustment first, else
+    the all-buffer one, else null).  The proposals are ordered by
+    ``start_on``, then the larger ``abs(factor - 1)``, then
+    ``item_code`` and ``site_code``.  Nothing is written.
+    """
+    as_of, zone_rows = ddmrp_zone_rows()
+    threshold = setting_value(
+        _stored_system_settings(), ADJUSTMENT_PROPOSAL_THRESHOLD_KEY
+    )
+    forecast_by_pair = {
+        (row["item_code"], row["site_code"]): row for row in forecast_rows(as_of)
+    }
+    adjustments = _adjustments_repo.list_all()
+
+    proposals: list[dict] = []
+    for zone_row in zone_rows:
+        if zone_row["status"] != "ok" or zone_row["adu_base"] <= 0:
+            continue
+        item_code = zone_row["item_code"]
+        site_code = zone_row["site_code"]
+        forecast = forecast_by_pair.get((item_code, site_code))
+        if forecast is None:
+            continue
+        for bucket in forecast["forecast"][:periods]:
+            start_on = bucket["bucket_start"]
+            end_on = bucket["bucket_end"]
+            days = (end_on - start_on).days + 1
+            effective = bucket.get("effective_quantity")
+            if days <= 0 or effective is None:
+                continue
+            forecast_daily = effective / days
+            factor = forecast_daily / zone_row["adu_base"]
+            if abs(factor - 1) < threshold:
+                continue
+            proposals.append(
+                {
+                    "item_code": item_code,
+                    "site_code": site_code,
+                    "start_on": start_on,
+                    "end_on": end_on,
+                    "adu_base": zone_row["adu_base"],
+                    "forecast_daily": forecast_daily,
+                    "factor": min(10.0, max(0.05, round(factor, 2))),
+                    "existing_factor": _covering_adjustment_factor(
+                        adjustments, item_code, site_code, start_on
+                    ),
+                }
+            )
+
+    proposals.sort(
+        key=lambda proposal: (
+            proposal["start_on"],
+            -abs(proposal["factor"] - 1),
+            proposal["item_code"],
+            proposal["site_code"],
+        )
+    )
+    return {
+        "as_of": as_of,
+        "threshold": threshold,
+        "periods": periods,
+        "proposals": proposals,
+    }
 
 
 @router.get("/zones", response_model=DdmrpZoneResponse)
@@ -1032,6 +1177,74 @@ def list_ddmrp_adjustments() -> list[dict]:
     Nothing is written.
     """
     return _adjustments_repo.list_all()
+
+
+class DdmrpAdjustmentProposal(BaseModel):
+    """One proposed adjustment factor for one forecast period.
+
+    ``start_on`` and ``end_on`` are the period's ``bucket_start`` and
+    ``bucket_end``, ``forecast_daily`` is the period's
+    ``effective_quantity`` divided by the period's days (inclusive)
+    and ``factor`` is ``forecast_daily`` over the buffer's
+    ``adu_base``, rounded to 2 decimals and held between 0.05 and
+    10.  ``existing_factor`` is the factor of the stored adjustment
+    that covers ``start_on`` (the pair's own adjustment first, else
+    the all-buffer one, else null).
+    """
+
+    item_code: str
+    site_code: str
+    start_on: date
+    end_on: date
+    adu_base: float
+    forecast_daily: float
+    factor: float
+    existing_factor: float | None
+
+
+class DdmrpAdjustmentProposalsResponse(BaseModel):
+    """The planned DDMRP adjustment factors, as of one date.
+
+    ``threshold`` is the ``ddmrp.adjustment_proposal_threshold``
+    share that applied and ``periods`` the number of forecast periods
+    scanned per buffered item-site.
+    """
+
+    as_of: date
+    threshold: float
+    periods: int
+    proposals: list[DdmrpAdjustmentProposal] = Field(default_factory=list)
+
+
+@router.get("/adjustments/proposals", response_model=DdmrpAdjustmentProposalsResponse)
+def get_ddmrp_adjustment_proposals(
+    periods: int = Query(default=3, ge=1, le=12),
+) -> dict:
+    """The planned DDMRP adjustment factors of the coming forecast
+    periods.
+
+    Open to any authenticated user (the router is mounted behind the
+    app's authentication gate), like ``GET /api/ddmrp/adjustments``.
+    ``periods`` is 1 to 12 (default 3); anything else answers 422.
+    As of the demand statistics' default as-of date, for each buffered
+    item-site whose zone row is "ok" and whose ``adu_base`` is above
+    0, and each of the first ``periods`` periods of its forecast row,
+    a period is proposed only when its factor — the period's
+    ``effective_quantity`` over its ``bucket_start`` to ``bucket_end``
+    days (inclusive) divided by the buffer's ``adu_base`` — differs
+    from 1 by at least the ``ddmrp.adjustment_proposal_threshold``
+    share (default 0.25): each proposal carries the pair, the
+    period's boundaries as ``start_on`` and ``end_on``, the buffer's
+    ``adu_base``, the period's forecast daily demand, the factor
+    rounded to 2 decimals and held between 0.05 and 10, and
+    ``existing_factor``, the factor of the stored adjustment that
+    covers ``start_on`` (the pair's own adjustment first, else the
+    all-buffer one, else null).  The proposals are ordered by
+    ``start_on``, then the larger ``abs(factor - 1)``, then item_code
+    and site_code, and the answer is ``{"as_of", "threshold",
+    "periods", "proposals"}``.  Nothing is written.
+    """
+    return adjustment_proposals(periods)
 
 
 @router.post(

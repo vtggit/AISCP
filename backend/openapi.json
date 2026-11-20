@@ -3735,6 +3735,73 @@
         }
       }
     },
+    "/api/ddmrp/adjustments/proposals": {
+      "get": {
+        "tags": [
+          "ddmrp"
+        ],
+        "summary": "Get Ddmrp Adjustment Proposals",
+        "description": "The planned DDMRP adjustment factors of the coming forecast\nperiods.\n\nOpen to any authenticated user (the router is mounted behind the\napp's authentication gate), like ``GET /api/ddmrp/adjustments``.\n``periods`` is 1 to 12 (default 3); anything else answers 422.\nAs of the demand statistics' default as-of date, for each buffered\nitem-site whose zone row is \"ok\" and whose ``adu_base`` is above\n0, and each of the first ``periods`` periods of its forecast row,\na period is proposed only when its factor \u2014 the period's\n``effective_quantity`` over its ``bucket_start`` to ``bucket_end``\ndays (inclusive) divided by the buffer's ``adu_base`` \u2014 differs\nfrom 1 by at least the ``ddmrp.adjustment_proposal_threshold``\nshare (default 0.25): each proposal carries the pair, the\nperiod's boundaries as ``start_on`` and ``end_on``, the buffer's\n``adu_base``, the period's forecast daily demand, the factor\nrounded to 2 decimals and held between 0.05 and 10, and\n``existing_factor``, the factor of the stored adjustment that\ncovers ``start_on`` (the pair's own adjustment first, else the\nall-buffer one, else null).  The proposals are ordered by\n``start_on``, then the larger ``abs(factor - 1)``, then item_code\nand site_code, and the answer is ``{\"as_of\", \"threshold\",\n\"periods\", \"proposals\"}``.  Nothing is written.",
+        "operationId": "get_ddmrp_adjustment_proposals_api_ddmrp_adjustments_proposals_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "periods",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "default": 3,
+              "title": "Periods"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DdmrpAdjustmentProposalsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ddmrp/adjustments/{adjustment_id}": {
       "delete": {
         "tags": [
@@ -13609,6 +13676,96 @@
         ],
         "title": "DdmrpAdjustmentBody",
         "description": "The body of POST /api/ddmrp/adjustments.\n\n``item_code`` and ``site_code`` are both absent (an adjustment\nfor every stored buffer) or both given (one item-site).  Every\nbusiness rule is a model validation, so a rejected body answers\n422 in FastAPI's HTTPValidationError envelope, exactly like a\nmalformed one."
+      },
+      "DdmrpAdjustmentProposal": {
+        "properties": {
+          "item_code": {
+            "type": "string",
+            "title": "Item Code"
+          },
+          "site_code": {
+            "type": "string",
+            "title": "Site Code"
+          },
+          "start_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Start On"
+          },
+          "end_on": {
+            "type": "string",
+            "format": "date",
+            "title": "End On"
+          },
+          "adu_base": {
+            "type": "number",
+            "title": "Adu Base"
+          },
+          "forecast_daily": {
+            "type": "number",
+            "title": "Forecast Daily"
+          },
+          "factor": {
+            "type": "number",
+            "title": "Factor"
+          },
+          "existing_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Factor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_code",
+          "site_code",
+          "start_on",
+          "end_on",
+          "adu_base",
+          "forecast_daily",
+          "factor",
+          "existing_factor"
+        ],
+        "title": "DdmrpAdjustmentProposal",
+        "description": "One proposed adjustment factor for one forecast period.\n\n``start_on`` and ``end_on`` are the period's ``bucket_start`` and\n``bucket_end``, ``forecast_daily`` is the period's\n``effective_quantity`` divided by the period's days (inclusive)\nand ``factor`` is ``forecast_daily`` over the buffer's\n``adu_base``, rounded to 2 decimals and held between 0.05 and\n10.  ``existing_factor`` is the factor of the stored adjustment\nthat covers ``start_on`` (the pair's own adjustment first, else\nthe all-buffer one, else null)."
+      },
+      "DdmrpAdjustmentProposalsResponse": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "periods": {
+            "type": "integer",
+            "title": "Periods"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/DdmrpAdjustmentProposal"
+            },
+            "type": "array",
+            "title": "Proposals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "threshold",
+          "periods"
+        ],
+        "title": "DdmrpAdjustmentProposalsResponse",
+        "description": "The planned DDMRP adjustment factors, as of one date.\n\n``threshold`` is the ``ddmrp.adjustment_proposal_threshold``\nshare that applied and ``periods`` the number of forecast periods\nscanned per buffered item-site."
       },
       "DdmrpBuffer": {
         "properties": {

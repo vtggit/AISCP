@@ -212,6 +212,7 @@ function detailsFor(rows) {
 // bound via api.failKey — the failure is bound to that row's own
 // request, never to whatever else is in flight.
 async function mockDemandApi(page, { rows, details, detailDelayMs = 0 } = {}) {
+  const held = []; // by-key responders held while api.holdDetail is true
   const api = {
     listGets: 0,
     byKeyGets: [],
@@ -222,6 +223,15 @@ async function mockDemandApi(page, { rows, details, detailDelayMs = 0 } = {}) {
     details,
     detailDelayMs,
     failKey: null, // { item, site } whose next detail request responds 500
+    holdDetail: false, // while true, each by-key request is held, not answered
+    releaseDetail() {
+      // Set holdDetail to false, then answer every held by-key request
+      // in the order it arrived: the 500 for the row bound by
+      // api.failKey, the 404 for an unknown item-site, or the detail.
+      api.holdDetail = false;
+      const released = held.splice(0, held.length);
+      released.forEach((respond) => respond());
+    },
   };
   await page.route('**/api/**', (route) => {
     const url = new URL(route.request().url());
@@ -251,6 +261,10 @@ async function mockDemandApi(page, { rows, details, detailDelayMs = 0 } = {}) {
         }
         return route.fulfill({ status: 200, json: detail });
       };
+      if (api.holdDetail) {
+        held.push(respond);
+        return;
+      }
       if (api.detailDelayMs > 0) {
         return new Promise((resolve) => {
           setTimeout(resolve, api.detailDelayMs);
@@ -412,6 +426,7 @@ test('issue329 freeform', async ({ page }) => {
   const clicked = await pickVisibleRow(page, 0);
   const clickedRow = rows.nth(clicked.index);
   await expect(clickedRow).toHaveAttribute('data-item', clicked.item);
+  api.holdDetail = true;
   await clickedRow.click();
 
   // Straight after the click: the scroll position is kept, the focus
@@ -427,6 +442,7 @@ test('issue329 freeform', async ({ page }) => {
   // At this moment the detail request is still in flight (delayed
   // in the mocked route): the detail pane still shows its skeleton.
   expect(await detailInFlight(page)).toBe(true);
+  api.releaseDetail();
 
   // Once the detail lands, the scroll position and the focus are
   // still there, the chosen row still in view, and the detail pane
@@ -448,6 +464,7 @@ test('issue329 freeform', async ({ page }) => {
   // request for this item-site that fails, not whatever request is
   // next in flight.
   api.failKey = { item: failing.item, site: failing.site };
+  api.holdDetail = true;
   await failingRow.click();
   expect(await listScrollTop(page)).toBe(2000);
   focus = await focusInfo(page);
@@ -456,6 +473,7 @@ test('issue329 freeform', async ({ page }) => {
   expect(focus.site).toBe(failing.site);
   await expect(failingRow).toHaveAttribute('aria-current', 'true');
   expect(await detailInFlight(page)).toBe(true);
+  api.releaseDetail();
 
   // The delayed response is an error: the detail pane shows the
   // message with a "Try again" button, the scroll position is kept,

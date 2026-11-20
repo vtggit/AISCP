@@ -505,13 +505,22 @@ test('issue638 freeform', async ({ page }) => {
   const longDesc = page.locator('.q-row[data-item="LONGDESC"][data-site="154"] .q-item-desc');
   await expect(longDesc).toHaveText(LONG_DESC);
   expect(LONG_DESC.length).toBe(120);
-  const longFit = await longDesc.evaluate((descEl) => ({
-    height: descEl.getBoundingClientRect().height,
-    lineHeight: parseFloat(getComputedStyle(descEl).lineHeight),
-  }));
   // One unbreakable run of 120 characters cannot fit on a line: it
   // wraps to more than one line of the description's own line height.
-  expect(longFit.height).toBeGreaterThan(1.5 * longFit.lineHeight);
+  // The check retries, reading the box and the line height afresh on
+  // each try, until the line height is a finite number above 0 and
+  // the height is more than 1.5 times it.
+  await expect.poll(async () => {
+    const longFit = await longDesc.evaluate((descEl) => ({
+      height: descEl.getBoundingClientRect().height,
+      lineHeight: parseFloat(getComputedStyle(descEl).lineHeight),
+    }));
+    if (!Number.isFinite(longFit.lineHeight) || longFit.lineHeight <= 0) {
+      return false;
+    }
+    expect(longFit.height).toBeGreaterThan(1.5 * longFit.lineHeight);
+    return true;
+  }).toBeTruthy();
 
   const listFit = await page.locator('.q-list-body').evaluate((listEl) => ({
     scrollWidth: listEl.scrollWidth,

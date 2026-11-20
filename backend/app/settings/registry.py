@@ -104,6 +104,23 @@ def all_settings() -> list[Setting]:
 
 register(
     Setting(
+        key="ddmrp.adjustment_proposal_threshold",
+        scope="system",
+        type="number",
+        default=0.25,
+        description=(
+            "How far a period's forecast daily demand must be from a "
+            "buffer's average daily usage, as a share (0.25 = 25%), "
+            "before a planned adjustment factor is proposed for that "
+            "period."
+        ),
+        min=0.05,
+        max=5,
+    )
+)
+
+register(
+    Setting(
         key="ddmrp.adu_window_days",
         scope="system",
         type="number",

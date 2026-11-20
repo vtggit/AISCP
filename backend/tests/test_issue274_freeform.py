@@ -147,6 +147,7 @@ def test_issue274_freeform(client, admin_token, user_token):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert [e["key"] for e in body] == [
+        "ddmrp.adjustment_proposal_threshold",
         "ddmrp.adu_window_days",
         "ddmrp.lead_time_factor_long",
         "ddmrp.lead_time_factor_medium",
@@ -359,6 +360,7 @@ def test_issue274_freeform(client, admin_token, user_token):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert [e["key"] for e in body] == [
+        "ddmrp.adjustment_proposal_threshold",
         "ddmrp.adu_window_days",
         "ddmrp.lead_time_factor_long",
         "ddmrp.lead_time_factor_medium",

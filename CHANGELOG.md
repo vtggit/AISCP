@@ -87,6 +87,9 @@ code is the authority for details.
 - The Buffers screen's Planned adjustments section now lists proposed adjustment factors from the
   forecast, showing the forecast and base daily usage and, when present, the current factor, and an
   admin can use a proposal to fill the adjustment add form without sending a request (#1468).
+- Each saved adjustment records the factor proposed for its item-site and window at that moment, and
+  `GET /api/ddmrp/adjustments/record` counts how many were saved at, below or above the proposal
+  (#1475).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,

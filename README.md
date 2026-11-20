@@ -236,6 +236,12 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   read-only (`GET /api/ddmrp/adjustments/proposals`, `backend/app/api/ddmrp.py`). The Buffers
   screen shows them in the Planned adjustments section, and an admin can use one to fill the
   add form without sending a request (`app/js/buffers.js`).
+- Every store of `POST /api/ddmrp/adjustments` appends one append-only row of
+  `ddmrp_adjustment_proposals` beside the adjustment, with the `proposed_factor` and
+  `threshold` from the proposals read for that window, and `GET /api/ddmrp/adjustments/record`
+  (any signed-in user) reports how many saved adjustments took, fell below, or went above that
+  proposal (`backend/app/api/ddmrp.py`,
+  `backend/migrations/versions/0053_ddmrp_adjustment_proposals.py`).
 
 **Exceptions**
 
@@ -463,7 +469,7 @@ any write to an ERP. Personal settings and saved scenarios are open to any signe
 | Purchase budgets | `/api/purchase-budgets` (also the proposals) |
 | Supply plan | `/api/supply-plan` (plan, summary, top-ups, release, transfers, transfer release and its audit), `/api/supplier-order-minimums` |
 | Suppliers | `/api/suppliers/performance`, `/api/supplier-risk`, `/api/second-sources`, `/api/expedite` |
-| DDMRP | `/api/ddmrp` (buffers, zones, plan, candidates, adjustments, adjustment proposals, performance) |
+| DDMRP | `/api/ddmrp` (buffers, zones, plan, candidates, adjustments, adjustment proposals, adjustment record, performance) |
 | Exceptions | `/api/exceptions` (the list, acknowledgements and proposal counts) |
 | Several ERPs | `/api/erp-sources`, `/api/erp-mappings` (with suggested matches), `/api/cross-erp/items`, `/api/erp-currencies` |
 | ERP actions | `/api/replenishment/actions/draft-po`, `/api/parameter-writeback` (preview, confirm, history) |

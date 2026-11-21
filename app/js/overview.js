@@ -46,6 +46,14 @@
 //     same_direction each no greater than proposed and proposed no
 //     greater than overrides — removes the card — no error text,
 //     no Retry, no skeleton survives.
+//   * GET /api/work/scorecard, the "Work scorecard" card's answer,
+//     the card's own read beside the Forecast overrides card: the
+//     intro line and one row per usable entry in the answer's
+//     order, each row the entry's step above its counts; a failed
+//     read — any status, a network error, or a body that is not an
+//     object whose processes is an array holding at least one
+//     usable entry — removes the card — no error text, no Retry,
+//     no skeleton survives.
 //
 // The figures load the first time the view becomes the active view. A
 // decision recorded in the Work queue (any of the three kinds) marks
@@ -110,6 +118,16 @@
 //     <without_proposal> of <overrides>") while without_proposal
 //     is above 0, and the link to #/demand; a failed read removes
 //     the card — no error text, no Retry, no skeleton survives;
+//   * the "Work scorecard" card — GET /api/work/scorecard, the
+//     last card above the attention region: the intro line and one
+//     row per usable entry in the answer's order, each row the
+//     entry's step above its counts — "Not available" while the
+//     entry's decisions is null, "No decisions yet" while it is 0,
+//     otherwise "Decisions: <decisions>; with a proposal:
+//     <with_proposal>", with "; proposal taken: <at_proposal>
+//     (<pct>%)" following while at_proposal is a number and
+//     with_proposal is above 0; a failed read removes the card —
+//     no error text, no Retry, no skeleton survives;
 //   * the attention region — "Needs a decision, largest money first",
 //     the five undecided rows with the most money across the three
 //     lists; it renders only when all three lists loaded, never from
@@ -130,6 +148,7 @@
   var EXCEPTIONS_PROPOSALS_PATH = '/api/exceptions/proposals';
   var SUPPLY_PATH = '/api/supply-plan/summary';
   var OVERRIDES_PROPOSALS_PATH = '/api/forecast/overrides/proposals';
+  var WORK_SCORECARD_PATH = '/api/work/scorecard';
   var STOCKOUT_PROPOSALS_PATH = '/api/stockout/proposals';
   var EXCESS_PROPOSALS_PATH = '/api/excess/proposals';
   var DRIFT_ACCEPTANCE_PATH = '/api/drift/decisions/acceptance';
@@ -179,6 +198,7 @@
     'ov-region-exceptions',
     'ov-region-supply',
     'ov-region-overrides',
+    'ov-region-work',
     'ov-attention-body',
   ];
 
@@ -391,6 +411,9 @@
     if (regionId === OVERRIDES_REGION_ID) {
       ensureOverridesSection();
     }
+    if (regionId === WORK_REGION_ID) {
+      ensureWorkSection();
+    }
     if (regionId === 'ov-region-tiles') {
       var tiles = '';
       for (var i = 0; i < 3; i++) {
@@ -494,6 +517,10 @@
       work = global.Api.get(OVERRIDES_PROPOSALS_PATH).then(function (answer) {
         renderOverrides(answer);
       });
+    } else if (regionId === WORK_REGION_ID) {
+      work = global.Api.get(WORK_SCORECARD_PATH).then(function (answer) {
+        renderWork(answer);
+      });
     } else if (regionId === 'ov-attention-body') {
       work = Promise.all([
         global.Api.get(KINDS_BY_KIND.drift.endpoint),
@@ -558,6 +585,8 @@
         removeSupplySection();
       } else if (regionId === OVERRIDES_REGION_ID) {
         removeOverridesSection();
+      } else if (regionId === WORK_REGION_ID) {
+        removeWorkSection();
       } else if (regionId === 'ov-region-releases') {
         showReleasesError(error);
       } else {
@@ -581,14 +610,15 @@
     stale = false;
     REGION_IDS.forEach(function (regionId) {
       // The "Value by class", "Exceptions today", "Supply this
-      // week" and "Forecast overrides" sections are dropped from
-      // the DOM when their read fails, so they are (re)created on
-      // every activation.
+      // week", "Forecast overrides" and "Work scorecard" sections
+      // are dropped from the DOM when their read fails, so they are
+      // (re)created on every activation.
       if (
         regionId === ABC_REGION_ID ||
         regionId === EXCEPTIONS_REGION_ID ||
         regionId === SUPPLY_REGION_ID ||
         regionId === OVERRIDES_REGION_ID ||
+        regionId === WORK_REGION_ID ||
         regionEls[regionId]
       ) {
         loadRegion(regionId);
@@ -617,6 +647,8 @@
         removeSupplySection();
       } else if (regionId === OVERRIDES_REGION_ID) {
         removeOverridesSection();
+      } else if (regionId === WORK_REGION_ID) {
+        removeWorkSection();
       } else if (regionEls[regionId]) {
         regionEls[regionId].innerHTML = '';
       }
@@ -1858,6 +1890,171 @@
     section.appendChild(open);
   }
 
+  /* --------------------------- work scorecard --------------------------- */
+
+  // The "Work scorecard" card: directly before the attention region,
+  // so that it is the last card above it; with no attention region in
+  // .ov it is appended to .ov. A failed read — any status, a
+  // network error, or a body that is not an object whose processes
+  // is an array holding at least one usable entry — removes the
+  // card: no error text, no Retry and no skeleton survive; the next
+  // load recreates the section before the attention region. An entry
+  // is usable when its key and step are non-empty strings and either
+  // its decisions, with_proposal, at_proposal and without_proposal
+  // are all null (a failed source), or its decisions, with_proposal
+  // and without_proposal are each a number for which isMoney holds
+  // and its at_proposal is null or such a number. Every number goes
+  // through countLabel, the words stay the same for a count of 1,
+  // and every API value is set as text.
+
+  var WORK_REGION_ID = 'ov-region-work';
+
+  function ensureWorkSection() {
+    var existing = document.getElementById(WORK_REGION_ID);
+    if (existing) {
+      return existing;
+    }
+    var section = document.createElement('section');
+    section.id = WORK_REGION_ID;
+    section.className = 'card ov-work';
+    section.setAttribute('aria-label', 'Work scorecard');
+    // Directly before the attention region, so that it is the last
+    // card above it; with no attention region in .ov, appended to .ov.
+    var container = document.querySelector('#view-overview .ov');
+    if (container) {
+      var attention = container.querySelector('.ov-attention');
+      if (attention) {
+        attention.insertAdjacentElement('beforebegin', section);
+      } else {
+        container.appendChild(section);
+      }
+    }
+    regionEls[WORK_REGION_ID] = section;
+    return section;
+  }
+
+  function removeWorkSection() {
+    var section = regionEls[WORK_REGION_ID];
+    regionEls[WORK_REGION_ID] = null;
+    if (section && section.parentNode) {
+      section.parentNode.removeChild(section);
+    }
+  }
+
+  // The answer is usable only when it is an object whose processes is
+  // an array; an entry is usable as documented above the region id.
+  function workEntryValid(entry) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return false;
+    }
+    if (typeof entry.key !== 'string' || entry.key === '') {
+      return false;
+    }
+    if (typeof entry.step !== 'string' || entry.step === '') {
+      return false;
+    }
+    if (
+      entry.decisions === null && entry.with_proposal === null &&
+      entry.at_proposal === null && entry.without_proposal === null
+    ) {
+      return true;
+    }
+    return (
+      isMoney(entry.decisions) &&
+      isMoney(entry.with_proposal) &&
+      isMoney(entry.without_proposal) &&
+      (entry.at_proposal === null || isMoney(entry.at_proposal))
+    );
+  }
+
+  // The row's counts: "Not available" while decisions is null
+  // (a failed source), "No decisions yet" while it is 0, otherwise
+  // "Decisions: <decisions>; with a proposal: <with_proposal>", with
+  // "; proposal taken: <at_proposal> (<pct>%)" following while
+  // at_proposal is a number and with_proposal is above 0 — pct the
+  // rounded share of the with-proposal decisions that took the
+  // proposal as it stood. The words stay the same for a count of 1.
+  function workCountsText(entry) {
+    if (entry.decisions === null) {
+      return 'Not available';
+    }
+    if (entry.decisions === 0) {
+      return 'No decisions yet';
+    }
+    var text =
+      'Decisions: ' + countLabel(entry.decisions) +
+      '; with a proposal: ' + countLabel(entry.with_proposal);
+    if (isMoney(entry.at_proposal) && entry.with_proposal > 0) {
+      var pct = Math.round(100 * entry.at_proposal / entry.with_proposal);
+      text +=
+        '; proposal taken: ' + countLabel(entry.at_proposal) +
+        ' (' + countLabel(pct) + '%)';
+    }
+    return text;
+  }
+
+  function renderWork(answer) {
+    if (
+      !answer || typeof answer !== 'object' || Array.isArray(answer) ||
+      !Array.isArray(answer.processes)
+    ) {
+      removeWorkSection();
+      return;
+    }
+    var entries = [];
+    for (var i = 0; i < answer.processes.length; i++) {
+      if (workEntryValid(answer.processes[i])) {
+        entries.push(answer.processes[i]);
+      }
+    }
+    if (!entries.length) {
+      removeWorkSection();
+      return;
+    }
+    var section = ensureWorkSection();
+
+    // Every API value is set as text: the DOM is built node by node,
+    // nothing goes through innerHTML.
+    while (section.firstChild) {
+      section.removeChild(section.firstChild);
+    }
+
+    var title = document.createElement('h2');
+    title.className = 'ov-work-title';
+    title.textContent = 'Work scorecard';
+    section.appendChild(title);
+
+    var intro = document.createElement('p');
+    intro.className = 'ov-work-intro';
+    intro.setAttribute('data-testid', 'ov-work-intro');
+    intro.textContent =
+      'For each step: how many decisions were made, how many had a ' +
+      'proposal, and how many took the proposal as it stood.';
+    section.appendChild(intro);
+
+    var list = document.createElement('ul');
+    list.className = 'ov-work-list';
+    list.setAttribute('data-testid', 'ov-work-list');
+    entries.forEach(function (entry) {
+      var row = document.createElement('li');
+      row.className = 'ov-work-row';
+      row.setAttribute('data-key', entry.key);
+
+      var step = document.createElement('span');
+      step.className = 'ov-work-step';
+      step.textContent = entry.step;
+      row.appendChild(step);
+
+      var counts = document.createElement('span');
+      counts.className = 'ov-work-counts';
+      counts.textContent = workCountsText(entry);
+      row.appendChild(counts);
+
+      list.appendChild(row);
+    });
+    section.appendChild(list);
+  }
+
   /* -------------------------------- boot -------------------------------- */
 
   (function boot() {
@@ -1867,20 +2064,24 @@
         regionEls[regionId] = regionEl;
       }
     });
-    // The "Value by class", "Exceptions today", "Supply this week"
-    // and "Forecast overrides" cards are not in the markup: they are
-    // created after the Released orders card (the supply card after
-    // the exceptions card, where that card would stand when its read
-    // failed; the overrides card after the supply card, where that
-    // card would stand when its read failed) and again after any
-    // failed read removed them (see ensureAbcSection /
-    // removeAbcSection, ensureExceptionsSection / removeExceptionsSection,
+    // The "Value by class", "Exceptions today", "Supply this week",
+    // "Forecast overrides" and "Work scorecard" cards are not in the
+    // markup: they are created after the Released orders card (the
+    // supply card after the exceptions card, where that card would
+    // stand when its read failed; the overrides card after the
+    // supply card, where that card would stand when its read
+    // failed; the work card directly before the attention region, or
+    // appended to .ov without it) and again after any failed read
+    // removed them (see ensureAbcSection / removeAbcSection,
+    // ensureExceptionsSection / removeExceptionsSection,
     // ensureSupplySection / removeSupplySection,
-    // ensureOverridesSection / removeOverridesSection).
+    // ensureOverridesSection / removeOverridesSection,
+    // ensureWorkSection / removeWorkSection).
     ensureAbcSection();
     ensureExceptionsSection();
     ensureSupplySection();
     ensureOverridesSection();
+    ensureWorkSection();
 
     var appEl = document.getElementById('app');
     if (!appEl) {

@@ -285,6 +285,7 @@ const KNOWN_GET_PATHS = [
   '/api/drift/decisions/acceptance',
   '/api/exceptions/proposals',
   '/api/forecast/overrides/proposals',
+  '/api/work/scorecard',
   '/api/supplier-risk',
   '/api/supply-plan',
   '/api/supply-plan/summary',

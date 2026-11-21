@@ -10,6 +10,7 @@ from app.recommend.service_curve import (
     service_level_curve,
     service_level_suggestion,
 )
+from app.recommend.service_reached import service_reached
 
 router = APIRouter(prefix="/api/service-levels", tags=["service-levels"])
 
@@ -205,3 +206,84 @@ def get_service_level_suggestion(
     combinations.
     """
     return service_level_suggestion(target_fill_rate)
+
+
+class ServiceLevelReachedClass(BaseModel):
+    """One ABC class' entry of the reached service levels.
+
+    ``abc_class`` is ``"A"``, ``"B"`` or ``"C"``, ``level`` the
+    class' current service level — the level the service curve marks
+    as current, null when no current level is stored for the class —
+    ``item_sites`` the counted item-sites of the class (the ones with
+    a ``demand_events`` row and an ``on_hand_snapshots`` row in the
+    window), ``item_site_days`` their ``on_hand_snapshots`` rows in
+    the window — one per item-site and date — and ``days_in_stock``
+    the rows of those whose ``quantity_on_hand`` is above 0;
+    ``share_in_stock`` is ``days_in_stock / item_site_days`` rounded
+    to 4 places, null when no item-site day counts for the class.
+    """
+
+    abc_class: str
+    level: float | None = None
+    item_sites: int
+    item_site_days: int
+    days_in_stock: int
+    share_in_stock: float | None = None
+
+
+class ServiceLevelReachedResponse(BaseModel):
+    """The service levels actually reached, per ABC class.
+
+    ``as_of`` is the latest ``on_hand_snapshots`` date and
+    ``window_start`` the window's start — ``as_of`` minus ``days - 1``
+    days — each as ``YYYY-MM-DD`` database text, null when the table
+    is empty; they are plain strings, not dates, on purpose, so a
+    snapshot date outside Python's date range answers like any other
+    date.  ``days`` is the window's length as asked, ``snapshot_dates``
+    the number of distinct ``snapshot_on`` dates in the window — 0
+    when ``as_of`` is null, so a missed day shows as fewer dates than
+    ``days`` — and ``service_target`` the value the stored answer
+    reports.  ``classes`` holds exactly three entries, for ``"A"``,
+    ``"B"`` and ``"C"`` in that order, and
+    ``unclassified_item_sites`` the counted item-sites whose class is
+    null or that the classification does not list.  It is not a fill
+    rate: it counts only the demand the ERP recorded, the class is
+    the item-site's class today, and a date with no snapshot is not
+    counted.
+    """
+
+    as_of: str | None = None
+    days: int
+    window_start: str | None = None
+    snapshot_dates: int
+    service_target: str | None = None
+    classes: list[ServiceLevelReachedClass]
+    unclassified_item_sites: int
+
+
+@router.get("/reached", response_model=ServiceLevelReachedResponse)
+def get_service_level_reached(
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=366,
+            description=(
+                "The length of the window, in days: an integer from 1 "
+                "to 366, defaulting to 30."
+            ),
+        ),
+    ] = 30,
+) -> dict:
+    """The service levels actually reached, per ABC class.
+
+    The ``app.recommend.service_reached.service_reached`` answer for
+    the trailing ``days`` snapshot dates ending at the latest
+    ``on_hand_snapshots`` date: for each ABC class, the counted
+    item-sites (the ones with a demand event and a snapshot in the
+    window), their snapshot days, the days of those in stock and the
+    share of them, beside the class' current service level.  It is
+    not a fill rate: demand the ERP never recorded, such as a sale
+    lost while out of stock, is not counted.  It writes nothing.
+    """
+    return service_reached(days)

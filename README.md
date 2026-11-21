@@ -95,6 +95,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - The Overview's Reorder points card shows the drift acceptance measure when the read
   succeeds: the accepted share of decided rows, the share of money at stake when present,
   and the raise/lower direction counts (`app/js/overview.js`).
+- The Overview's Work scorecard card shows, for each step, how many decisions were made,
+  how many had a proposal, and how many took the proposal as it stood, when the read
+  succeeds; a failed read removes the card (`app/js/overview.js`).
 - An accepted decision is shown as applied once the ERP data reflects it, and a summary
   totals accepted, applied and outstanding decisions with their money
   (`backend/app/api/decision_summary.py`).
@@ -102,6 +105,12 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   item-site's current decision: accepted and dismissed counts with their money at stake, snoozed count,
   accepted share by count and money, and raise/lower direction counts
   (`backend/app/api/planner_decisions.py`).
+- `GET /api/work/scorecard` gives any signed-in user, for each of eight steps (reorder
+  points, excess, stockout, exceptions, forecast overrides, the month's sign-off, the purchase
+  budget and DDMRP adjustment factors), how many decisions were made, how many had a
+  proposal, how many took the proposal as it stood and how many had none, with the share
+  taken; a step whose source fails or answers inconsistent counts answers its counts as
+  null, and the other steps still answer (`backend/app/api/work.py`).
 
 **Demand planning**
 

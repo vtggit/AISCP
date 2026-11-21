@@ -65,7 +65,7 @@ State on 2026-11-16. Update this file when a step changes hands. Each process se
 Raising an order or moving stock uses the release steps of the order plan and of transfers below.
 
 ## The order plan and its release
-<!-- docs-follow areas: order-quantities, execution-release-and-tracking, aggregate-planning, who-does-the-work -->
+<!-- docs-follow areas: order-quantities, execution-release-and-tracking, aggregate-planning -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -83,7 +83,7 @@ Raising an order or moving stock uses the release steps of the order plan and of
 The Releases screen tracks the Acumatica releases. Odoo draft orders are not on it. The Released cell reads an order released under a standing grant as "by standing grant #<id>".
 
 ## Transfers
-<!-- docs-follow areas: execution-release-and-tracking, several-erps-one-planner, who-does-the-work -->
+<!-- docs-follow areas: execution-release-and-tracking, several-erps-one-planner -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|

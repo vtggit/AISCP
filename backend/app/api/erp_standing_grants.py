@@ -30,6 +30,35 @@ token.  No route deletes a grant and no route changes a grant's
 limits: changing a limit means revoking the grant and creating a new
 one.
 
+``GET /api/standing-grants/record`` answers the record of the
+stored standing-grant runs, per process — ``{"processes": [...]}``
+with one entry for ``order_plan_release`` and then one for
+``transfer_release``, each ``{process, runs, released,
+sent_everything, nothing_due, skipped, failed, rate,
+documents_sent, value_sent, latest}``: ``runs`` the number of the
+process's stored runs, ``released``, ``nothing_due``, ``skipped``
+and ``failed`` those runs counted by outcome,
+``sent_everything`` the ``released`` runs whose ``left_out`` is
+empty, ``rate`` ``sent_everything / (runs - nothing_due)`` rounded
+to 4 decimals, null while ``runs - nothing_due`` is 0,
+``documents_sent`` the sum of the runs' ``documents`` and
+``value_sent`` the sum of the runs' ``value``, a number rounded to
+2 decimal places with ``decimal.ROUND_HALF_UP`` — and
+``latest`` the process's newest run, by ``started_at`` descending,
+the greater ``id`` breaking a tie, or null while the process has no
+run; it is ``{started_at, outcome, reason, documents, value,
+held_back, held_back_value}`` with ``started_at`` an ISO-8601
+string with its UTC offset, ``value`` a number, ``held_back`` the
+number of the entries of its ``left_out`` and
+``held_back_value`` the sum of their values, a number rounded to 2
+decimal places with ``decimal.ROUND_HALF_UP``.  A process with no
+run answers ``runs`` 0, every count 0, ``rate`` null,
+``documents_sent`` 0, ``value_sent`` 0 and ``latest`` null.  The
+read is one SELECT over ``standing_grant_runs`` through
+``app.db.connection.get_cursor`` (at most two), the route is open
+to any signed-in user, like ``GET /api/standing-grants/runs``,
+answers 401 without a valid token and writes nothing.
+
 Creating a grant when one for the process is already in force answers
 409 and writes nothing — the unique index over ``process`` where
 ``revoked_at`` is null is the check, so even two concurrent creates
@@ -57,7 +86,10 @@ or 403 instead, passing every other request (and a signed-in admin
 on these paths) through to the default 422 handler.
 """
 
+import json
 import re
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -82,9 +114,11 @@ from app.api.erp_mappings import (
 from app.api.supplier_order_minimums import _reject_unstoreable_body
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
+from app.db.connection import get_cursor
 from app.models.erp_standing_grants import (
     ErpStandingGrantIn,
     ErpStandingGrantOut,
+    ErpStandingGrantRecordOut,
     ErpStandingGrantRunOut,
 )
 from app.repositories.erp_standing_grants_postgres_repository import (
@@ -174,6 +208,225 @@ def list_grant_runs(
     ``left_out`` in their stored order.  The route never writes.
     """
     return _runs_repo.list(limit=limit, process=process)
+
+
+# The two processes the record's entries cover, in the answer's order.
+_RECORD_PROCESSES = ("order_plan_release", "transfer_release")
+
+# The precision the record's money answers are rounded to.
+_TWO_PLACES = Decimal("0.01")
+
+
+def _round_money(amount: Decimal) -> float:
+    """The amount as a number, to 2 decimal places.
+
+    The rounding mode and the precision are the explicit
+    ``decimal.ROUND_HALF_UP`` at ``_TWO_PLACES`` — ``value_sent`` and
+    ``held_back_value`` are rounded no other way.
+    """
+    return float(amount.quantize(_TWO_PLACES, rounding=ROUND_HALF_UP))
+
+
+def _left_out_entries(left_out: object) -> list:
+    """The entries of a run's stored ``left_out`` — a list, never a raise.
+
+    The column is JSONB and the app stores a JSON array of entries,
+    but a hand-written row may store a JSON ``null`` or a raw string
+    instead: a ``null`` or an unparseable or non-array value reads as
+    no entries, so the record answers 200, never a 500.
+    """
+    if left_out is None:
+        return []
+    if isinstance(left_out, str):
+        try:
+            left_out = json.loads(left_out)
+        except ValueError:
+            return []
+    return left_out if isinstance(left_out, list) else []
+
+
+def _entry_value(entry: object) -> Decimal:
+    """The value of one left-out entry: the number its stored decimal
+    string reads as — 0 for an entry that names none or a value that
+    does not read as a number."""
+    if not isinstance(entry, dict):
+        return Decimal(0)
+    value = entry.get("value")
+    if value is None or isinstance(value, bool):
+        return Decimal(0)
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return Decimal(0)
+
+
+def _documents_count(documents: object) -> int:
+    """The run's ``documents``: a non-negative whole number, else 0."""
+    if isinstance(documents, bool):
+        return 0
+    return documents if isinstance(documents, int) else 0
+
+
+def _run_value(value: object) -> Decimal:
+    """The run's ``value``: the exact Decimal the NUMERIC column
+    holds, else the number the value reads as, else 0."""
+    if value is None or isinstance(value, bool):
+        return Decimal(0)
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return Decimal(0)
+
+
+# The instant a run whose stored ``started_at`` does not read as a
+# datetime orders before every run that does.
+_EARLIEST_INSTANT = datetime.min.replace(tzinfo=UTC)
+
+
+def _started_instant(row: dict) -> tuple:
+    """The ordering key of a run for the record's ``latest``: its
+    ``started_at`` as an aware datetime, the greater ``id`` breaking
+    a tie — a key that compares, never a raise.
+
+    The instant is compared as a datetime, never as its
+    ``timestamp()`` float: near ``datetime.max`` that float loses
+    the microseconds a run may differ by, so a one-microsecond step
+    would read as a tie and the id would decide the newest run.
+    """
+    started_at = row["started_at"]
+    if isinstance(started_at, datetime):
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=UTC)
+        return (started_at, row["id"])
+    return (_EARLIEST_INSTANT, row["id"])
+
+
+def _started_at_string(started_at: object) -> str:
+    """The run's ``started_at`` as the ISO-8601 string with its UTC
+    offset — the aware datetime's own spelling."""
+    if isinstance(started_at, datetime):
+        return started_at.isoformat()
+    return str(started_at)
+
+
+def _record_process(process: str, rows: list) -> dict:
+    """One process's entry of the record, over its stored run rows."""
+    released = nothing_due = skipped = failed = 0
+    sent_everything = 0
+    documents_sent = 0
+    value_sent = Decimal(0)
+    latest_row = None
+    for row in rows:
+        outcome = row["outcome"]
+        if outcome == "released":
+            released += 1
+            if not _left_out_entries(row["left_out"]):
+                sent_everything += 1
+        elif outcome == "nothing_due":
+            nothing_due += 1
+        elif outcome == "skipped":
+            skipped += 1
+        elif outcome == "failed":
+            failed += 1
+        documents_sent += _documents_count(row["documents"])
+        value_sent += _run_value(row["value"])
+        if latest_row is None or _started_instant(row) > _started_instant(latest_row):
+            latest_row = row
+    runs = len(rows)
+    rate = (
+        round(sent_everything / (runs - nothing_due), 4) if runs - nothing_due else None
+    )
+    latest: dict | None = None
+    if latest_row is not None:
+        left_out = _left_out_entries(latest_row["left_out"])
+        latest = {
+            "started_at": _started_at_string(latest_row["started_at"]),
+            "outcome": latest_row["outcome"],
+            "reason": latest_row["reason"],
+            "documents": _documents_count(latest_row["documents"]),
+            "value": float(_run_value(latest_row["value"])),
+            "held_back": len(left_out),
+            "held_back_value": _round_money(
+                sum((_entry_value(entry) for entry in left_out), Decimal(0))
+            ),
+        }
+    return {
+        "process": process,
+        "runs": runs,
+        "released": released,
+        "sent_everything": sent_everything,
+        "nothing_due": nothing_due,
+        "skipped": skipped,
+        "failed": failed,
+        "rate": rate,
+        "documents_sent": documents_sent,
+        "value_sent": _round_money(value_sent),
+        "latest": latest,
+    }
+
+
+def _grant_record() -> dict:
+    """The record of the stored standing-grant runs, per process.
+
+    One SELECT over ``standing_grant_runs`` through
+    ``app.db.connection.get_cursor`` (at most two, never more)
+    buckets the stored runs by their process and answers the two
+    entries — ``order_plan_release`` first, then
+    ``transfer_release`` — whatever rows the table holds, the empty
+    entry for a process with no run.  Read-only: it writes nothing.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT id, process, started_at, outcome, reason, documents, "
+            "value, left_out FROM standing_grant_runs"
+        )
+        rows = cur.fetchall()
+    by_process: dict[str, list] = {process: [] for process in _RECORD_PROCESSES}
+    for row in rows:
+        bucket = by_process.get(row["process"])
+        if bucket is not None:
+            bucket.append(dict(row))
+    return {
+        "processes": [
+            _record_process(process, by_process[process])
+            for process in _RECORD_PROCESSES
+        ]
+    }
+
+
+@router.get("/record", response_model=ErpStandingGrantRecordOut)
+def grant_record(
+    current_user: AuthUser = Depends(require_any_authenticated_user),
+) -> dict:
+    """The record of the standing-grant runs, per process.
+
+    ``{"processes": [...]}`` — one entry for ``order_plan_release``
+    and then one for ``transfer_release``, each ``{process, runs,
+    released, sent_everything, nothing_due, skipped, failed, rate,
+    documents_sent, value_sent, latest}`` as the module documents:
+    ``runs`` the process's stored runs, the four outcomes counted
+    from them, ``sent_everything`` the ``released`` runs whose
+    ``left_out`` is empty, ``rate`` ``sent_everything / (runs -
+    nothing_due)`` rounded to 4 decimals, null while ``runs -
+    nothing_due`` is 0, ``documents_sent`` the sum of the runs'
+    ``documents`` and ``value_sent`` the sum of the runs'
+    ``value``, a number rounded to 2 decimal places with
+    ``decimal.ROUND_HALF_UP``; ``latest`` the process's newest run
+    (by ``started_at`` descending, the greater ``id`` breaking a
+    tie) — ``{started_at, outcome, reason, documents, value,
+    held_back, held_back_value}`` with ``held_back_value`` the sum
+    of the values of its ``left_out`` entries, a number rounded to 2
+    decimal places with ``decimal.ROUND_HALF_UP`` — or null while
+    the process has no run, the entry then answering ``runs`` 0,
+    every count 0, ``rate`` null, ``documents_sent`` 0,
+    ``value_sent`` 0 and ``latest`` null.  Open to any signed-in
+    user, like the runs list — the router's include-time gate
+    answers 401 without a valid Bearer token — and the route never
+    writes.
+    """
+    return _grant_record()
 
 
 @router.post("", status_code=201, response_model=ErpStandingGrantOut)

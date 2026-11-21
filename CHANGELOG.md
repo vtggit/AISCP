@@ -68,6 +68,10 @@ code is the authority for details.
   it stood and how many had none, with the share taken (#1485).
 - A "Work scorecard" card on the Overview shows, for each process, how many decisions were made, how
   many had a proposal, and how often a decision took the proposal as it stood (#1494).
+- The Work scorecard now includes order and transfer releases, with an automatic count of the releases
+  made by a standing grant (#1495).
+- The Work scorecard now shows, for release rows, how many decisions were made by a standing grant and
+  how many by a person (#1499).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica
@@ -165,6 +169,11 @@ code is the authority for details.
 - A standing-grant run of transfer releases now holds back a document when a suggestion has no
   value or a value of 0 or below, before the document and daily limits, reduces no allowance for
   it, and reports the document's left-out value as the sum of its suggestions above 0 (#1302).
+- A read-only route, `GET /api/standing-grants/record`, answers the stored standing-grant runs per
+  process, with how often a run sent everything that was due, outcome counts, documents and value sent,
+  and the latest run, for any signed-in user (#1502).
+- Released purchase orders are read back from Acumatica, storing the returned status, lines, and check
+  time on their release rows (#1508).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

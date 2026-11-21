@@ -74,6 +74,8 @@ code is the authority for details.
   how many by a person (#1499).
 - `GET /api/work/scorecard` now answers, for order releases, how many were read back from the ERP
   and how many of those came back unchanged (#1514).
+- The Work scorecard now shows, for order releases, how many released orders the ERP still holds
+  unchanged, as a count and a percentage of the released orders read back (#1519).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica
@@ -295,6 +297,7 @@ code is the authority for details.
 - One on-hand snapshot a day: a maintenance entry point, `capture_on_hand_snapshot()`, stores the
   current `on_hand` rows in `on_hand_snapshots` under the UTC date of the latest `as_of`, replacing
   that date's rows and leaving every other date untouched (#1511).
+- The share of days in stock per ABC class, from the daily on-hand snapshots (#1522).
 
 **Supplier order minimums**
 - A minimum order value per supplier, stored by an admin (`/api/supplier-order-minimums`)

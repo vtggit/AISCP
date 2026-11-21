@@ -90,9 +90,8 @@ code is the authority for details.
 - Each saved adjustment records the factor proposed for its item-site and window at that moment, and
   `GET /api/ddmrp/adjustments/record` counts how many were saved at, below or above the proposal
   (#1475).
-- The Buffers screen's Planned adjustments section now shows how many saved adjustments were saved
-  where a factor was proposed, with counts below and above it, or that none have been saved yet
-  (#1481).
+- The Buffers screen's Planned adjustments section now shows how often an adjustment was saved at
+  the proposed factor, with how many were saved below or above it (#1481).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,

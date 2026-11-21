@@ -62,3 +62,13 @@ items:
       date: 2026-11-11
       under: delegation
       ref: "AIERP#1116"
+
+  - key: AIERP-D-227
+    type: design
+    title: "What the service reached is measured from"
+    statement: "To show the service the levels reach, AIERP keeps one on-hand snapshot a day: after each sync, every item-site's on-hand as the ERP reported it, with that row's own as-of time, stored under the UTC date of the latest as-of time, a second capture of the same date replacing the first. The measure reads only these snapshots: for each ABC class, the share of item-site days in stock (on hand above zero) among the item-sites with demand in the window, beside the class's service level. It is a share of days in stock, not a fill rate: demand the ERP never recorded, such as a sale lost while out of stock, is not counted. Nothing is rebuilt backwards from stock movements, because a history rebuilt from the movements the feed carries would drift wherever one is missing."
+    decided:
+      by: model:claude
+      date: 2026-11-21
+      under: delegation
+      ref: "AISCP#1511"

@@ -12,8 +12,9 @@ an admin created for the release of purchase orders or transfers, within its lim
 writes lands on hold, so the ERP's own approval still applies.
 
 AISCP is not an ERP. It was built under the codename aierp, which the guidance keys
-(`AIERP-...`), the product vision, the configuration and the service names still use
-(AIERP-D-226).
+(`AIERP-...`), the product vision, the configuration and the service names still use. So does
+the origin tag on each document it creates in an ERP (`AIERP order plan ...`), because AISCP
+finds a document it already created by that tag (AIERP-D-226).
 
 The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 

@@ -4,6 +4,9 @@
 # the ERP and not an ERP: "I like and agree with your analysis of the Full ERP. That will be
 # much later and as a separate environment. I want you to decide on the rename if it should
 # happen and how". The model (model:claude) decided under that delegation.
+# 2026-11-21: AIERP-D-226 names the origin tag on the documents AISCP creates in an ERP among
+# what keeps the codename: AISCP finds a document it already created by that tag, so a new tag
+# would make the documents released before it unknown to the duplicate check.
 scope: AIERP
 area: product-name
 title: "The product's name"
@@ -14,11 +17,11 @@ items:
   - key: AIERP-D-226
     type: design
     title: "Published as AISCP; aierp stays the codename"
-    statement: "The product is published under the name AISCP, for AI supply chain planning: demand, supply and inventory planning and the S&OP review over the ERPs a company already runs. It is not an ERP and is never presented as one. The public name is used wherever someone outside the team reads: the repository's name and description, the README, the release notes and every text the planner screen shows. Everywhere else the codename aierp stays unchanged: the guidance keys (AIERP-...), the product vision, environment variables, the API and OData names, the service, container and database names, and the engine's product profile. The name AIERP is kept for the full ERP environment planned much later as a separate product."
+    statement: "The product is published under the name AISCP, for AI supply chain planning: demand, supply and inventory planning and the S&OP review over the ERPs a company already runs. It is not an ERP and is never presented as one. The public name is used wherever someone outside the team reads: the repository's name and description, the README, the release notes and every text the planner screen shows. Everywhere else the codename aierp stays unchanged: the guidance keys (AIERP-...), the product vision, environment variables, the API and OData names, the service, container and database names, the engine's product profile, and the origin tag on each document AISCP creates in an ERP (AIERP order plan, AIERP plan, AIERP transfer, AIERP:replenishment), because AISCP finds a document it already created by that tag. The name AIERP is kept for the full ERP environment planned much later as a separate product."
     status: active
     authority: executive
     derives_from: [AIERP-N-1, AIERP-N-2]
     decided:
       by: model:claude
-      date: 2026-11-15
+      date: 2026-11-21
       under: "the operator's delegation of 2026-11-15"

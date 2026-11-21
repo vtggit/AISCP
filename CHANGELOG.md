@@ -63,6 +63,8 @@ code is the authority for details.
 - The reorder recommendations are kept across requests in a process-wide cache keyed by the as-of
   date and the data stamp, so a repeated read whose inputs have not changed answers without
   computing (#1464).
+- A "Work scorecard" card on the Overview shows, for each process, how many decisions were made, how
+  many had a proposal, and how often a decision took the proposal as it stood (#1494).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

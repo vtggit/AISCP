@@ -172,6 +172,8 @@ code is the authority for details.
 - A read-only route, `GET /api/standing-grants/record`, answers the stored standing-grant runs per
   process, with how often a run sent everything that was due, outcome counts, documents and value sent,
   and the latest run, for any signed-in user (#1502).
+- Released purchase orders are read back from Acumatica, storing the returned status, lines, and check
+  time on their release rows (#1508).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

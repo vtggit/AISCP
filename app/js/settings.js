@@ -225,6 +225,47 @@
 // is dropped, the typed value kept — and sign-out clears the typed
 // value too. No element of the block carries role="alert", and the
 // block sends no request other than the GET.
+// Below the class blocks, and only while the card shows its
+// classes, the reached block ([data-testid="service-reached"]) —
+// fetched separately from GET /api/service-levels/reached with no
+// query, so the route's default window of 30 days applies. It sits
+// after the last class block and before the suggestion block, which
+// stays the card's last child. Its heading (an h3) reads "Service
+// reached."; with as_of null it holds only the heading and the note
+// ([data-testid="service-reached-none"]) "No daily on-hand snapshot
+// yet.", and nothing else follows the heading. Otherwise, in order:
+// the window line ([data-testid="service-reached-window"]) "Days in
+// stock over the last <days> days, from <snapshot_dates> daily
+// on-hand snapshots up to <as_of>.", one line per class
+// ([data-testid="service-reached-class"]) in the answer's order —
+// with item_site_days above 0, "Class <abc_class> · level <level> ·
+// in stock on <share> of <item_site_days> item-site days
+// (<item_sites> item-sites)", and with item_site_days 0, "Class
+// <abc_class> · level <level> · no item-site with demand and a
+// snapshot in the window" — the unclassified line
+// ([data-testid="service-reached-unclassified"]) "<n> item-sites
+// with demand have no ABC class and are not counted." only when
+// unclassified_item_sites is above 0, and the note
+// ([data-testid="service-reached-note"]) "Days in stock, not a fill
+// rate: a sale lost while out of stock is not counted.". The level
+// and the share go through formatPercent, a null level reads as an
+// em dash, and a count of 1 reads in the singular: "1 daily
+// on-hand snapshot", "1 item-site day", "(1 item-site)" and "1
+// item-site with demand has no ABC class and is not counted.". The
+// block is built from the elements and classes the card already
+// styles, so no stylesheet changes. It has its own state, its own
+// request-sequence guard and its own re-render, started with the
+// activation beside startCurveLoad, and reset() bumps its sequence
+// and clears its state; a re-render never starts it. While the read
+// is out, after a non-200 answer, after a network failure and after
+// a 200 whose body is malformed, the block is absent and nothing
+// says why. A malformed body is any body where as_of is neither
+// null nor a string, days, snapshot_dates or
+// unclassified_item_sites are not whole numbers of at least 0,
+// classes is not an array of objects each with a string abc_class,
+// or in a class item_sites, item_site_days or days_in_stock are not
+// whole numbers of at least 0, share_in_stock is not null or a
+// number from 0 to 1, or level is not null or a number.
 // Below it a seventh card — "Demand basis: history or forecast"
 // ([data-testid="demand-basis"]) — rendered under #settings-root,
 // after the service-curve card (its next element sibling), shows
@@ -331,6 +372,13 @@
 //     cheapest per-class levels reaching a target fill rate (the
 //     current and highest combinations, the suggested one or null
 //     and the holding-cost delta), the suggestion block's own read;
+//   * GET /api/service-levels/reached — the service levels actually
+//     reached per ABC class over the trailing window (as_of, the
+//     window's days, the snapshot dates' count, each class' level,
+//     counted item-sites, item-site days, days in stock and their
+//     share, and the unclassified item-sites' count), the reached
+//     block's own read, sent with no query so the route's default
+//     window of 30 days applies;
 //   * GET /api/forecast/accuracy/basis?bucket_index=1 — the realised
 //     value of the stored history basis against the forecast (the
 //     compared buckets, the two wapes, the value added and one
@@ -372,6 +420,7 @@
   var IMPACT_PATH = '/api/recommendations/intermittent-impact';
   var CURVE_PATH = '/api/service-levels/curve';
   var SUGGESTION_PATH = '/api/service-levels/suggestion';
+  var REACHED_PATH = '/api/service-levels/reached';
   var BASIS_PATH = '/api/forecast/accuracy/basis?bucket_index=1';
   var ADOPTIONS_PATH = '/api/empirical-adoptions';
   var ME_PATH = '/api/auth/me';
@@ -458,6 +507,13 @@
   // rate can be worked out.
   var CURVE_SUGGEST_NOPART =
     'A fill rate cannot be worked out: no item-site has a recommended order quantity.';
+  // The reached block, after the last class block and before the
+  // suggestion block (the card's own separate read): its heading,
+  // its none line for an as_of of null and its not-a-fill-rate note.
+  var REACHED_TITLE = 'Service reached';
+  var REACHED_NONE_NOTE = 'No daily on-hand snapshot yet.';
+  var REACHED_NOTE =
+    'Days in stock, not a fill rate: a sale lost while out of stock is not counted.';
   // The points' table columns, the cells' order.
   var CURVE_COLUMNS = [
     'Service level',
@@ -510,6 +566,7 @@
     budgets: newBudgetsState(), // the purchasing budget card's state
     impact: newImpactState(), // the intermittent-impact card's state
     curve: newCurveState(), // the service-curve card's state
+    reached: newReachedState(), // the reached block's state
     basis: newBasisState(), // the demand-basis card's state
   };
   var loadSeq = 0;
@@ -519,6 +576,7 @@
   var impactLoadSeq = 0;
   var curveLoadSeq = 0;
   var curveSuggestSeq = 0; // the suggestion block's request sequence
+  var reachedLoadSeq = 0; // the reached block's request sequence
   var basisLoadSeq = 0; // the demand-basis card's request sequence
   var rootEl = null;
 
@@ -624,6 +682,19 @@
   // no card and no message, and the card is absent while the read
   // is out.
   function newBasisState() {
+    return {
+      loading: false,
+      data: null,
+    };
+  }
+
+  // The reached block's state: the validated payload as served
+  // (as_of, the window's days, the snapshot dates' count, the
+  // classes' levels, counted item-sites, item-site days, days in
+  // stock and their share, and the unclassified item-sites' count)
+  // or null — a failed or invalid read renders no block and no
+  // message, and the block is absent while the read is out.
+  function newReachedState() {
     return {
       loading: false,
       data: null,
@@ -2621,6 +2692,73 @@
     return true;
   }
 
+  // A well-formed class entry of the reached answer: the class
+  // label, the counted item-sites, their snapshot days and the days
+  // of those in stock — whole numbers of at least 0 — the share of
+  // the days in stock null or a fraction from 0 to 1 and the class'
+  // level null or a finite number.
+  function isReachedClass(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+    if (typeof value.abc_class !== 'string') {
+      return false;
+    }
+    if (!isWholeNumber(value.item_sites) || value.item_sites < 0) {
+      return false;
+    }
+    if (!isWholeNumber(value.item_site_days) || value.item_site_days < 0) {
+      return false;
+    }
+    if (!isWholeNumber(value.days_in_stock) || value.days_in_stock < 0) {
+      return false;
+    }
+    if (
+      value.share_in_stock !== null &&
+      (!isPlainNumber(value.share_in_stock) ||
+        value.share_in_stock < 0 ||
+        value.share_in_stock > 1)
+    ) {
+      return false;
+    }
+    if (value.level !== null && !isPlainNumber(value.level)) {
+      return false;
+    }
+    return true;
+  }
+
+  // A well-formed reached answer as served: as_of null or a string,
+  // days, snapshot_dates and unclassified_item_sites whole numbers
+  // of at least 0 and classes an array of well-formed entries.
+  // Anything less is a failure: no block and no message, as a
+  // non-200 answer.
+  function isReachedPayload(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+    if (value.as_of !== null && typeof value.as_of !== 'string') {
+      return false;
+    }
+    if (!isWholeNumber(value.days) || value.days < 0) {
+      return false;
+    }
+    if (!isWholeNumber(value.snapshot_dates) || value.snapshot_dates < 0) {
+      return false;
+    }
+    if (!isWholeNumber(value.unclassified_item_sites) || value.unclassified_item_sites < 0) {
+      return false;
+    }
+    if (!Array.isArray(value.classes)) {
+      return false;
+    }
+    for (var i = 0; i < value.classes.length; i++) {
+      if (!isReachedClass(value.classes[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   // "95%" or "99.5%" — the level as a percent with at most one
   // decimal: 0.995 reads 99.5% and 0.95 reads 95%.
   function formatPercent(level) {
@@ -2850,6 +2988,14 @@
     for (var i = 0; i < data.classes.length; i++) {
       card.appendChild(renderCurveClass(data.classes[i]));
     }
+    // The reached block, the card's own separate read: after the
+    // last class block and before the suggestion block — shown only
+    // while the card shows its classes, and absent, with no message
+    // of its own, while its read is out and on a failed or malformed
+    // read.
+    if (state.reached.data !== null) {
+      card.appendChild(renderReachedBlock(state.reached.data));
+    }
     card.appendChild(renderCurveSuggest());
     return card;
   }
@@ -3051,6 +3197,96 @@
     return row;
   }
 
+  // One class' reached line: the class label, its level as a
+  // percent (an em dash when null) and — with item_site_days above
+  // 0 — the share of the item-site days in stock as a percent, the
+  // days' count and the item-sites' count; with item_site_days 0,
+  // the no-counted-day words. A count of 1 reads in the singular.
+  function renderReachedClassLine(entry) {
+    var levelText = entry.level === null ? EM_DASH : formatPercent(entry.level);
+    var text;
+    if (entry.item_site_days > 0) {
+      var shareText =
+        entry.share_in_stock === null ? EM_DASH : formatPercent(entry.share_in_stock);
+      text =
+        'Class ' +
+        entry.abc_class +
+        ' \u00B7 level ' +
+        levelText +
+        ' \u00B7 in stock on ' +
+        shareText +
+        ' of ' +
+        (entry.item_site_days === 1 ? '1 item-site day' : entry.item_site_days + ' item-site days') +
+        ' (' +
+        (entry.item_sites === 1 ? '1 item-site' : entry.item_sites + ' item-sites') +
+        ')';
+    } else {
+      text =
+        'Class ' +
+        entry.abc_class +
+        ' \u00B7 level ' +
+        levelText +
+        ' \u00B7 no item-site with demand and a snapshot in the window';
+    }
+    var line = el('p', 'service-curve-fill-note', text);
+    line.setAttribute('data-testid', 'service-reached-class');
+    return line;
+  }
+
+  // The reached block: the heading, the none note for an as_of of
+  // null — and nothing after the heading — or, with snapshots, the
+  // window line, one line per class in the answer's order, the
+  // unclassified line only for a count above 0 and the not-a-fill-
+  // rate note. The block is built from the elements and classes the
+  // card already styles; it shows only while the card shows its
+  // classes, after the last class block and before the suggestion
+  // block, which stays the card's last child.
+  function renderReachedBlock(data) {
+    var block = el('section', 'service-curve-class');
+    block.setAttribute('data-testid', 'service-reached');
+    block.appendChild(el('h3', 'service-curve-class-title', REACHED_TITLE));
+    if (data.as_of === null) {
+      var noneNote = el('p', 'service-curve-fill-note', REACHED_NONE_NOTE);
+      noneNote.setAttribute('data-testid', 'service-reached-none');
+      block.appendChild(noneNote);
+      return block;
+    }
+    var windowLine = el(
+      'p',
+      'service-curve-fill-note',
+      'Days in stock over the last ' +
+        data.days +
+        ' days, from ' +
+        (data.snapshot_dates === 1
+          ? '1 daily on-hand snapshot'
+          : data.snapshot_dates + ' daily on-hand snapshots') +
+        ' up to ' +
+        data.as_of +
+        '.'
+    );
+    windowLine.setAttribute('data-testid', 'service-reached-window');
+    block.appendChild(windowLine);
+    for (var i = 0; i < data.classes.length; i++) {
+      block.appendChild(renderReachedClassLine(data.classes[i]));
+    }
+    if (data.unclassified_item_sites > 0) {
+      var unclassifiedLine = el(
+        'p',
+        'service-curve-fill-note',
+        data.unclassified_item_sites === 1
+          ? '1 item-site with demand has no ABC class and is not counted.'
+          : data.unclassified_item_sites +
+            ' item-sites with demand have no ABC class and are not counted.'
+      );
+      unclassifiedLine.setAttribute('data-testid', 'service-reached-unclassified');
+      block.appendChild(unclassifiedLine);
+    }
+    var noteLine = el('p', 'service-curve-fill-note', REACHED_NOTE);
+    noteLine.setAttribute('data-testid', 'service-reached-note');
+    block.appendChild(noteLine);
+    return block;
+  }
+
   // The card's separate read, the way the intermittent-impact card
   // reads its own data: its own state, its own sequence and its own
   // re-render. A non-200 answer, a network failure or a 200 with a
@@ -3126,6 +3362,42 @@
         }
         basis.loading = false;
         basis.data = null;
+        render();
+      }
+    );
+  }
+
+  // The reached block's separate read, the way the demand-basis card
+  // reads its own data: its own state, its own sequence and its own
+  // re-render. A non-200 answer, a network failure or a 200 with a
+  // malformed body all end with no block and no message; an answer
+  // that arrives after a newer load has started (a stale sequence)
+  // is ignored, and sign-out's reset bumps the sequence and clears
+  // the block's state. The block is absent while the read is out.
+  function startReachedLoad() {
+    var reached = state.reached;
+    if (reached.loading) {
+      return;
+    }
+    reached.loading = true;
+    reached.data = null;
+    render();
+    var seq = ++reachedLoadSeq;
+    global.Api.get(REACHED_PATH).then(
+      function (payload) {
+        if (seq !== reachedLoadSeq) {
+          return;
+        }
+        reached.loading = false;
+        reached.data = isReachedPayload(payload) ? payload : null;
+        render();
+      },
+      function () {
+        if (seq !== reachedLoadSeq) {
+          return;
+        }
+        reached.loading = false;
+        reached.data = null;
         render();
       }
     );
@@ -3622,6 +3894,7 @@
     startBudgetsLoad();
     startImpactLoad();
     startCurveLoad();
+    startReachedLoad();
     startBasisLoad();
   }
 
@@ -3633,6 +3906,7 @@
     impactLoadSeq += 1;
     curveLoadSeq += 1;
     curveSuggestSeq += 1;
+    reachedLoadSeq += 1;
     basisLoadSeq += 1;
     state.loading = false;
     state.error = null;
@@ -3643,6 +3917,7 @@
     state.budgets = newBudgetsState();
     state.impact = newImpactState();
     state.curve = newCurveState();
+    state.reached = newReachedState();
     state.basis = newBasisState();
     if (rootEl) {
       rootEl.textContent = '';

@@ -18,6 +18,27 @@ refused, as is any field the body does not define.  A violation is a
 model validation error so a rejected body answers 422 in FastAPI's
 HTTPValidationError envelope before anything is written.
 
+The record served by ``GET /api/standing-grants/record`` is shaped by
+``ErpStandingGrantRecordOut``: ``processes`` one
+``ErpStandingGrantRecordProcessOut`` per process —
+``order_plan_release`` first, then ``transfer_release`` — with
+``runs`` the number of the process's stored runs, ``released``,
+``nothing_due``, ``skipped`` and ``failed`` those runs counted by
+outcome, ``sent_everything`` the ``released`` runs whose
+``left_out`` is empty, ``rate`` ``sent_everything / (runs -
+nothing_due)`` rounded to 4 decimals, null while ``runs -
+nothing_due`` is 0, ``documents_sent`` the sum of the runs'
+``documents`` and ``value_sent`` the sum of the runs' ``value``, a
+number rounded to 2 decimal places with ``decimal.ROUND_HALF_UP``,
+and ``latest`` the process's newest run, an
+``ErpStandingGrantRecordLatestOut`` with ``started_at`` the
+ISO-8601 string with its UTC offset, ``outcome``, ``reason`` (null
+when the run has none), ``documents`` and ``value``, ``held_back``
+the number of the entries of its ``left_out`` and
+``held_back_value`` the sum of their values, a number rounded to 2
+decimal places with ``decimal.ROUND_HALF_UP`` — or null while the
+process has no run.
+
 The runs served by ``GET /api/standing-grants/runs`` are shaped by
 ``ErpStandingGrantRunOut``: one stored run with ``id``, ``process``
 and ``grant_id``, ``started_at`` the ISO-8601 string with its UTC
@@ -174,3 +195,64 @@ class ErpStandingGrantRunOut(BaseModel):
     documents: int
     value: float
     left_out: list[ErpStandingGrantRunLeftOut | ErpStandingGrantTransferRunLeftOut]
+
+
+class ErpStandingGrantRecordLatestOut(BaseModel):
+    """The process's newest run, as the record's entry serves it.
+
+    ``started_at`` the ISO-8601 string with its UTC offset,
+    ``outcome`` the run's outcome, ``reason`` why the run did not
+    release (null when the run has none), ``documents`` and
+    ``value`` the count and the summed value of the groups the run
+    sent, ``held_back`` the number of the groups its limits left out
+    and ``held_back_value`` the sum of their values, a number
+    rounded to 2 decimal places with ``decimal.ROUND_HALF_UP``.
+    """
+
+    started_at: str
+    outcome: str
+    reason: str | None
+    documents: int
+    value: float
+    held_back: int
+    held_back_value: float
+
+
+class ErpStandingGrantRecordProcessOut(BaseModel):
+    """One process's entry of ``GET /api/standing-grants/record``.
+
+    ``process`` one of the two release names, ``runs`` the number of
+    the process's stored runs, ``released``, ``nothing_due``,
+    ``skipped`` and ``failed`` those runs counted by outcome,
+    ``sent_everything`` the ``released`` runs whose ``left_out`` is
+    empty, ``rate`` ``sent_everything / (runs - nothing_due)``
+    rounded to 4 decimals, null while ``runs - nothing_due`` is 0,
+    ``documents_sent`` the sum of the runs' ``documents`` and
+    ``value_sent`` the sum of the runs' ``value``, a number rounded
+    to 2 decimal places with ``decimal.ROUND_HALF_UP``, and
+    ``latest`` the process's newest run (by ``started_at``
+    descending, the greater ``id`` breaking a tie), or null while
+    the process has no run.
+    """
+
+    process: PROCESS
+    runs: int
+    released: int
+    sent_everything: int
+    nothing_due: int
+    skipped: int
+    failed: int
+    rate: float | None
+    documents_sent: int
+    value_sent: float
+    latest: ErpStandingGrantRecordLatestOut | None
+
+
+class ErpStandingGrantRecordOut(BaseModel):
+    """The answer of ``GET /api/standing-grants/record``.
+
+    ``processes`` the one entry per process — ``order_plan_release``
+    first, then ``transfer_release``.
+    """
+
+    processes: list[ErpStandingGrantRecordProcessOut]

@@ -6238,6 +6238,61 @@
         }
       }
     },
+    "/api/standing-grants/record": {
+      "get": {
+        "tags": [
+          "standing-grants"
+        ],
+        "summary": "Grant Record",
+        "description": "The record of the standing-grant runs, per process.\n\n``{\"processes\": [...]}`` \u2014 one entry for ``order_plan_release``\nand then one for ``transfer_release``, each ``{process, runs,\nreleased, sent_everything, nothing_due, skipped, failed, rate,\ndocuments_sent, value_sent, latest}`` as the module documents:\n``runs`` the process's stored runs, the four outcomes counted\nfrom them, ``sent_everything`` the ``released`` runs whose\n``left_out`` is empty, ``rate`` ``sent_everything / (runs -\nnothing_due)`` rounded to 4 decimals, null while ``runs -\nnothing_due`` is 0, ``documents_sent`` the sum of the runs'\n``documents`` and ``value_sent`` the sum of the runs'\n``value``, a number rounded to 2 decimal places with\n``decimal.ROUND_HALF_UP``; ``latest`` the process's newest run\n(by ``started_at`` descending, the greater ``id`` breaking a\ntie) \u2014 ``{started_at, outcome, reason, documents, value,\nheld_back, held_back_value}`` with ``held_back_value`` the sum\nof the values of its ``left_out`` entries, a number rounded to 2\ndecimal places with ``decimal.ROUND_HALF_UP`` \u2014 or null while\nthe process has no run, the entry then answering ``runs`` 0,\nevery count 0, ``rate`` null, ``documents_sent`` 0,\n``value_sent`` 0 and ``latest`` null.  Open to any signed-in\nuser, like the runs list \u2014 the router's include-time gate\nanswers 401 without a valid Bearer token \u2014 and the route never\nwrites.",
+        "operationId": "grant_record_api_standing_grants_record_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErpStandingGrantRecordOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/standing-grants/{id}/revoke": {
       "post": {
         "tags": [
@@ -16542,6 +16597,155 @@
         ],
         "title": "ErpStandingGrantOut",
         "description": "One stored standing grant as served by the routes."
+      },
+      "ErpStandingGrantRecordLatestOut": {
+        "properties": {
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "held_back": {
+            "type": "integer",
+            "title": "Held Back"
+          },
+          "held_back_value": {
+            "type": "number",
+            "title": "Held Back Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "started_at",
+          "outcome",
+          "reason",
+          "documents",
+          "value",
+          "held_back",
+          "held_back_value"
+        ],
+        "title": "ErpStandingGrantRecordLatestOut",
+        "description": "The process's newest run, as the record's entry serves it.\n\n``started_at`` the ISO-8601 string with its UTC offset,\n``outcome`` the run's outcome, ``reason`` why the run did not\nrelease (null when the run has none), ``documents`` and\n``value`` the count and the summed value of the groups the run\nsent, ``held_back`` the number of the groups its limits left out\nand ``held_back_value`` the sum of their values, a number\nrounded to 2 decimal places with ``decimal.ROUND_HALF_UP``."
+      },
+      "ErpStandingGrantRecordOut": {
+        "properties": {
+          "processes": {
+            "items": {
+              "$ref": "#/components/schemas/ErpStandingGrantRecordProcessOut"
+            },
+            "type": "array",
+            "title": "Processes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "processes"
+        ],
+        "title": "ErpStandingGrantRecordOut",
+        "description": "The answer of ``GET /api/standing-grants/record``.\n\n``processes`` the one entry per process \u2014 ``order_plan_release``\nfirst, then ``transfer_release``."
+      },
+      "ErpStandingGrantRecordProcessOut": {
+        "properties": {
+          "process": {
+            "type": "string",
+            "enum": [
+              "order_plan_release",
+              "transfer_release"
+            ],
+            "title": "Process"
+          },
+          "runs": {
+            "type": "integer",
+            "title": "Runs"
+          },
+          "released": {
+            "type": "integer",
+            "title": "Released"
+          },
+          "sent_everything": {
+            "type": "integer",
+            "title": "Sent Everything"
+          },
+          "nothing_due": {
+            "type": "integer",
+            "title": "Nothing Due"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          },
+          "documents_sent": {
+            "type": "integer",
+            "title": "Documents Sent"
+          },
+          "value_sent": {
+            "type": "number",
+            "title": "Value Sent"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErpStandingGrantRecordLatestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "process",
+          "runs",
+          "released",
+          "sent_everything",
+          "nothing_due",
+          "skipped",
+          "failed",
+          "rate",
+          "documents_sent",
+          "value_sent",
+          "latest"
+        ],
+        "title": "ErpStandingGrantRecordProcessOut",
+        "description": "One process's entry of ``GET /api/standing-grants/record``.\n\n``process`` one of the two release names, ``runs`` the number of\nthe process's stored runs, ``released``, ``nothing_due``,\n``skipped`` and ``failed`` those runs counted by outcome,\n``sent_everything`` the ``released`` runs whose ``left_out`` is\nempty, ``rate`` ``sent_everything / (runs - nothing_due)``\nrounded to 4 decimals, null while ``runs - nothing_due`` is 0,\n``documents_sent`` the sum of the runs' ``documents`` and\n``value_sent`` the sum of the runs' ``value``, a number rounded\nto 2 decimal places with ``decimal.ROUND_HALF_UP``, and\n``latest`` the process's newest run (by ``started_at``\ndescending, the greater ``id`` breaking a tie), or null while\nthe process has no run."
       },
       "ErpStandingGrantRunLeftOut": {
         "properties": {

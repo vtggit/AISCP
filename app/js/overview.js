@@ -64,6 +64,21 @@
 //     is not an object whose processes is an array holding at least
 //     one usable entry — removes the card — no error text, no
 //     Retry, no skeleton survives.
+//   * GET /api/standing-grants/record, the "Standing grants"
+//     card's answer, the card's own read beside the Work scorecard
+//     card, sent when the scorecard read is sent: the intro line and
+//     one row per usable entry in the answer's order, each row the
+//     grant's step above its counts, with the last run's held-back
+//     line while that run held anything back; an entry is usable
+//     while its process is order_plan_release or transfer_release,
+//     its runs, sent_everything and nothing_due are each a number
+//     for which isMoney holds, its rate is null or such a number
+//     and its latest is null or an object whose held_back and
+//     held_back_value are such numbers; a failed read — any status,
+//     a network error, or a body that is not an object whose
+//     processes is an array holding at least one usable entry —
+//     removes the card — no error text, no Retry, no skeleton
+//     survives.
 //
 // The figures load the first time the view becomes the active view. A
 // decision recorded in the Work queue (any of the three kinds) marks
@@ -138,6 +153,21 @@
 //     (<pct>%)" following while at_proposal is a number and
 //     with_proposal is above 0; a failed read removes the card —
 //     no error text, no Retry, no skeleton survives;
+//   * the "Standing grants" card — GET
+//     /api/standing-grants/record, the card's own read beside the
+//     Work scorecard card, directly after it and the last card
+//     above the attention region: the intro line and one row per
+//     usable entry in the answer's order, each row the grant's step
+//     above its counts — "No runs yet" while the entry's runs is 0,
+//     "Runs: <runs>; nothing was due" while runs - nothing_due is
+//     0, otherwise "Runs: <runs>; sent everything due:
+//     <sent_everything> of <runs - nothing_due>", with " (<pct>%)"
+//     following while the rate is a number — and, while the
+//     entry's latest is an object whose held_back is above 0, the
+//     held-back line "Last run held back <held_back> worth
+//     <moneyLabel(held_back_value)>"; every number through
+//     countLabel; a failed read removes the card — no error text,
+//     no Retry, no skeleton survives;
 //   * the attention region — "Needs a decision, largest money first",
 //     the five undecided rows with the most money across the three
 //     lists; it renders only when all three lists loaded, never from
@@ -159,6 +189,7 @@
   var SUPPLY_PATH = '/api/supply-plan/summary';
   var OVERRIDES_PROPOSALS_PATH = '/api/forecast/overrides/proposals';
   var WORK_SCORECARD_PATH = '/api/work/scorecard';
+  var STANDING_GRANTS_PATH = '/api/standing-grants/record';
   var STOCKOUT_PROPOSALS_PATH = '/api/stockout/proposals';
   var EXCESS_PROPOSALS_PATH = '/api/excess/proposals';
   var DRIFT_ACCEPTANCE_PATH = '/api/drift/decisions/acceptance';
@@ -209,6 +240,7 @@
     'ov-region-supply',
     'ov-region-overrides',
     'ov-region-work',
+    'ov-region-grants',
     'ov-attention-body',
   ];
 
@@ -424,6 +456,9 @@
     if (regionId === WORK_REGION_ID) {
       ensureWorkSection();
     }
+    if (regionId === GRANTS_REGION_ID) {
+      ensureGrantsSection();
+    }
     if (regionId === 'ov-region-tiles') {
       var tiles = '';
       for (var i = 0; i < 3; i++) {
@@ -531,6 +566,10 @@
       work = global.Api.get(WORK_SCORECARD_PATH).then(function (answer) {
         renderWork(answer);
       });
+    } else if (regionId === GRANTS_REGION_ID) {
+      work = global.Api.get(STANDING_GRANTS_PATH).then(function (answer) {
+        renderGrants(answer);
+      });
     } else if (regionId === 'ov-attention-body') {
       work = Promise.all([
         global.Api.get(KINDS_BY_KIND.drift.endpoint),
@@ -597,6 +636,8 @@
         removeOverridesSection();
       } else if (regionId === WORK_REGION_ID) {
         removeWorkSection();
+      } else if (regionId === GRANTS_REGION_ID) {
+        removeGrantsSection();
       } else if (regionId === 'ov-region-releases') {
         showReleasesError(error);
       } else {
@@ -620,15 +661,16 @@
     stale = false;
     REGION_IDS.forEach(function (regionId) {
       // The "Value by class", "Exceptions today", "Supply this
-      // week", "Forecast overrides" and "Work scorecard" sections
-      // are dropped from the DOM when their read fails, so they are
-      // (re)created on every activation.
+      // week", "Forecast overrides", "Work scorecard" and "Standing
+      // grants" sections are dropped from the DOM when their read
+      // fails, so they are (re)created on every activation.
       if (
         regionId === ABC_REGION_ID ||
         regionId === EXCEPTIONS_REGION_ID ||
         regionId === SUPPLY_REGION_ID ||
         regionId === OVERRIDES_REGION_ID ||
         regionId === WORK_REGION_ID ||
+        regionId === GRANTS_REGION_ID ||
         regionEls[regionId]
       ) {
         loadRegion(regionId);
@@ -659,6 +701,8 @@
         removeOverridesSection();
       } else if (regionId === WORK_REGION_ID) {
         removeWorkSection();
+      } else if (regionId === GRANTS_REGION_ID) {
+        removeGrantsSection();
       } else if (regionEls[regionId]) {
         regionEls[regionId].innerHTML = '';
       }
@@ -2097,6 +2141,202 @@
     section.appendChild(list);
   }
 
+  /* --------------------------- standing grants -------------------------- */
+
+  // The "Standing grants" card: directly after the Work scorecard
+  // card and directly before the attention region, so that it is the
+  // last card above it; with no attention region in .ov it is
+  // appended to .ov. A failed read — any status, a network error,
+  // or a body that is not an object whose processes is an array
+  // holding at least one usable entry — removes the card: no error
+  // text, no Retry and no skeleton survive; the next load recreates
+  // the section directly before the attention region. An entry is
+  // usable while its process is order_plan_release or
+  // transfer_release, its runs, sent_everything and nothing_due are
+  // each a number for which isMoney holds, its rate is null or such
+  // a number and its latest is null or an object whose held_back
+  // and held_back_value are such numbers; any other entry is left
+  // out. Each row reads the grant's step above its counts — "No
+  // runs yet" while the entry's runs is 0, "Runs: <runs>; nothing
+  // was due" while runs - nothing_due is 0, otherwise "Runs:
+  // <runs>; sent everything due: <sent_everything> of <runs -
+  // nothing_due>", with " (<pct>%)" following while the rate is a
+  // number — and, while the entry's latest is an object whose
+  // held_back is above 0, the held-back line "Last run held back
+  // <held_back> worth <moneyLabel(held_back_value)>". Every number
+  // goes through countLabel, and every API value is set as text.
+
+  var GRANTS_REGION_ID = 'ov-region-grants';
+
+  function ensureGrantsSection() {
+    var existing = document.getElementById(GRANTS_REGION_ID);
+    if (existing) {
+      return existing;
+    }
+    var section = document.createElement('section');
+    section.id = GRANTS_REGION_ID;
+    section.className = 'card ov-grants';
+    section.setAttribute('aria-label', 'Standing grants');
+    // Directly after the Work scorecard card and directly before the
+    // attention region, so that it is the last card above it; with
+    // no attention region in .ov, appended to .ov.
+    var container = document.querySelector('#view-overview .ov');
+    if (container) {
+      var attention = container.querySelector('.ov-attention');
+      if (attention) {
+        attention.insertAdjacentElement('beforebegin', section);
+      } else {
+        container.appendChild(section);
+      }
+    }
+    regionEls[GRANTS_REGION_ID] = section;
+    return section;
+  }
+
+  function removeGrantsSection() {
+    var section = regionEls[GRANTS_REGION_ID];
+    regionEls[GRANTS_REGION_ID] = null;
+    if (section && section.parentNode) {
+      section.parentNode.removeChild(section);
+    }
+  }
+
+  // The answer is usable only when it is an object whose processes is
+  // an array; an entry is usable as documented above the region id.
+  function grantsEntryValid(entry) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return false;
+    }
+    if (
+      entry.process !== 'order_plan_release' &&
+      entry.process !== 'transfer_release'
+    ) {
+      return false;
+    }
+    if (
+      !isMoney(entry.runs) || !isMoney(entry.sent_everything) ||
+      !isMoney(entry.nothing_due)
+    ) {
+      return false;
+    }
+    if (entry.rate !== null && !isMoney(entry.rate)) {
+      return false;
+    }
+    if (entry.latest !== null) {
+      if (
+        !entry.latest || typeof entry.latest !== 'object' ||
+        Array.isArray(entry.latest) ||
+        !isMoney(entry.latest.held_back) ||
+        !isMoney(entry.latest.held_back_value)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // The row's counts: "No runs yet" while runs is 0, "Runs: <runs>;
+  // nothing was due" while runs - nothing_due is 0, otherwise
+  // "Runs: <runs>; sent everything due: <sent_everything> of
+  // <runs - nothing_due>", with " (<pct>%)" following while the
+  // rate is a number — every number through countLabel.
+  function grantsCountsText(entry) {
+    if (entry.runs === 0) {
+      return 'No runs yet';
+    }
+    var due = entry.runs - entry.nothing_due;
+    if (due === 0) {
+      return 'Runs: ' + countLabel(entry.runs) + '; nothing was due';
+    }
+    var text =
+      'Runs: ' + countLabel(entry.runs) +
+      '; sent everything due: ' + countLabel(entry.sent_everything) +
+      ' of ' + countLabel(due);
+    if (isMoney(entry.rate)) {
+      text += ' (' + Math.round(100 * entry.rate) + '%)';
+    }
+    return text;
+  }
+
+  function renderGrants(answer) {
+    if (
+      !answer || typeof answer !== 'object' || Array.isArray(answer) ||
+      !Array.isArray(answer.processes)
+    ) {
+      removeGrantsSection();
+      return;
+    }
+    var entries = [];
+    for (var i = 0; i < answer.processes.length; i++) {
+      if (grantsEntryValid(answer.processes[i])) {
+        entries.push(answer.processes[i]);
+      }
+    }
+    if (!entries.length) {
+      removeGrantsSection();
+      return;
+    }
+    var section = ensureGrantsSection();
+
+    // Every API value is set as text: the DOM is built node by node,
+    // nothing goes through innerHTML.
+    while (section.firstChild) {
+      section.removeChild(section.firstChild);
+    }
+
+    var title = document.createElement('h2');
+    title.className = 'ov-grants-title';
+    title.textContent = 'Standing grants';
+    section.appendChild(title);
+
+    var intro = document.createElement('p');
+    intro.className = 'ov-grants-intro';
+    intro.setAttribute('data-testid', 'ov-grants-intro');
+    intro.textContent =
+      'For each standing grant: how many runs sent everything that ' +
+      'was due, and what the last run held back for a person.';
+    section.appendChild(intro);
+
+    var list = document.createElement('ul');
+    list.className = 'ov-grants-list';
+    list.setAttribute('data-testid', 'ov-grants-list');
+    entries.forEach(function (entry) {
+      var row = document.createElement('li');
+      row.className = 'ov-grants-row';
+      row.setAttribute('data-process', entry.process);
+
+      var step = document.createElement('span');
+      step.className = 'ov-grants-step';
+      step.textContent = entry.process === 'order_plan_release'
+        ? 'Release purchase orders to the ERP'
+        : 'Release transfers to the ERP';
+      row.appendChild(step);
+
+      var counts = document.createElement('span');
+      counts.className = 'ov-grants-counts';
+      counts.textContent = grantsCountsText(entry);
+      row.appendChild(counts);
+
+      // The held-back line: only while the last run held something
+      // back — the runs through countLabel, the value through
+      // moneyLabel.
+      if (
+        entry.latest && typeof entry.latest === 'object' &&
+        isMoney(entry.latest.held_back) && entry.latest.held_back > 0
+      ) {
+        var held = document.createElement('span');
+        held.className = 'ov-grants-held';
+        held.textContent =
+          'Last run held back ' + countLabel(entry.latest.held_back) +
+          ' worth ' + moneyLabel(entry.latest.held_back_value);
+        row.appendChild(held);
+      }
+
+      list.appendChild(row);
+    });
+    section.appendChild(list);
+  }
+
   /* -------------------------------- boot -------------------------------- */
 
   (function boot() {
@@ -2107,23 +2347,27 @@
       }
     });
     // The "Value by class", "Exceptions today", "Supply this week",
-    // "Forecast overrides" and "Work scorecard" cards are not in the
-    // markup: they are created after the Released orders card (the
-    // supply card after the exceptions card, where that card would
-    // stand when its read failed; the overrides card after the
-    // supply card, where that card would stand when its read
-    // failed; the work card directly before the attention region, or
-    // appended to .ov without it) and again after any failed read
-    // removed them (see ensureAbcSection / removeAbcSection,
+    // "Forecast overrides", "Work scorecard" and "Standing grants"
+    // cards are not in the markup: they are created after the
+    // Released orders card (the supply card after the exceptions
+    // card, where that card would stand when its read failed; the
+    // overrides card after the supply card, where that card would
+    // stand when its read failed; the work card and the standing
+    // grants card directly before the attention region, the grants
+    // card after the work card, or appended to .ov without it) and
+    // again after any failed read removed them (see
+    // ensureAbcSection / removeAbcSection,
     // ensureExceptionsSection / removeExceptionsSection,
     // ensureSupplySection / removeSupplySection,
     // ensureOverridesSection / removeOverridesSection,
-    // ensureWorkSection / removeWorkSection).
+    // ensureWorkSection / removeWorkSection,
+    // ensureGrantsSection / removeGrantsSection).
     ensureAbcSection();
     ensureExceptionsSection();
     ensureSupplySection();
     ensureOverridesSection();
     ensureWorkSection();
+    ensureGrantsSection();
 
     var appEl = document.getElementById('app');
     if (!appEl) {

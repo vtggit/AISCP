@@ -654,6 +654,7 @@ test('issue518 freeform', async ({ page }) => {
     '/api/exceptions/proposals',
     '/api/forecast/overrides/proposals',
     '/api/work/scorecard',
+    '/api/standing-grants/record',
   ]);
   for (const url of allRequests) {
     if (url.indexOf('/api/') !== -1) {

@@ -112,6 +112,8 @@ KEYS = [
     "sop_signoff",
     "purchase_budget",
     "ddmrp_adjustment",
+    "order_release",
+    "transfer_release",
 ]
 
 STEPS = {
@@ -123,6 +125,8 @@ STEPS = {
     "sop_signoff": "Sign the month off",
     "purchase_budget": "Set each month's purchase budget",
     "ddmrp_adjustment": "Enter planned adjustment factors for a ramp",
+    "order_release": "Release purchase orders to the ERP",
+    "transfer_release": "Release transfers to the ERP",
 }
 
 DRIFT_ANSWER = {
@@ -185,6 +189,7 @@ EXPECTED = {
         "with_proposal": 8,
         "at_proposal": 6,
         "without_proposal": 0,
+        "automatic": None,
         "rate": 0.75,
     },
     "excess": {
@@ -192,6 +197,7 @@ EXPECTED = {
         "with_proposal": 4,
         "at_proposal": 3,
         "without_proposal": 1,
+        "automatic": None,
         "rate": 0.75,
     },
     "stockout": {
@@ -199,6 +205,7 @@ EXPECTED = {
         "with_proposal": 3,
         "at_proposal": 1,
         "without_proposal": 0,
+        "automatic": None,
         "rate": 0.3333,
     },
     "exceptions": {
@@ -206,6 +213,7 @@ EXPECTED = {
         "with_proposal": 5,
         "at_proposal": None,
         "without_proposal": 2,
+        "automatic": None,
         "rate": None,
     },
     "forecast_overrides": {
@@ -213,6 +221,7 @@ EXPECTED = {
         "with_proposal": 4,
         "at_proposal": 1,
         "without_proposal": 5,
+        "automatic": None,
         "rate": 0.25,
     },
     "sop_signoff": {
@@ -220,6 +229,7 @@ EXPECTED = {
         "with_proposal": 3,
         "at_proposal": 2,
         "without_proposal": 0,
+        "automatic": None,
         "rate": 0.6667,
     },
     "purchase_budget": {
@@ -227,6 +237,7 @@ EXPECTED = {
         "with_proposal": 3,
         "at_proposal": 2,
         "without_proposal": 1,
+        "automatic": None,
         "rate": 0.6667,
     },
     "ddmrp_adjustment": {
@@ -234,7 +245,24 @@ EXPECTED = {
         "with_proposal": 3,
         "at_proposal": 1,
         "without_proposal": 2,
+        "automatic": None,
         "rate": 0.3333,
+    },
+    "order_release": {
+        "decisions": 0,
+        "with_proposal": 0,
+        "at_proposal": None,
+        "without_proposal": 0,
+        "automatic": 0,
+        "rate": None,
+    },
+    "transfer_release": {
+        "decisions": 0,
+        "with_proposal": 0,
+        "at_proposal": None,
+        "without_proposal": 0,
+        "automatic": 0,
+        "rate": None,
     },
 }
 
@@ -245,6 +273,7 @@ ENTRY_KEYS = {
     "with_proposal",
     "at_proposal",
     "without_proposal",
+    "automatic",
     "rate",
 }
 
@@ -282,6 +311,7 @@ def _assert_process(entry: dict, key: str) -> None:
         entry["with_proposal"],
         entry["at_proposal"],
         entry["without_proposal"],
+        entry["automatic"],
         entry["rate"],
     ) == tuple(
         EXPECTED[key][name]
@@ -290,6 +320,7 @@ def _assert_process(entry: dict, key: str) -> None:
             "with_proposal",
             "at_proposal",
             "without_proposal",
+            "automatic",
             "rate",
         )
     ), key
@@ -305,8 +336,9 @@ def _assert_failed(entry: dict, key: str) -> None:
         entry["with_proposal"],
         entry["at_proposal"],
         entry["without_proposal"],
+        entry["automatic"],
         entry["rate"],
-    ) == (None, None, None, None, None), key
+    ) == (None, None, None, None, None, None), key
 
 
 def test_issue1485_freeform(client, monkeypatch, caplog):
@@ -335,6 +367,16 @@ def test_issue1485_freeform(client, monkeypatch, caplog):
     monkeypatch.setattr(work_module, "_record_count", _fixed(BUDGET_RECORD))
     monkeypatch.setattr(
         work_module, "get_ddmrp_adjustment_record", _fixed(DDMRP_RECORD)
+    )
+    monkeypatch.setattr(
+        work_module,
+        "order_release_counts",
+        _fixed({"released": 0, "automatic": 0}),
+    )
+    monkeypatch.setattr(
+        work_module,
+        "transfer_release_counts",
+        _fixed({"released": 0, "automatic": 0}),
     )
 
     # The migration's alembic fileConfig (migrations/env.py) disables every

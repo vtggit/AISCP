@@ -3,15 +3,16 @@
 ``GET /api/work/scorecard`` (the router's prefix is ``/api/work``; the
 router is included in ``app.main`` behind the app's include-time
 authentication gate, like every other API router) answers
-``{"processes": [...]}`` — the eight work processes, in this order:
+``{"processes": [...]}`` — the ten work processes, in this order:
 ``reorder_points``, ``excess``, ``stockout``, ``exceptions``,
-``forecast_overrides``, ``sop_signoff``, ``purchase_budget`` and
-``ddmrp_adjustment``.  It is open to any signed-in user — the gate
-answers 401 without a token — and it writes nothing.
+``forecast_overrides``, ``sop_signoff``, ``purchase_budget``,
+``ddmrp_adjustment``, ``order_release`` and ``transfer_release``.  It
+is open to any signed-in user — the gate answers 401 without a token
+— and it writes nothing.
 
 Each entry is ``{key, step, decisions, with_proposal, at_proposal,
-without_proposal, rate}``, computed by calling the named source
-function directly (not over HTTP):
+without_proposal, automatic, rate}``, computed by calling the named
+source function directly (not over HTTP):
 
 * ``reorder_points`` — "Accept or dismiss a recommended reorder
   point" — from ``app.api.planner_decisions.decision_acceptance()``:
@@ -47,19 +48,41 @@ function directly (not over HTTP):
 * ``ddmrp_adjustment`` — "Enter planned adjustment factors for a
   ramp" — from ``app.api.ddmrp.get_ddmrp_adjustment_record()``:
   mapped the same way as ``purchase_budget``.
+* ``order_release`` — "Release purchase orders to the ERP" — from
+  this module's own ``order_release_counts()``: ``decisions`` is
+  ``released``, ``with_proposal`` is ``released``, ``at_proposal`` is
+  null, ``without_proposal`` is 0 and ``automatic`` is
+  ``automatic``.
+* ``transfer_release`` — "Release transfers to the ERP" — from
+  ``transfer_release_counts()``, mapped the same way as
+  ``order_release``.
+
+``order_release_counts`` and ``transfer_release_counts`` each run one
+SELECT through ``app.db.connection.get_cursor``, over ``plan_releases``
+and ``transfer_releases`` respectively: ``released`` is the number of
+rows whose ``outcome`` is ``created``, and ``automatic`` the number of
+those whose ``actor`` starts with ``standing-grant:`` — the releases a
+standing grant fired rather than a person.  Rows whose outcome is
+``pending``, ``exists``, ``error`` or ``aborted`` are not counted.
+For the eight existing entries ``automatic`` is null; for the two
+release entries it is the count above.
 
 ``rate`` is ``at_proposal / with_proposal`` rounded to 4 decimals, or
 null when ``with_proposal`` is 0 or ``at_proposal`` is null.
 
-A failed source — one whose function raises — keeps its ``key`` and
-``step`` and answers with its five numbers null; the other entries
+A failed source — one whose function raises, or one that breaks an
+invariant — keeps its ``key`` and ``step`` and answers with its six
+numbers null: ``decisions``, ``with_proposal``, ``at_proposal``,
+``without_proposal``, ``rate`` and ``automatic``; the other entries
 still answer and the route answers 200.  A source answer that violates
 the scorecard invariants — a count that is not a non-negative integer,
-an ``at_proposal`` above its ``with_proposal``, or a ``with_proposal``
+an ``at_proposal`` above its ``with_proposal``, a ``with_proposal``
 plus ``without_proposal`` that exceeds ``decisions`` (a ``saved``
-below its ``with_proposal`` among them) — answers the same single
-failed-entry shape with null counts, so the scorecard never emits
-contradictory numbers, and the violation is logged.
+below its ``with_proposal`` among them), or an ``automatic`` that is
+not null and is not a non-negative integer (a bool is not one) no
+greater than ``decisions`` — answers the same single failed-entry
+shape with null counts, so the scorecard never emits contradictory
+numbers, and the violation is logged.
 """
 
 import logging
@@ -78,10 +101,54 @@ from app.api.sop import signoff_proposals
 from app.api.stockout_decisions import stockout_proposal_counts
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
+from app.db.connection import get_cursor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/work", tags=["work"])
+
+
+def order_release_counts() -> dict:
+    """The scorecard's ``order_release`` counts, over ``plan_releases``.
+
+    One SELECT through ``app.db.connection.get_cursor``: ``released``
+    is the number of rows whose ``outcome`` is ``created``, and
+    ``automatic`` the number of those whose ``actor`` starts with
+    ``standing-grant:`` — the releases a standing grant fired rather
+    than a person.  Rows whose outcome is ``pending``, ``exists``,
+    ``error`` or ``aborted`` are not counted.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS released, "
+            "COUNT(*) FILTER (WHERE actor LIKE 'standing-grant:%') "
+            "AS automatic "
+            "FROM plan_releases WHERE outcome = 'created'"
+        )
+        row = cur.fetchone()
+    return {"released": row["released"], "automatic": row["automatic"]}
+
+
+def transfer_release_counts() -> dict:
+    """The scorecard's ``transfer_release`` counts, over
+    ``transfer_releases``.
+
+    One SELECT through ``app.db.connection.get_cursor``, the way
+    ``order_release_counts`` counts ``plan_releases``: ``released`` is
+    the number of rows whose ``outcome`` is ``created``, and
+    ``automatic`` the number of those whose ``actor`` starts with
+    ``standing-grant:``.  Rows whose outcome is ``pending``,
+    ``exists``, ``error`` or ``aborted`` are not counted.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS released, "
+            "COUNT(*) FILTER (WHERE actor LIKE 'standing-grant:%') "
+            "AS automatic "
+            "FROM transfer_releases WHERE outcome = 'created'"
+        )
+        row = cur.fetchone()
+    return {"released": row["released"], "automatic": row["automatic"]}
 
 
 def require_any_authenticated_user(
@@ -101,7 +168,7 @@ class ScorecardProcess(BaseModel):
     """One work process of the scorecard.
 
     A failed or inconsistent source keeps ``key`` and ``step`` and
-    answers its five numbers null.
+    answers its six numbers null.
     """
 
     key: str
@@ -110,6 +177,7 @@ class ScorecardProcess(BaseModel):
     with_proposal: int | None = None
     at_proposal: int | None = None
     without_proposal: int | None = None
+    automatic: int | None = None
     rate: float | None = None
 
 
@@ -123,7 +191,7 @@ def _map_reorder_points(answer: dict) -> tuple:
     """reorder_points: accepted + dismissed over the current decisions."""
     accepted = answer["accepted"]["count"]
     dismissed = answer["dismissed"]["count"]
-    return accepted + dismissed, accepted + dismissed, accepted, 0
+    return accepted + dismissed, accepted + dismissed, accepted, 0, None
 
 
 def _map_proposal_counts(answer: dict) -> tuple:
@@ -133,13 +201,20 @@ def _map_proposal_counts(answer: dict) -> tuple:
         answer["total"]["proposed"],
         answer["total"]["chosen"],
         answer["without_proposal"],
+        None,
     )
 
 
 def _map_exception_counts(answer: dict) -> tuple:
     """exceptions: the acknowledgement events; the proposal was not a
     decision, so ``at_proposal`` stays null."""
-    return answer["acknowledged"], answer["proposed"], None, answer["without_proposal"]
+    return (
+        answer["acknowledged"],
+        answer["proposed"],
+        None,
+        answer["without_proposal"],
+        None,
+    )
 
 
 def _map_override_counts(answer: dict) -> tuple:
@@ -149,6 +224,7 @@ def _map_override_counts(answer: dict) -> tuple:
         answer["proposed"],
         answer["taken"],
         answer["without_proposal"],
+        None,
     )
 
 
@@ -159,6 +235,7 @@ def _map_signoff_counts(answer: dict) -> tuple:
         answer["proposed"] + answer["not_proposed"],
         answer["proposed"],
         answer["without_proposal"],
+        None,
     )
 
 
@@ -169,22 +246,33 @@ def _map_record_counts(answer: dict) -> tuple:
         answer["with_proposal"],
         answer["taken"],
         answer["saved"] - answer["with_proposal"],
+        None,
     )
+
+
+def _map_release_counts(answer: dict) -> tuple:
+    """order_release and transfer_release: the releases to the ERP;
+    the release itself is the decision — ``decisions`` and
+    ``with_proposal`` are ``released``, ``at_proposal`` stays null
+    and ``without_proposal`` is 0 — while ``automatic`` is the share
+    the standing grants fired."""
+    return answer["released"], answer["released"], None, 0, answer["automatic"]
 
 
 def _log_violation(key: str, values: tuple, reason: str) -> bool:
     """Log one invariant violation and mark the entry failed."""
-    decisions, with_proposal, at_proposal, without_proposal = values
+    decisions, with_proposal, at_proposal, without_proposal, automatic = values
     logger.warning(
         "work scorecard: source %s violates the scorecard invariants (%s) — "
         "answering null (decisions=%r, with_proposal=%r, at_proposal=%r, "
-        "without_proposal=%r)",
+        "without_proposal=%r, automatic=%r)",
         key,
         reason,
         decisions,
         with_proposal,
         at_proposal,
         without_proposal,
+        automatic,
     )
     return False
 
@@ -198,9 +286,11 @@ def _invariants_hold(key: str, values: tuple) -> bool:
     ``without_proposal`` never exceeds ``decisions`` — the two disjoint
     parts of the decisions cannot outnumber them (a ``saved`` below
     its ``with_proposal`` lands here through its negative
-    ``without_proposal``).
+    ``without_proposal``); and ``automatic``, when not null, is a
+    non-negative integer (a bool is not one) no greater than
+    ``decisions``.
     """
-    decisions, with_proposal, at_proposal, without_proposal = values
+    decisions, with_proposal, at_proposal, without_proposal, automatic = values
     for name, value in (
         ("decisions", decisions),
         ("with_proposal", with_proposal),
@@ -221,11 +311,18 @@ def _invariants_hold(key: str, values: tuple) -> bool:
         return _log_violation(
             key, values, "with_proposal + without_proposal exceeds decisions"
         )
+    if automatic is not None and (
+        isinstance(automatic, bool)
+        or not isinstance(automatic, int)
+        or automatic < 0
+        or automatic > decisions
+    ):
+        return _log_violation(key, values, f"automatic is invalid: {automatic!r}")
     return True
 
 
 def _failed_entry(key: str, step: str) -> dict:
-    """The single failed-entry shape: key and step, five numbers null."""
+    """The single failed-entry shape: key and step, six numbers null."""
     return {
         "key": key,
         "step": step,
@@ -233,6 +330,7 @@ def _failed_entry(key: str, step: str) -> dict:
         "with_proposal": None,
         "at_proposal": None,
         "without_proposal": None,
+        "automatic": None,
         "rate": None,
     }
 
@@ -261,7 +359,7 @@ def _entry(
         return _failed_entry(key, step)
     if not _invariants_hold(key, values):
         return _failed_entry(key, step)
-    decisions, with_proposal, at_proposal, without_proposal = values
+    decisions, with_proposal, at_proposal, without_proposal, automatic = values
     return {
         "key": key,
         "step": step,
@@ -269,6 +367,7 @@ def _entry(
         "with_proposal": with_proposal,
         "at_proposal": at_proposal,
         "without_proposal": without_proposal,
+        "automatic": automatic,
         "rate": _rate(with_proposal, at_proposal),
     }
 
@@ -277,7 +376,7 @@ def _entry(
 def scorecard(
     current_user: AuthUser = Depends(require_any_authenticated_user),
 ) -> dict:
-    """The work scorecard: the eight processes, in their order.
+    """The work scorecard: the ten processes, in their order.
 
     Open to any signed-in user (the router is mounted behind the
     app's include-time gate, which answers 401 without a valid Bearer
@@ -288,7 +387,7 @@ def scorecard(
     decimals, null when ``with_proposal`` is 0 or ``at_proposal`` is
     null.  A failed source — one that raises, or one whose answer
     violates the scorecard invariants — keeps its ``key`` and
-    ``step`` with its five numbers null; the other entries still
+    ``step`` with its six numbers null; the other entries still
     answer and the route answers 200.
     """
     return {
@@ -340,6 +439,18 @@ def scorecard(
                 "Enter planned adjustment factors for a ramp",
                 _map_record_counts,
                 lambda: get_ddmrp_adjustment_record(),
+            ),
+            _entry(
+                "order_release",
+                "Release purchase orders to the ERP",
+                _map_release_counts,
+                lambda: order_release_counts(),
+            ),
+            _entry(
+                "transfer_release",
+                "Release transfers to the ERP",
+                _map_release_counts,
+                lambda: transfer_release_counts(),
             ),
         ],
     }

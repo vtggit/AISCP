@@ -343,6 +343,7 @@ const EXPECTED_API_PATHS = new Set([
   '/api/supply-plan/summary',
   '/api/forecast/overrides/proposals',
   '/api/work/scorecard',
+  '/api/standing-grants/record',
   '/api/sop/review',
   '/api/forecast/accuracy/signals',
   '/api/sop/signoffs/proposals',

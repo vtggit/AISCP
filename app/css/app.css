@@ -1022,6 +1022,59 @@ input {
   overflow-wrap: anywhere;
 }
 
+/* Standing grants (the Overview's standing grants card) */
+
+.ov-grants {
+  overflow: hidden;
+}
+
+.ov-grants-title {
+  margin: 0;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ov-grants-intro {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: 13px;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.ov-grants-list {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-4);
+  list-style: none;
+}
+
+.ov-grants-row {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ov-grants-step {
+  display: block;
+  font-weight: 500;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.ov-grants-counts {
+  display: block;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.ov-grants-held {
+  display: block;
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+
 /* Region skeletons and load errors */
 
 @keyframes ov-pulse {

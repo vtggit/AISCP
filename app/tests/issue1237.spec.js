@@ -286,6 +286,7 @@ const KNOWN_GET_PATHS = [
   '/api/exceptions/proposals',
   '/api/forecast/overrides/proposals',
   '/api/work/scorecard',
+  '/api/standing-grants/record',
   '/api/supplier-risk',
   '/api/supply-plan',
   '/api/supply-plan/summary',

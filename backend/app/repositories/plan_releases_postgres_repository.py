@@ -213,6 +213,62 @@ class PlanReleasePostgresRepository:
             result.setdefault(row["origin"], []).append(row["lines"])
         return result
 
+    def list_readback_order_nbrs(self) -> list[str]:
+        """The distinct order numbers the readback must read.
+
+        Every stored row whose outcome is ``created`` or ``exists``,
+        whose ``order_nbr`` is non-null, and whose ``erp_status`` is
+        null or neither ``Completed``, ``Closed`` nor ``Canceled`` —
+        the rows whose order may have moved on in Acumatica since it
+        was last read (a completed, closed or canceled order needs no
+        more reads).  Distinct, in ascending order-number order.
+        """
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT order_nbr FROM plan_releases "
+                "WHERE outcome IN ('created', 'exists') "
+                "AND order_nbr IS NOT NULL "
+                "AND (erp_status IS NULL "
+                "OR erp_status NOT IN ('Completed', 'Closed', 'Canceled')) "
+                "ORDER BY 1"
+            )
+            return [row["order_nbr"] for row in cur.fetchall()]
+
+    def mark_erp_readbacks(self, found: dict[str, dict]) -> int:
+        """Store the read-back purchase-order records; rows updated.
+
+        For every order number in ``found`` (an empty mapping updates
+        nothing) sets ``erp_status`` to the record's ``status``,
+        ``erp_lines`` to the record's ``lines`` — exactly as returned
+        — and ``erp_checked_at`` to now on every row carrying that
+        order number.  One transaction, committed together.
+        """
+        if not found:
+            return 0
+        conn = get_connection()
+        try:
+            updated = 0
+            with conn.cursor() as cur:
+                for order_nbr, record in found.items():
+                    cur.execute(
+                        "UPDATE plan_releases SET erp_status = %s, "
+                        "erp_lines = %s::jsonb, erp_checked_at = now() "
+                        "WHERE order_nbr = %s",
+                        (
+                            record["status"],
+                            json.dumps(record["lines"]),
+                            order_nbr,
+                        ),
+                    )
+                    updated += cur.rowcount
+            conn.commit()
+            return updated
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def list_newest(self) -> list[dict]:
         """Every stored release row, newest first.
 

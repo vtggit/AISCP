@@ -297,6 +297,7 @@ code is the authority for details.
 - One on-hand snapshot a day: a maintenance entry point, `capture_on_hand_snapshot()`, stores the
   current `on_hand` rows in `on_hand_snapshots` under the UTC date of the latest `as_of`, replacing
   that date's rows and leaving every other date untouched (#1511).
+- The share of days in stock per ABC class, from the daily on-hand snapshots (#1522).
 
 **Supplier order minimums**
 - A minimum order value per supplier, stored by an admin (`/api/supplier-order-minimums`)

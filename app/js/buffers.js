@@ -91,6 +91,23 @@
 //     <adu_base>/day" — and clears a previous add error, without
 //     sending anything; the admin saves with "Add adjustment" as
 //     before.
+//     After the proposals block (or where the block would sit
+//     without it), and before the add form, a record line
+//     ([data-testid="buffers-adjust-record"]) — GET
+//     /api/ddmrp/adjustments/record, fetched with the sections on
+//     activation and Refresh under its own request-sequence guard
+//     (recordSeq, advanced by the sign-out reset) and with no note
+//     and no loading placeholder: a failed read (any status or a
+//     network error) or any body that is not an object whose
+//     "saved", "with_proposal", "taken", "below" and "above" are
+//     all whole numbers of zero or more, of the number type (a
+//     numeric string is not usable), leaves the line out and the
+//     section renders exactly as before. Shown, it reuses the note
+//     class and reads, in whole numbers with separators, "Saved at
+//     the proposal: <taken> of <with_proposal> adjustments saved
+//     where a factor was proposed (<below> below it, <above> above
+//     it)" for a with_proposal above zero, or "No adjustment has
+//     been saved where a factor was proposed yet." without.
 //   * "Buffer performance (last 90 days)"
 //     ([data-testid="buffers-performance"]) — GET
 //     /api/ddmrp/performance: one row per buffer (item / site, days
@@ -118,6 +135,7 @@
   var CANDIDATES_PATH = '/api/ddmrp/candidates';
   var ADJUSTMENTS_PATH = '/api/ddmrp/adjustments';
   var PROPOSALS_PATH = '/api/ddmrp/adjustments/proposals';
+  var RECORD_PATH = '/api/ddmrp/adjustments/record';
   var PERFORMANCE_PATH = '/api/ddmrp/performance';
   var ME_PATH = '/api/auth/me';
 
@@ -198,6 +216,7 @@
       confirmAdjustDelete: null, // { id } the open adjustment delete confirm
       adjustDeleteError: null, // the last failed adjustment delete's message
       proposals: null, // the newest usable proposals answer (well-formed lines)
+      record: null, // the newest usable record answer (whole figures)
     };
   }
 
@@ -234,6 +253,7 @@
   var adjustmentsSeq = 0;
   var performanceSeq = 0;
   var proposalsSeq = 0;
+  var recordSeq = 0;
 
   /* ------------------------------ helpers ------------------------------ */
 
@@ -667,6 +687,7 @@
     loadAdjustments();
     loadPerformance();
     loadProposals();
+    loadRecord();
   }
 
   function loadCandidates() {
@@ -810,6 +831,63 @@
         }
       }
     );
+  }
+
+  // The record's read, beside the sections' own reads: unlike them
+  // it carries no note and no loading placeholder — a failed read
+  // (any status or a network error) or any body that is not an
+  // object whose "saved", "with_proposal", "taken", "below" and
+  // "above" are all whole numbers of zero or more, of the number
+  // type, simply leaves the line out, and the section renders
+  // exactly as before. Its own sequence guard keeps a stale answer
+  // from rendering into a newer load.
+  function loadRecord() {
+    recordSeq += 1;
+    var mySeq = recordSeq;
+    global.Api.get(RECORD_PATH).then(
+      function (payload) {
+        if (mySeq !== recordSeq) {
+          return; // a newer read is out: this answer is stale
+        }
+        var usable = usableRecord(payload);
+        if (state.record !== usable) {
+          state.record = usable;
+          render();
+        }
+      },
+      function () {
+        if (mySeq !== recordSeq) {
+          return;
+        }
+        if (state.record !== null) {
+          state.record = null;
+          render();
+        }
+      }
+    );
+  }
+
+  // A usable record answer: an object whose "saved", "with_proposal",
+  // "taken", "below" and "above" are all whole numbers of zero or
+  // more, of the number type — a numeric string is not usable.
+  // Anything less answers null and the line stays out.
+  function usableRecord(body) {
+    var fields = ['saved', 'with_proposal', 'taken', 'below', 'above'];
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return null;
+    }
+    for (var i = 0; i < fields.length; i++) {
+      var value = body[fields[i]];
+      if (
+        typeof value !== 'number' ||
+        !isFinite(value) ||
+        value < 0 ||
+        Math.round(value) !== value
+      ) {
+        return null;
+      }
+    }
+    return body;
   }
 
   // Activation and Refresh both fetch everything again — the plan and
@@ -1815,6 +1893,39 @@
     );
   }
 
+  // The record line, inside the "Planned adjustments" section,
+  // directly after the proposals block (or where the block would
+  // sit without it) and before the add form: shown whenever the
+  // section has its adjustments answer and the record answer is
+  // usable. It reuses the note class, sets the sentence as text,
+  // never as markup, and carries no colour outside tokens.css.
+  function recordLineHtml() {
+    var record = state.record;
+    if (!record) {
+      return '';
+    }
+    var text;
+    if (record.with_proposal > 0) {
+      text =
+        'Saved at the proposal: ' +
+        wholeNumber(record.taken) +
+        ' of ' +
+        wholeNumber(record.with_proposal) +
+        ' adjustments saved where a factor was proposed (' +
+        wholeNumber(record.below) +
+        ' below it, ' +
+        wholeNumber(record.above) +
+        ' above it)';
+    } else {
+      text = 'No adjustment has been saved where a factor was proposed yet.';
+    }
+    return (
+      '<p class="bf-note" data-testid="buffers-adjust-record">' +
+      esc(text) +
+      '</p>'
+    );
+  }
+
   function adjustmentsSectionHtml() {
     var inner;
     if (state.adjustmentsError) {
@@ -1826,12 +1937,14 @@
       var rows = adjustmentRows();
       var proposals =
         state.proposals && state.proposals.length > 0 ? proposalsBlockHtml() : '';
+      var record = recordLineHtml();
       if (rows.length === 0) {
         inner =
           '<p class="bf-section-empty" data-testid="buffers-adjustments-empty">' +
           esc(ADJUSTMENTS_EMPTY) +
           '</p>' +
           proposals +
+          record +
           (state.isAdmin ? adjustFormHtml() : '');
       } else {
         var lines = [];
@@ -1847,6 +1960,7 @@
           lines.join('') +
           '</ul>' +
           proposals +
+          record +
           (state.isAdmin ? adjustFormHtml() : '');
       }
     } else {
@@ -2104,6 +2218,7 @@
     adjustmentsSeq += 1;
     performanceSeq += 1;
     proposalsSeq += 1;
+    recordSeq += 1;
     state = freshState();
     render();
   }

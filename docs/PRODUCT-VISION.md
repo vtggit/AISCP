@@ -511,6 +511,15 @@ item-site. It covers BOTH ERPs (operator decision): Acumatica and Odoo.
     "applied" at once.
 - **Odoo current values.** AIERP also reads Odoo's reorder rules, so Odoo item-sites have a
   current reorder point to compare against (#714). Before that, Odoo's side of drift was blank.
+- **How often a pushed value stays in the ERP.** To show how often a pushed value is changed again
+  in the ERP, AIERP takes, for each item-site, its latest push that left the ERP holding the pushed
+  values (outcome written or unchanged). Once a sync has read the item-site after that push, the
+  push is read back. It is unchanged while the ERP's reorder point and max both equal the values
+  read back after the write, to within 0.000001, and changed otherwise, including when the ERP no
+  longer holds a value. An item-site that no sync has read since its push is not read back yet.
+  Pushes of an accepted reorder-point decision and of DDMRP buffer levels are counted apart. AIERP
+  keeps no history of the ERP's values between syncs, so a value changed and changed back between
+  two syncs counts as unchanged.
 - **Slices:** #714–#719, then the planner screen.
 
 ## Demand-driven replenishment (DDMRP) (operator direction, 2026-10-28; method defaults decided by Claude under delegation)

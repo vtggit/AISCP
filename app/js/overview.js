@@ -49,11 +49,21 @@
 //   * GET /api/work/scorecard, the "Work scorecard" card's answer,
 //     the card's own read beside the Forecast overrides card: the
 //     intro line and one row per usable entry in the answer's
-//     order, each row the entry's step above its counts; a failed
-//     read — any status, a network error, or a body that is not an
-//     object whose processes is an array holding at least one
-//     usable entry — removes the card — no error text, no Retry,
-//     no skeleton survives.
+//     order, each row the entry's step above its counts; an entry
+//     may carry an automatic — a missing automatic and a null one
+//     change nothing, a number for which isMoney holds is usable
+//     only while it is no greater than the entry's decisions, and
+//     an entry with any other automatic is left out, like any other
+//     unusable entry, the failed-entry rule (its four counts all
+//     null) unchanged; a row whose automatic is a number reads its
+//     counts "Decisions: <decisions>; by a standing grant:
+//     <automatic>; by a person: <decisions - automatic>", every
+//     number through countLabel, "Not available" and "No decisions
+//     yet" unchanged, and every other row reads exactly as before;
+//     a failed read — any status, a network error, or a body that
+//     is not an object whose processes is an array holding at least
+//     one usable entry — removes the card — no error text, no
+//     Retry, no skeleton survives.
 //
 // The figures load the first time the view becomes the active view. A
 // decision recorded in the Work queue (any of the three kinds) marks
@@ -1903,9 +1913,17 @@
   // its decisions, with_proposal, at_proposal and without_proposal
   // are all null (a failed source), or its decisions, with_proposal
   // and without_proposal are each a number for which isMoney holds
-  // and its at_proposal is null or such a number. Every number goes
-  // through countLabel, the words stay the same for a count of 1,
-  // and every API value is set as text.
+  // and its at_proposal is null or such a number; the entry may
+  // carry an automatic — a missing automatic and a null one change
+  // nothing, a number for which isMoney holds is usable only while
+  // it is no greater than the entry's decisions, and any other
+  // automatic leaves the entry out, like any other unusable entry;
+  // a row whose automatic is a number reads its counts "Decisions:
+  // <decisions>; by a standing grant: <automatic>; by a person:
+  // <decisions - automatic>", "Not available" and "No decisions
+  // yet" unchanged and every other row exactly as before. Every
+  // number goes through countLabel, the words stay the same for a
+  // count of 1, and every API value is set as text.
 
   var WORK_REGION_ID = 'ov-region-work';
 
@@ -1953,22 +1971,39 @@
     if (typeof entry.step !== 'string' || entry.step === '') {
       return false;
     }
+    var countsUsable;
     if (
       entry.decisions === null && entry.with_proposal === null &&
       entry.at_proposal === null && entry.without_proposal === null
     ) {
-      return true;
+      // A failed source: the rule is unchanged.
+      countsUsable = true;
+    } else {
+      countsUsable =
+        isMoney(entry.decisions) &&
+        isMoney(entry.with_proposal) &&
+        isMoney(entry.without_proposal) &&
+        (entry.at_proposal === null || isMoney(entry.at_proposal));
     }
+    if (!countsUsable) {
+      return false;
+    }
+    // A missing automatic and a null one change nothing; any other
+    // automatic than a number for which isMoney holds leaves the
+    // entry out, and such a number is usable only while it is no
+    // greater than the entry's decisions.
     return (
-      isMoney(entry.decisions) &&
-      isMoney(entry.with_proposal) &&
-      isMoney(entry.without_proposal) &&
-      (entry.at_proposal === null || isMoney(entry.at_proposal))
+      entry.automatic === undefined || entry.automatic === null ||
+      (isMoney(entry.automatic) && isMoney(entry.decisions) &&
+        entry.automatic <= entry.decisions)
     );
   }
 
   // The row's counts: "Not available" while decisions is null
-  // (a failed source), "No decisions yet" while it is 0, otherwise
+  // (a failed source), "No decisions yet" while it is 0, and for a
+  // row whose automatic is a number "Decisions: <decisions>; by a
+  // standing grant: <automatic>; by a person: <decisions -
+  // automatic>", every number through countLabel; otherwise
   // "Decisions: <decisions>; with a proposal: <with_proposal>", with
   // "; proposal taken: <at_proposal> (<pct>%)" following while
   // at_proposal is a number and with_proposal is above 0 — pct the
@@ -1980,6 +2015,13 @@
     }
     if (entry.decisions === 0) {
       return 'No decisions yet';
+    }
+    if (isMoney(entry.automatic)) {
+      return (
+        'Decisions: ' + countLabel(entry.decisions) +
+        '; by a standing grant: ' + countLabel(entry.automatic) +
+        '; by a person: ' + countLabel(entry.decisions - entry.automatic)
+      );
     }
     var text =
       'Decisions: ' + countLabel(entry.decisions) +

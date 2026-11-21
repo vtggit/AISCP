@@ -105,6 +105,12 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   item-site's current decision: accepted and dismissed counts with their money at stake, snoozed count,
   accepted share by count and money, and raise/lower direction counts
   (`backend/app/api/planner_decisions.py`).
+- `GET /api/work/scorecard` gives any signed-in user, for each of eight steps (reorder
+  points, excess, stockout, exceptions, forecast overrides, the month's sign-off, the purchase
+  budget and DDMRP adjustment factors), how many decisions were made, how many had a
+  proposal, how many took the proposal as it stood and how many had none, with the share
+  taken; a step whose source fails or answers inconsistent counts answers its counts as
+  null, and the other steps still answer (`backend/app/api/work.py`).
 
 **Demand planning**
 

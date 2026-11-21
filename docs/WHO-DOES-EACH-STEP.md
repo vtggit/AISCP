@@ -178,6 +178,7 @@ Each exception links to the screen that explains it. Acting on it is a step of t
 AIERP-D-225 asks AIERP to show, for each process, how many decisions it made or proposed and how many a planner made or changed, and how its answers did against the planner's changes. These are measured today:
 
 - **Every step at once:** `GET /api/work/scorecard` answers, for eight steps (reorder points, excess, stockout risk, exceptions, forecast overrides, the month's sign-off, the purchase budget and DDMRP adjustment factors), how many decisions were made, how many had a proposal, how many took the proposal as it stood and how many had none (#1485). For the release of purchase orders and of transfers to the ERP, it answers how many orders were released and how many of them a standing grant released (#1495). The Overview's "Work scorecard" card shows it (#1494). For those release rows, the card's counts show how many were released by a standing grant and how many by a person (#1499).
+- **Standing grant record:** `GET /api/standing-grants/record` answers, per process, how often a standing grant's run sends everything that is due (#1502).
 - **Reorder points:** `GET /api/drift/decisions/acceptance` answers how often the planners' decisions accept the recommended reorder point, by count and by money at stake, shown on the Overview's Reorder points card (#1412, #1413).
 - **Excess and stockout risk:** each accepted decision keeps the action or remedy proposed for its row; `GET /api/excess/proposals` and `GET /api/stockout/proposals` count, by kind, the accepted decisions that had one proposed and those that chose it, shown on the Overview's Excess and dead stock and Stockout risk cards (#1321, #1323, #1336, #1338).
 - **Exceptions:** `GET /api/exceptions/proposals` counts the acknowledgements that had a proposed answer, shown on the Overview's "Exceptions today" card (#1350, #1353).
@@ -187,4 +188,4 @@ AIERP-D-225 asks AIERP to show, for each process, how many decisions it made or 
 - **DDMRP adjustment factors:** `GET /api/ddmrp/adjustments/record` counts the adjustments saved at, below or above the proposed factor, shown in the Buffers screen's Planned adjustments section (#1475, #1481).
 - **Decisions and their money:** `GET /api/decisions/summary` counts accepted, applied, dismissed and snoozed decisions with their money.
 
-The rows above name what is not measured yet, such as how often a standing grant's run sends everything that is due, and how often a planner changes an order AIERP released.
+The rows above name what is not measured yet, such as how often a planner changes an order AIERP released.

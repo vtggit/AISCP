@@ -242,6 +242,11 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   (any signed-in user) reports how many saved adjustments took, fell below, or went above that
   proposal (`backend/app/api/ddmrp.py`,
   `backend/migrations/versions/0053_ddmrp_adjustment_proposals.py`).
+- The Buffers screen's Planned adjustments section shows that record after the proposals block
+  (or where it would be) and before the add form: how many of the saved adjustments where a
+  factor was proposed took it, with how many fell below or went above it, or that none have
+  been saved where a factor was proposed yet; a failed or unusable read leaves the line out
+  (`app/js/buffers.js`).
 
 **Exceptions**
 
@@ -428,7 +433,8 @@ views are:
   push, and the history of every write.
 - **Buffers**: the DDMRP buffers with their zones, net flow, order signals and on-hand alerts,
   suggested buffers, planned adjustments with proposed adjustment factors an admin can use to
-  fill the add form, and buffer performance.
+  fill the add form, how often admins save a proposed adjustment factor, and buffer
+  performance.
 - **Decision log**: every recorded decision across the three lists, newest first.
 - **Settings**: system and personal settings, ERP code mappings with suggested matches,
   purchase budgets, the intermittent and lumpy items with their adoption, and the cost of

@@ -21,7 +21,7 @@ A step left to a planner names why, and the evidence that would let AIERP propos
 
   A parameter push always needs a person's approval of each write. Writes to either ERP also stay off until the instance switches them on (`ACUMATICA_ALLOW_WRITES`, `ODOO_ALLOW_WRITES`).
 - **The data.** Every process reads AIERP's own synced copy of the ERP. The sync and the jobs after it (the forecast snapshot, the buffer status snapshot, the transfer-order status read, the standing-grant runs of the order plan and transfers and the exceptions' first-seen dates) run without a person, on the schedule the deployment sets.
-- **The measures.** AIERP-D-225 asks AIERP to show how its answers did against the planner's changes. Today three answers are measured that way: the forecast, by realised accuracy with the effect of overrides and of demand signals measured apart; the stockout remedies, where the Overview's Stockout risk card shows how often accepted decisions took the proposed remedy, by kind (#1321, #1323); and the excess actions, where the Overview's Excess and dead stock card shows the same for the proposed action (#1336, #1338). `GET /api/decisions/summary` counts accepted, applied, dismissed and snoozed decisions with their money. The other measures named below are not built yet.
+- **The measures.** AIERP-D-225 asks AIERP to show how its answers did against the planner's changes. [How the answers are measured](#how-the-answers-are-measured), the last section, lists what is measured today.
 
 State on 2026-11-16. Update this file when a step changes hands. Each process section starts with a comment line, which does not render, naming the guidance areas it covers, so that documentation updates for a change in one of those areas reach the section; keep it when you edit the section.
 
@@ -65,7 +65,7 @@ State on 2026-11-16. Update this file when a step changes hands. Each process se
 Raising an order or moving stock uses the release steps of the order plan and of transfers below.
 
 ## The order plan and its release
-<!-- docs-follow areas: order-quantities, execution-release-and-tracking, aggregate-planning -->
+<!-- docs-follow areas: order-quantities, execution-release-and-tracking, aggregate-planning, who-does-the-work -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -83,7 +83,7 @@ Raising an order or moving stock uses the release steps of the order plan and of
 The Releases screen tracks the Acumatica releases. Odoo draft orders are not on it. The Released cell reads an order released under a standing grant as "by standing grant #<id>".
 
 ## Transfers
-<!-- docs-follow areas: execution-release-and-tracking, several-erps-one-planner -->
+<!-- docs-follow areas: execution-release-and-tracking, several-erps-one-planner, who-does-the-work -->
 
 | Step | Done by | Why not AIERP (yet) | What would move it |
 |---|---|---|---|
@@ -171,3 +171,20 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Send notices by email or chat | not built yet | In the app first: nothing about an exception leaves AIERP until then (AIERP-D-195). | The operator's decision on notices (AIERP-D-195). |
 
 Each exception links to the screen that explains it. Acting on it is a step of that process, in its own table above.
+
+## How the answers are measured
+<!-- docs-follow areas: who-does-the-work -->
+
+AIERP-D-225 asks AIERP to show, for each process, how many decisions it made or proposed and how many a planner made or changed, and how its answers did against the planner's changes. These are measured today:
+
+- **Every step at once:** `GET /api/work/scorecard` answers, for eight steps (reorder points, excess, stockout risk, exceptions, forecast overrides, the month's sign-off, the purchase budget and DDMRP adjustment factors), how many decisions were made, how many had a proposal, how many took the proposal as it stood and how many had none (#1485). For the release of purchase orders and of transfers to the ERP, it answers how many orders were released and how many of them a standing grant released (#1495). The Overview's "Work scorecard" card shows it (#1494).
+- **Reorder points:** `GET /api/drift/decisions/acceptance` answers how often the planners' decisions accept the recommended reorder point, by count and by money at stake, shown on the Overview's Reorder points card (#1412, #1413).
+- **Excess and stockout risk:** each accepted decision keeps the action or remedy proposed for its row; `GET /api/excess/proposals` and `GET /api/stockout/proposals` count, by kind, the accepted decisions that had one proposed and those that chose it, shown on the Overview's Excess and dead stock and Stockout risk cards (#1321, #1323, #1336, #1338).
+- **Exceptions:** `GET /api/exceptions/proposals` counts the acknowledgements that had a proposed answer, shown on the Overview's "Exceptions today" card (#1350, #1353).
+- **The forecast:** realised accuracy measures the effect of overrides and of demand signals apart (`GET /api/forecast/accuracy/signals`, #979). `GET /api/forecast/overrides/proposals` counts how often the overrides follow their proposed corrections, shown on the Overview's "Forecast overrides" card (#1365, #1369). Once their periods complete, `GET /api/forecast/accuracy/corrections` measures the corrections against what sold (#1376), and `GET /api/forecast/accuracy/basis` the history basis beside the forecast (#1389).
+- **The month's sign-off:** `GET /api/sop/signoffs/proposals` answers how often the months signed off were proposed, shown on the S&OP status card (#1435, #1448).
+- **The purchase budget:** each saved month keeps the proposal that stood, and `GET /api/purchase-budgets/proposals` reports how many months were last saved at it, below it or above it, shown on the purchasing budget card in Settings (#1432, #1442).
+- **DDMRP adjustment factors:** `GET /api/ddmrp/adjustments/record` counts the adjustments saved at, below or above the proposed factor, shown in the Buffers screen's Planned adjustments section (#1475, #1481).
+- **Decisions and their money:** `GET /api/decisions/summary` counts accepted, applied, dismissed and snoozed decisions with their money.
+
+The rows above name what is not measured yet, such as how often a standing grant's run sends everything that is due, and how often a planner changes an order AIERP released.

@@ -72,6 +72,8 @@ code is the authority for details.
   made by a standing grant (#1495).
 - The Work scorecard now shows, for release rows, how many decisions were made by a standing grant and
   how many by a person (#1499).
+- The Work scorecard now shows, for order releases, how many were read back from the ERP and how many
+  came back unchanged (#1514).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

@@ -43,10 +43,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   expected fill rate of each level from 90% to 99.5%, and the cheapest levels for a fill-rate
   target. A setting makes the levels fill-rate targets instead of cycle service levels
   (`backend/app/recommend/service_curve.py`).
-- The service levels actually reached, per ABC class, over a trailing window of snapshot dates
-  (`days` from 1 to 366, default 30): the counted item-sites' snapshot days, days in stock and
-  share in stock beside each class' current service level (`backend/app/recommend/service_reached.py`,
-  `GET /api/service-levels/reached`).
+- The share of item-site days in stock per ABC class, over the last `days` days (1 to 366, default
+  30) up to the latest daily on-hand snapshot, among the item-sites with demand in that window,
+  beside each class's current service level. It counts days in stock, not a fill rate
+  (`backend/app/recommend/service_reached.py`, `GET /api/service-levels/reached`).
 - Drift: where the ERP's current reorder point no longer fits, ranked by money at stake
   (`backend/app/recommend/drift.py`).
 - Recommendation changes: why a recommended reorder point moved since an earlier date, split

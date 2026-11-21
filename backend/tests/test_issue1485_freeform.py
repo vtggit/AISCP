@@ -251,7 +251,7 @@ EXPECTED = {
     "order_release": {
         "decisions": 0,
         "with_proposal": 0,
-        "at_proposal": None,
+        "at_proposal": 0,
         "without_proposal": 0,
         "automatic": 0,
         "rate": None,
@@ -371,7 +371,7 @@ def test_issue1485_freeform(client, monkeypatch, caplog):
     monkeypatch.setattr(
         work_module,
         "order_release_counts",
-        _fixed({"released": 0, "automatic": 0}),
+        _fixed({"released": 0, "automatic": 0, "read": 0, "unchanged": 0}),
     )
     monkeypatch.setattr(
         work_module,

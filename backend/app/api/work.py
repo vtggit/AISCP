@@ -50,12 +50,13 @@ source function directly (not over HTTP):
   mapped the same way as ``purchase_budget``.
 * ``order_release`` — "Release purchase orders to the ERP" — from
   this module's own ``order_release_counts()``: ``decisions`` is
-  ``released``, ``with_proposal`` is ``released``, ``at_proposal`` is
-  null, ``without_proposal`` is 0 and ``automatic`` is
+  ``released``, ``with_proposal`` is ``read``, ``at_proposal`` is
+  ``unchanged``, ``without_proposal`` is 0 and ``automatic`` is
   ``automatic``.
 * ``transfer_release`` — "Release transfers to the ERP" — from
-  ``transfer_release_counts()``, mapped the same way as
-  ``order_release``.
+  ``transfer_release_counts()``: ``decisions`` and ``with_proposal``
+  are ``released``, ``at_proposal`` is null, ``without_proposal`` is
+  0 and ``automatic`` is ``automatic``.
 
 ``order_release_counts`` and ``transfer_release_counts`` each run one
 SELECT through ``app.db.connection.get_cursor``, over ``plan_releases``
@@ -64,6 +65,12 @@ rows whose ``outcome`` is ``created``, and ``automatic`` the number of
 those whose ``actor`` starts with ``standing-grant:`` — the releases a
 standing grant fired rather than a person.  Rows whose outcome is
 ``pending``, ``exists``, ``error`` or ``aborted`` are not counted.
+``order_release_counts`` also answers ``read`` — the created rows
+whose ``erp_status`` is not null, the ones the Acumatica readback has
+answered — and ``unchanged`` — the read rows for which
+``app.supply.release_readback.release_unchanged`` of the row's
+``lines``, ``erp_status`` and ``erp_lines`` is True: the ERP read the
+order back with the same items and quantities as the released side.
 For the eight existing entries ``automatic`` is null; for the two
 release entries it is the count above.
 
@@ -102,6 +109,7 @@ from app.api.stockout_decisions import stockout_proposal_counts
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
 from app.db.connection import get_cursor
+from app.supply.release_readback import release_unchanged
 
 logger = logging.getLogger(__name__)
 
@@ -111,22 +119,42 @@ router = APIRouter(prefix="/api/work", tags=["work"])
 def order_release_counts() -> dict:
     """The scorecard's ``order_release`` counts, over ``plan_releases``.
 
-    One SELECT through ``app.db.connection.get_cursor``: ``released``
-    is the number of rows whose ``outcome`` is ``created``, and
+    One SELECT through ``app.db.connection.get_cursor``, over the rows
+    whose ``outcome`` is ``created``: ``released`` is their number and
     ``automatic`` the number of those whose ``actor`` starts with
     ``standing-grant:`` — the releases a standing grant fired rather
-    than a person.  Rows whose outcome is ``pending``, ``exists``,
-    ``error`` or ``aborted`` are not counted.
+    than a person.  ``read`` is the number of the created rows whose
+    ``erp_status`` is not null — the ones the Acumatica readback has
+    answered — and ``unchanged`` the read rows for which
+    ``app.supply.release_readback.release_unchanged`` of the row's
+    ``lines``, ``erp_status`` and ``erp_lines`` is True.  Rows whose
+    outcome is ``pending``, ``exists``, ``error`` or ``aborted`` are
+    not counted.
     """
     with get_cursor() as cur:
         cur.execute(
-            "SELECT COUNT(*) AS released, "
-            "COUNT(*) FILTER (WHERE actor LIKE 'standing-grant:%') "
-            "AS automatic "
+            "SELECT actor, lines, erp_status, erp_lines "
             "FROM plan_releases WHERE outcome = 'created'"
         )
-        row = cur.fetchone()
-    return {"released": row["released"], "automatic": row["automatic"]}
+        rows = cur.fetchall()
+    released = len(rows)
+    automatic = 0
+    read = 0
+    unchanged = 0
+    for row in rows:
+        if (row["actor"] or "").startswith("standing-grant:"):
+            automatic += 1
+        if row["erp_status"] is None:
+            continue
+        read += 1
+        if release_unchanged(row["lines"], row["erp_status"], row["erp_lines"]):
+            unchanged += 1
+    return {
+        "released": released,
+        "automatic": automatic,
+        "read": read,
+        "unchanged": unchanged,
+    }
 
 
 def transfer_release_counts() -> dict:
@@ -250,12 +278,27 @@ def _map_record_counts(answer: dict) -> tuple:
     )
 
 
-def _map_release_counts(answer: dict) -> tuple:
-    """order_release and transfer_release: the releases to the ERP;
-    the release itself is the decision — ``decisions`` and
-    ``with_proposal`` are ``released``, ``at_proposal`` stays null
-    and ``without_proposal`` is 0 — while ``automatic`` is the share
-    the standing grants fired."""
+def _map_order_release_counts(answer: dict) -> tuple:
+    """order_release: the releases to the ERP — the decision is the
+    release and the proposal the readback: ``decisions`` is
+    ``released``, ``with_proposal`` is ``read``, ``at_proposal`` is
+    ``unchanged`` and ``without_proposal`` is 0, while ``automatic``
+    is the share the standing grants fired."""
+    return (
+        answer["released"],
+        answer["read"],
+        answer["unchanged"],
+        0,
+        answer["automatic"],
+    )
+
+
+def _map_transfer_release_counts(answer: dict) -> tuple:
+    """transfer_release: the releases to the ERP; the release itself
+    is the decision — ``decisions`` and ``with_proposal`` are
+    ``released``, ``at_proposal`` stays null and
+    ``without_proposal`` is 0 — while ``automatic`` is the share the
+    standing grants fired."""
     return answer["released"], answer["released"], None, 0, answer["automatic"]
 
 
@@ -443,13 +486,13 @@ def scorecard(
             _entry(
                 "order_release",
                 "Release purchase orders to the ERP",
-                _map_release_counts,
+                _map_order_release_counts,
                 lambda: order_release_counts(),
             ),
             _entry(
                 "transfer_release",
                 "Release transfers to the ERP",
-                _map_release_counts,
+                _map_transfer_release_counts,
                 lambda: transfer_release_counts(),
             ),
         ],

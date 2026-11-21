@@ -57,9 +57,12 @@
 //     unusable entry, the failed-entry rule (its four counts all
 //     null) unchanged; a row whose automatic is a number reads its
 //     counts "Decisions: <decisions>; by a standing grant:
-//     <automatic>; by a person: <decisions - automatic>", every
-//     number through countLabel, "Not available" and "No decisions
-//     yet" unchanged, and every other row reads exactly as before;
+//     <automatic>; by a person: <decisions - automatic>", with
+//     "; unchanged in the ERP: <at_proposal> of <with_proposal>
+//     read back (<pct>%)" following while at_proposal is a number
+//     and with_proposal is above 0, every number through countLabel,
+//     "Not available" and "No decisions yet" unchanged, and every
+//     other row reads exactly as before;
 //     a failed read — any status, a network error, or a body that
 //     is not an object whose processes is an array holding at least
 //     one usable entry — removes the card — no error text, no
@@ -2047,12 +2050,15 @@
   // (a failed source), "No decisions yet" while it is 0, and for a
   // row whose automatic is a number "Decisions: <decisions>; by a
   // standing grant: <automatic>; by a person: <decisions -
-  // automatic>", every number through countLabel; otherwise
-  // "Decisions: <decisions>; with a proposal: <with_proposal>", with
-  // "; proposal taken: <at_proposal> (<pct>%)" following while
-  // at_proposal is a number and with_proposal is above 0 — pct the
-  // rounded share of the with-proposal decisions that took the
-  // proposal as it stood. The words stay the same for a count of 1.
+  // automatic>", with "; unchanged in the ERP: <at_proposal> of
+  // <with_proposal> read back (<pct>%)" following while at_proposal
+  // is a number and with_proposal is above 0; every number through
+  // countLabel; otherwise "Decisions: <decisions>; with a proposal:
+  // <with_proposal>", with "; proposal taken: <at_proposal>
+  // (<pct>%)" following while at_proposal is a number and
+  // with_proposal is above 0 — pct, in both, the rounded share
+  // 100 * at_proposal / with_proposal of the with-proposal
+  // decisions. The words stay the same for a count of 1.
   function workCountsText(entry) {
     if (entry.decisions === null) {
       return 'Not available';
@@ -2061,11 +2067,18 @@
       return 'No decisions yet';
     }
     if (isMoney(entry.automatic)) {
-      return (
+      var text =
         'Decisions: ' + countLabel(entry.decisions) +
         '; by a standing grant: ' + countLabel(entry.automatic) +
-        '; by a person: ' + countLabel(entry.decisions - entry.automatic)
-      );
+        '; by a person: ' + countLabel(entry.decisions - entry.automatic);
+      if (isMoney(entry.at_proposal) && entry.with_proposal > 0) {
+        var pct = Math.round(100 * entry.at_proposal / entry.with_proposal);
+        text +=
+          '; unchanged in the ERP: ' + countLabel(entry.at_proposal) +
+          ' of ' + countLabel(entry.with_proposal) +
+          ' read back (' + countLabel(pct) + '%)';
+      }
+      return text;
     }
     var text =
       'Decisions: ' + countLabel(entry.decisions) +

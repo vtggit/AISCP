@@ -97,7 +97,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   and the raise/lower direction counts (`app/js/overview.js`).
 - The Overview's Work scorecard card shows, for each step, how many decisions were made,
   how many had a proposal, and how many took the proposal as it stood, when the read
-  succeeds; a failed read removes the card (`app/js/overview.js`).
+  succeeds; for a row whose automatic is a number it instead shows how many decisions were
+  made, how many were made by a standing grant, and how many by a person, and a failed read
+  removes the card (`app/js/overview.js`).
 - An accepted decision is shown as applied once the ERP data reflects it, and a summary
   totals accepted, applied and outstanding decisions with their money
   (`backend/app/api/decision_summary.py`).

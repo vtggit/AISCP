@@ -70,6 +70,8 @@ code is the authority for details.
   many had a proposal, and how often a decision took the proposal as it stood (#1494).
 - The Work scorecard now includes order and transfer releases, with an automatic count of the releases
   made by a standing grant (#1495).
+- The Work scorecard now shows, for release rows, how many decisions were made by a standing grant and
+  how many by a person (#1499).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

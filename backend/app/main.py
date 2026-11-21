@@ -82,6 +82,7 @@ def create_app() -> FastAPI:
     from app.api.supplier_terms import router as supplier_terms_router
     from app.api.suppliers import router as suppliers_router
     from app.api.supply_plan import router as supply_plan_router
+    from app.api.work import router as work_router
     from app.auth.dependencies import require_authenticated_user
 
     application = FastAPI(title=APP_NAME, version=APP_VERSION)
@@ -153,6 +154,7 @@ def create_app() -> FastAPI:
     application.include_router(supplier_terms_router, dependencies=auth_gate)
     application.include_router(suppliers_router, dependencies=auth_gate)
     application.include_router(supply_plan_router, dependencies=auth_gate)
+    application.include_router(work_router, dependencies=auth_gate)
     return application
 
 

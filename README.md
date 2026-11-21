@@ -95,11 +95,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - The Overview's Reorder points card shows the drift acceptance measure when the read
   succeeds: the accepted share of decided rows, the share of money at stake when present,
   and the raise/lower direction counts (`app/js/overview.js`).
-- The Overview's Work scorecard card shows, for each step, how many decisions were made,
-  how many had a proposal, and how many took the proposal as it stood, when the read
-  succeeds; for a row whose automatic is a number it instead shows how many decisions were
-  made, how many were made by a standing grant, and how many by a person, and a failed read
-  removes the card (`app/js/overview.js`).
+- The Overview's Work scorecard card shows, for each step, how many decisions were made, how
+  many had a proposal, and how many took the proposal as it stood, when the read succeeds; for
+  the two release rows it instead shows how many decisions were made, how many by a standing
+  grant and how many by a person, and a failed read removes the card (`app/js/overview.js`).
 - An accepted decision is shown as applied once the ERP data reflects it, and a summary
   totals accepted, applied and outstanding decisions with their money
   (`backend/app/api/decision_summary.py`).
@@ -107,13 +106,13 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   item-site's current decision: accepted and dismissed counts with their money at stake, snoozed count,
   accepted share by count and money, and raise/lower direction counts
   (`backend/app/api/planner_decisions.py`).
-- `GET /api/work/scorecard` gives any signed-in user, for each of ten steps (reorder
-  points, excess, stockout, exceptions, forecast overrides, the month's sign-off, the purchase
-  budget, DDMRP adjustment factors, order releases and transfer releases), how many decisions
-  were made, how many had a proposal, how many took the proposal as it stood, how many had
-  none, and how many were automatic (the standing-grant share for the two release steps, null
-  for the eight existing steps), with the share taken; a step whose source fails or answers
-  inconsistent counts answers its counts as null, and the other steps still answer
+- `GET /api/work/scorecard` gives any signed-in user, for each of ten steps (reorder points,
+  excess, stockout, exceptions, forecast overrides, the month's sign-off, the purchase budget,
+  DDMRP adjustment factors, order releases and transfer releases), how many decisions were made,
+  how many had a proposal, how many took the proposal as it stood, how many had none, and how
+  many were automatic (for the two release steps, the releases a standing grant made; null for
+  the other eight), with the share taken; a step whose source fails or answers inconsistent
+  counts answers its counts as null, and the other steps still answer
   (`backend/app/api/work.py`).
 
 **Demand planning**
@@ -357,7 +356,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   the grant, within its limits, and each run is recorded in `standing_grant_runs`
   (`backend/app/api/erp_standing_grants.py`, `backend/app/supply/standing_release.py`,
   `backend/app/settings/registry.py`). Any signed-in user can read the stored runs, newest
-  first, with an optional process filter and limit (`GET /api/standing-grants/runs`). The
+  first, with an optional process filter and limit (`GET /api/standing-grants/runs`), and the
+  record of the runs per process (`GET /api/standing-grants/record`): how many runs there
+  were, how many sent everything that was due, the counts by outcome, the documents and value
+  sent, and what the latest run held back. The
   order-plan run leaves out a group holding a line whose unit cost is not above 0, with the
   reason `no_value`, before its limits. The transfer run leaves out a group holding a
   suggestion whose value is null or not above 0, with the reason `no_value`, before its

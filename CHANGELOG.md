@@ -68,6 +68,8 @@ code is the authority for details.
   it stood and how many had none, with the share taken (#1485).
 - A "Work scorecard" card on the Overview shows, for each process, how many decisions were made, how
   many had a proposal, and how often a decision took the proposal as it stood (#1494).
+- The Work scorecard now includes order and transfer releases, with an automatic count of the releases
+  made by a standing grant (#1495).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

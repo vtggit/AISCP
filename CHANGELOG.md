@@ -174,6 +174,8 @@ code is the authority for details.
   and the latest run, for any signed-in user (#1502).
 - Released purchase orders are read back from Acumatica, storing the returned status, lines, and check
   time on their release rows (#1508).
+- A "Standing grants" card on the Overview shows, for each standing grant, how many runs sent
+  everything that was due and what the last run held back for a person (#1503).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

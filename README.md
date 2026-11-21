@@ -365,6 +365,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   suggestion whose value is null or not above 0, with the reason `no_value`, before its
   limits and reducing no allowance, and its left-out value is the summed value of its
   suggestions above 0.
+- The Overview's Standing grants card shows, for the order-plan and transfer standing grants, how many runs
+  sent everything that was due and what the last run held back for a person, when the read succeeds; a
+  failed read or no usable entry removes the card (`app/js/overview.js`).
 - Writes to either ERP are off unless switched on for the instance (`ACUMATICA_ALLOW_WRITES`,
   `ODOO_ALLOW_WRITES`).
 

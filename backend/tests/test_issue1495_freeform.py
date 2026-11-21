@@ -13,17 +13,24 @@ at_proposal, without_proposal, automatic, rate}``: for the eight
 existing entries ``automatic`` is null and the numbers and rates are
 the ones of the #1485 proof; the two release entries come after
 ``ddmrp_adjustment`` — ``order_release`` ("Release purchase orders to
-the ERP") from ``app.api.work.order_release_counts`` and
-``transfer_release`` ("Release transfers to the ERP") from
-``app.api.work.transfer_release_counts``, each mapping ``decisions``
-and ``with_proposal`` to ``released``, ``at_proposal`` to null,
-``without_proposal`` to 0 and ``automatic`` to ``automatic``, so
-``rate`` is null.  The two count functions each run one SELECT
-through ``app.db.connection.get_cursor``, over ``plan_releases`` and
-``transfer_releases`` respectively: ``released`` is the rows whose
-outcome is ``created`` and ``automatic`` those of them whose actor
-starts with ``standing-grant:``; rows whose outcome is ``pending``,
-``exists``, ``error`` or ``aborted`` are not counted.  A failed
+the ERP") from ``app.api.work.order_release_counts``, mapping
+``decisions`` to ``released``, ``with_proposal`` to ``read``,
+``at_proposal`` to ``unchanged``, ``without_proposal`` to 0 and
+``automatic`` to ``automatic``, so ``rate`` is ``unchanged`` over
+``read``, null while ``read`` is 0; and ``transfer_release`` ("Release
+transfers to the ERP") from ``app.api.work.transfer_release_counts``,
+mapping ``decisions`` and ``with_proposal`` to ``released``,
+``at_proposal`` to null, ``without_proposal`` to 0 and ``automatic``
+to ``automatic``, so ``rate`` is null.  The two count functions each
+run one SELECT through ``app.db.connection.get_cursor``, over
+``plan_releases`` and ``transfer_releases`` respectively: ``released``
+is the rows whose outcome is ``created`` and ``automatic`` those of
+them whose actor starts with ``standing-grant:``; rows whose outcome
+is ``pending``, ``exists``, ``error`` or ``aborted`` are not counted;
+``order_release_counts`` also answers ``read`` — the created rows
+whose ``erp_status`` is not null — and ``unchanged`` — the read rows
+for which ``app.supply.release_readback.release_unchanged`` of the
+row's ``lines``, ``erp_status`` and ``erp_lines`` is True.  A failed
 source — a source that raises, or one that breaks an invariant —
 keeps its ``key`` and ``step`` and its six numbers null, the
 invariant among them a non-null ``automatic`` that is not a
@@ -36,21 +43,23 @@ sources of #1485 replaced, by monkeypatch on the names ``app.api.work``
 calls, by stand-ins with the fixed answers that
 ``backend/tests/test_issue1485_freeform.py`` uses — and
 ``order_release_counts`` replaced by a stand-in answering
-``{"released": 19, "automatic": 2}`` and ``transfer_release_counts``
-by one answering ``{"released": 6, "automatic": 5}``:
+``{"released": 19, "automatic": 2, "read": 17, "unchanged": 15}`` and
+``transfer_release_counts`` by one answering
+``{"released": 6, "automatic": 5}``:
 
 * the answer for the ``user`` role lists the ten keys in order: the
   eight existing entries with that proof's numbers and rates, each
-  with ``automatic`` null; ``order_release`` 19/19/null/0 rate null
+  with ``automatic`` null; ``order_release`` 19/17/15/0 rate 0.8824
   automatic 2; ``transfer_release`` 6/6/null/0 rate null automatic 5;
 * a failed source — the ``transfer_release_counts`` stand-in raising
   — keeps the entry's ``key`` and ``step`` with its six numbers null,
   the other entries answer as above and the route answers 200;
 * a broken count — the ``order_release_counts`` stand-in answering
-  ``{"released": 2, "automatic": 3}``, an ``automatic`` above its
-  ``decisions`` — keeps the entry's ``key`` and ``step`` with its six
-  numbers null, a warning names ``order_release``, the other entries
-  answer as above and the route answers 200;
+  ``{"released": 2, "automatic": 3, "read": 0, "unchanged": 0}``, an
+  ``automatic`` above its ``decisions`` — keeps the entry's ``key``
+  and ``step`` with its six numbers null, a warning names
+  ``order_release``, the other entries answer as above and the route
+  answers 200;
 * the real counts — the two functions themselves, with no stand-ins,
   against the test database: six rows into ``plan_releases`` —
   outcome ``created`` with actor ``standing-grant:1``, ``created``
@@ -170,7 +179,7 @@ SIGNOFFS_ANSWER = {
 }
 BUDGET_RECORD = {"saved": 4, "with_proposal": 3, "taken": 2, "below": 1, "above": 0}
 DDMRP_RECORD = {"saved": 5, "with_proposal": 3, "taken": 1, "below": 1, "above": 1}
-ORDER_RELEASE_ANSWER = {"released": 19, "automatic": 2}
+ORDER_RELEASE_ANSWER = {"released": 19, "automatic": 2, "read": 17, "unchanged": 15}
 TRANSFER_RELEASE_ANSWER = {"released": 6, "automatic": 5}
 
 EXPECTED = {
@@ -240,11 +249,11 @@ EXPECTED = {
     },
     "order_release": {
         "decisions": 19,
-        "with_proposal": 19,
-        "at_proposal": None,
+        "with_proposal": 17,
+        "at_proposal": 15,
         "without_proposal": 0,
         "automatic": 2,
-        "rate": None,
+        "rate": 0.8824,
     },
     "transfer_release": {
         "decisions": 6,
@@ -496,7 +505,7 @@ def test_issue1495_freeform(client, monkeypatch, caplog):
     monkeypatch.setattr(
         work_module,
         "order_release_counts",
-        _fixed({"released": 2, "automatic": 3}),
+        _fixed({"released": 2, "automatic": 3, "read": 0, "unchanged": 0}),
     )
     caplog.at_level(logging.WARNING, logger="app.api.work")
     caplog.clear()

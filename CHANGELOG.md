@@ -176,6 +176,9 @@ code is the authority for details.
   time on their release rows (#1508).
 - A "Standing grants" card on the Overview shows, for the order-plan and transfer releases, how many
   runs sent everything that was due and what the last run held back for a person (#1503).
+- A maintenance entry point, `capture_on_hand_snapshot()`, stores the current `on_hand` rows in
+  `on_hand_snapshots` under the UTC date of the latest `as_of`, replacing that date's rows and leaving
+  every other date untouched (#1511).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

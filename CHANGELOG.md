@@ -72,8 +72,8 @@ code is the authority for details.
   made by a standing grant (#1495).
 - The Work scorecard now shows, for release rows, how many decisions were made by a standing grant and
   how many by a person (#1499).
-- The Work scorecard now shows, for order releases, how many were read back from the ERP and how many
-  came back unchanged (#1514).
+- `GET /api/work/scorecard` now answers, for order releases, how many were read back from the ERP
+  and how many of those came back unchanged (#1514).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica
@@ -178,9 +178,6 @@ code is the authority for details.
   time on their release rows (#1508).
 - A "Standing grants" card on the Overview shows, for the order-plan and transfer releases, how many
   runs sent everything that was due and what the last run held back for a person (#1503).
-- A maintenance entry point, `capture_on_hand_snapshot()`, stores the current `on_hand` rows in
-  `on_hand_snapshots` under the UTC date of the latest `as_of`, replacing that date's rows and leaving
-  every other date untouched (#1511).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,
@@ -295,6 +292,9 @@ code is the authority for details.
   them; the curve and the card say which meaning is in force (#1103, #1107, #1109, #1114).
 - The cheapest per-class levels for a fill-rate target (`GET /api/service-levels/suggestion`),
   shown on the card (#1115, #1122).
+- One on-hand snapshot a day: a maintenance entry point, `capture_on_hand_snapshot()`, stores the
+  current `on_hand` rows in `on_hand_snapshots` under the UTC date of the latest `as_of`, replacing
+  that date's rows and leaving every other date untouched (#1511).
 
 **Supplier order minimums**
 - A minimum order value per supplier, stored by an admin (`/api/supplier-order-minimums`)

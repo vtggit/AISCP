@@ -12115,6 +12115,61 @@
           }
         }
       }
+    },
+    "/api/work/scorecard": {
+      "get": {
+        "tags": [
+          "work"
+        ],
+        "summary": "Scorecard",
+        "description": "The work scorecard: the eight processes, in their order.\n\nOpen to any signed-in user (the router is mounted behind the\napp's include-time gate, which answers 401 without a valid Bearer\ntoken) and a pure read \u2014 it writes nothing and calls no ERP.\nEach entry is computed by calling its source function directly\n(not over HTTP) and mapping its answer as the module docstring\nstates; ``rate`` is ``at_proposal / with_proposal`` rounded to 4\ndecimals, null when ``with_proposal`` is 0 or ``at_proposal`` is\nnull.  A failed source \u2014 one that raises, or one whose answer\nviolates the scorecard invariants \u2014 keeps its ``key`` and\n``step`` with its five numbers null; the other entries still\nanswer and the route answers 200.",
+        "operationId": "scorecard_api_work_scorecard_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkScorecard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -21863,6 +21918,80 @@
         "title": "ScenarioUpdate",
         "description": "Payload for partially updating a scenario; every field optional.\n\nAn omitted field is left unchanged; an explicit null for a lever\nclears it to the baseline value (the column stores null).  A\n``name`` that is given must be a non-blank string, as on create \u2014\nan explicit null is rejected (a 422), because a stored name is\nnever null."
       },
+      "ScorecardProcess": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "step": {
+            "type": "string",
+            "title": "Step"
+          },
+          "decisions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisions"
+          },
+          "with_proposal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Proposal"
+          },
+          "at_proposal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At Proposal"
+          },
+          "without_proposal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Without Proposal"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "step"
+        ],
+        "title": "ScorecardProcess",
+        "description": "One work process of the scorecard.\n\nA failed or inconsistent source keeps ``key`` and ``step`` and\nanswers its five numbers null."
+      },
       "SecondSourceCandidate": {
         "properties": {
           "supplier_code": {
@@ -26306,6 +26435,23 @@
         ],
         "title": "WithdrawalBody",
         "description": "The body of POST /api/forecast/overrides/withdrawals.\n\nWithdraws the current override of the period: a new\n``withdrawal`` row with the stored period's dates.  A blank or\nover-long reason answers 422; a withdrawal with nothing to\nwithdraw, or for a completed period, answers 409."
+      },
+      "WorkScorecard": {
+        "properties": {
+          "processes": {
+            "items": {
+              "$ref": "#/components/schemas/ScorecardProcess"
+            },
+            "type": "array",
+            "title": "Processes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "processes"
+        ],
+        "title": "WorkScorecard",
+        "description": "The answer of GET /api/work/scorecard."
       },
       "_CountBucket": {
         "properties": {

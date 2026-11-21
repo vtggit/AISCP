@@ -47,6 +47,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   30) up to the latest daily on-hand snapshot, among the item-sites with demand in that window,
   beside each class's current service level. It counts days in stock, not a fill rate
   (`backend/app/recommend/service_reached.py`, `GET /api/service-levels/reached`).
+- The Settings screen's "Service levels and their cost" card shows that share, when the read
+  succeeds and the card shows its classes, in a "Service reached" block after the class blocks
+  and before the suggestion block (`app/js/settings.js`).
 - Drift: where the ERP's current reorder point no longer fits, ranked by money at stake
   (`backend/app/recommend/drift.py`).
 - Recommendation changes: why a recommended reorder point moved since an earlier date, split

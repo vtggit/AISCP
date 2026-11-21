@@ -298,6 +298,7 @@ code is the authority for details.
   current `on_hand` rows in `on_hand_snapshots` under the UTC date of the latest `as_of`, replacing
   that date's rows and leaving every other date untouched (#1511).
 - The share of days in stock per ABC class, from the daily on-hand snapshots (#1522).
+- The Settings service-level card shows the share of days in stock per class (#1523).
 
 **Supplier order minimums**
 - A minimum order value per supplier, stored by an admin (`/api/supplier-order-minimums`)

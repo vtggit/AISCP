@@ -2,7 +2,7 @@
 
 Reads backend/run_tests.sh as text (path relative to this test file) and checks:
   * it contains no `docker compose`, `docker-compose` or `COMPOSE_FILE`,
-  * it contains `docker run`, `postgres:15`, `aierp-test-db`, `5433:5432`,
+  * it contains `docker run`, `postgres:16-alpine`, `aierp-test-db`, `5433:5432`,
     `pg_isready` and `docker rm -f aierp-test-db`,
   * it still contains `trap cleanup EXIT`,
   * the readiness wait is bounded at a full 30 seconds (30 polls, with the
@@ -26,7 +26,7 @@ _FORBIDDEN_MARKERS = (
 
 _REQUIRED_MARKERS = (
     "docker run",
-    "postgres:15",
+    "postgres:16-alpine",
     "aierp-test-db",
     "5433:5432",
     "pg_isready",

@@ -234,6 +234,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   `backend/app/supply/terms.py`). Supplier ordering terms are read from both ERPs.
 - When an item has terms from more than one supplier, the plan buys from a lower-risk one and
   says why (a setting, on by default).
+- The `supply_plan.plan_buffers_by_signal` setting (on by default) plans each item-site that has
+  a DDMRP buffer from its buffer's order signal instead of its reorder point, and each plan line
+  carries a `source` of `buffer` or `reorder_point` (`backend/app/api/supply_plan.py`,
+  `backend/app/settings/registry.py`).
 - Supplier order minimums: an admin stores a minimum order value per supplier, the plan's
   supplier groups carry the minimum and the shortfall, and a read-only route suggests top-ups
   from the lines due next (`backend/app/api/supplier_order_minimums.py`,

@@ -348,6 +348,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   named suppliers; each held top-up is added to its site and supplier group, creating that
   group when the supplier has no due line there, and one the suggestions do not hold is listed
   as unreleasable.
+- Order-plan release lines record their source — `buffer`, `reorder_point`, or `top_up` — in the preview,
+  stored row and audit; the Acumatica order lines, aggregate release lines and rows stored before the field
+  omit it.
 - Release tracking: where each released order stands in the ERP (open, late, awaiting
   approval, partly received, received, cancelled, missing), with lateness judged by the
   expected date (`backend/app/aggregate/tracking.py`).

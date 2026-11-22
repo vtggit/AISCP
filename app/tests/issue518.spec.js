@@ -651,6 +651,7 @@ test('issue518 freeform', async ({ page }) => {
     '/api/stockout/proposals',
     '/api/excess/proposals',
     '/api/drift/decisions/acceptance',
+    '/api/parameter-writeback/record',
     '/api/exceptions/proposals',
     '/api/forecast/overrides/proposals',
     '/api/work/scorecard',

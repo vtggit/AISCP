@@ -416,9 +416,10 @@ test('issue1529 freeform', async ({ page }) => {
   await page.click('#signin-button');
   await expect(page.locator('#app')).toBeVisible();
   await expect(page.locator('#user-name')).toHaveText('admin1');
-  // The writeback view is not active yet (the default view is): no
-  // record request.
-  expect(ctrl.recordGets).toBe(0);
+  // The writeback view is not active yet (the default view is): the
+  // one record request so far is the Overview's — the default view's
+  // Reorder points card read the record on sign-in.
+  await expect.poll(() => ctrl.recordGets).toBe(1);
   expect(pageErrors).toEqual([]);
 
   // Activate the Push to ERP view.
@@ -430,12 +431,14 @@ test('issue1529 freeform', async ({ page }) => {
   // Activation fetches the preview, the history and the record.
   await expect.poll(() => ctrl.previewGets).toBe(1);
   await expect.poll(() => ctrl.historyGets).toBe(1);
-  await expect.poll(() => ctrl.recordGets).toBe(1);
+  await expect.poll(() => ctrl.recordGets).toBe(2);
   expect(pageErrors).toEqual([]);
 
-  // The record route was requested exactly once, as GET
-  // /api/parameter-writeback/record with no query.
+  // The record route was requested twice, both as GET
+  // /api/parameter-writeback/record with no query: the Overview's
+  // read first, the activation's second.
   expect(ctrl.recordRequests).toEqual([
+    { method: 'GET', path: '/api/parameter-writeback/record', search: '' },
     { method: 'GET', path: '/api/parameter-writeback/record', search: '' },
   ]);
 
@@ -478,7 +481,7 @@ test('issue1529 freeform', async ({ page }) => {
   // --- NOT READ: one kind never pushed, one pushed but not read back ----
   ctrl.recordAnswer = RECORD_NOT_READ;
   await refresh.click();
-  await expect.poll(() => ctrl.recordGets).toBe(2);
+  await expect.poll(() => ctrl.recordGets).toBe(3);
   await expect(record).toBeVisible();
   await expect(recordLines).toHaveCount(1);
   await expect(bufLine).toHaveText('Buffer levels pushed: 2; none read back by a sync yet');
@@ -491,7 +494,7 @@ test('issue1529 freeform', async ({ page }) => {
   // --- FROM THE COUNTS: the percentage comes from the counts, not rate --
   ctrl.recordAnswer = RECORD_FROM_COUNTS;
   await refresh.click();
-  await expect.poll(() => ctrl.recordGets).toBe(3);
+  await expect.poll(() => ctrl.recordGets).toBe(4);
   await expect(record).toBeVisible();
   await expect(recordLines).toHaveCount(1);
   await expect(rpLine).toHaveText('Reorder points still as pushed in the ERP: 1 of 10 read back (10%)');
@@ -503,7 +506,7 @@ test('issue1529 freeform', async ({ page }) => {
   // --- NONE: nothing pushed of either kind — no line, no block ---------
   ctrl.recordAnswer = RECORD_NONE;
   await refresh.click();
-  await expect.poll(() => ctrl.recordGets).toBe(4);
+  await expect.poll(() => ctrl.recordGets).toBe(5);
   await expect(record).toHaveCount(0);
   await expect(summary).toHaveText('3 outstanding · 2 ready to push');
   await expect(table).toBeVisible();
@@ -518,7 +521,7 @@ test('issue1529 freeform', async ({ page }) => {
   ctrl.recordAnswer = RECORD_TWO;
   ctrl.recordHold = hold.promise;
   await refresh.click();
-  await expect.poll(() => ctrl.recordGets).toBe(5);
+  await expect.poll(() => ctrl.recordGets).toBe(6);
   // While the record answer is held: the summary line and the
   // outstanding table show, and the block is absent — nothing says
   // why.
@@ -541,7 +544,7 @@ test('issue1529 freeform', async ({ page }) => {
   // (a) The record route answers 500.
   ctrl.recordNext = { status: 500, json: { detail: 'boom' } };
   await refresh.click();
-  await expect.poll(() => ctrl.recordGets).toBe(6);
+  await expect.poll(() => ctrl.recordGets).toBe(7);
   await expect(record).toHaveCount(0);
   await expect(summary).toHaveText('3 outstanding · 2 ready to push');
   await expect(table).toBeVisible();
@@ -554,7 +557,7 @@ test('issue1529 freeform', async ({ page }) => {
     json: { reorder_points: RECORD_TWO.reorder_points },
   };
   await refresh.click();
-  await expect.poll(() => ctrl.recordGets).toBe(7);
+  await expect.poll(() => ctrl.recordGets).toBe(8);
   await expect(record).toHaveCount(0);
   await expect(summary).toHaveText('3 outstanding · 2 ready to push');
   await expect(table).toBeVisible();
@@ -570,7 +573,7 @@ test('issue1529 freeform', async ({ page }) => {
     },
   };
   await refresh.click();
-  await expect.poll(() => ctrl.recordGets).toBe(8);
+  await expect.poll(() => ctrl.recordGets).toBe(9);
   await expect(record).toHaveCount(0);
   await expect(summary).toHaveText('3 outstanding · 2 ready to push');
   await expect(table).toBeVisible();

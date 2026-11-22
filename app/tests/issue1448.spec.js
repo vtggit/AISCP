@@ -336,6 +336,7 @@ const EXPECTED_API_PATHS = new Set([
   '/api/stockout/proposals',
   '/api/excess/proposals',
   '/api/drift/decisions/acceptance',
+  '/api/parameter-writeback/record',
   '/api/aggregate/releases',
   '/api/abc',
   '/api/exceptions',

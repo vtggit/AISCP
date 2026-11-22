@@ -60,10 +60,35 @@ exception, recorded internally as "ClassName: message", answers the
 stable public reason "writer_error" instead of the exception's class
 name, message, or provider internals.
 
-The preview and history are open to any authenticated user (401
-without a valid Bearer token); the confirm answers 403 to a non-admin
-before any repository read, ERP write, or audit row.  The preview
-and history read only — they call no ERP client and write nothing.
+``GET /api/parameter-writeback/record`` measures what the
+writeback confirm pushed and what the ERPs kept: over the
+append-only ``parameter_writebacks`` audit, an item-site is one
+(item_code, site_code) pair and for each item-site only one row
+counts — the latest of its rows whose outcome is "written" or
+"unchanged" and whose ``after_reorder_point`` and
+``after_max_qty`` are both not null, the latest the greatest
+``written_at``, ties broken by the greatest ``id`` (a "failed"
+row never counts and never hides an earlier push) — a
+reorder-point push when that row's ``decision_id`` is not null,
+a buffer push when it is null.  The push is read back when the
+item-site's ``item_sites`` row exists and its ``synced_at`` is
+later than the push's ``written_at``, and is unchanged when the
+row's ``reorder_point`` and ``max_qty`` are both not null and
+each differs by no more than 0.000001 from the push's after
+values, every other read-back push being changed.  The answer is
+``{reorder_points, buffers}``, each ``{pushed, read, unchanged,
+rate}`` with ``rate`` ``unchanged / read`` rounded to 4 places,
+null when ``read`` is 0.  The measure's limits are the sync's:
+AISCP keeps no history of the ERP's values between syncs, so a
+value changed and changed back between two syncs counts as
+unchanged, and an item-site that no sync lists any more is never
+read back.
+
+The preview, history and record are open to any authenticated
+user (401 without a valid Bearer token); the confirm answers 403
+to a non-admin before any repository read, ERP write, or audit
+row.  The preview, history and record read only — they call no
+ERP client and write nothing.
 """
 
 from datetime import datetime
@@ -84,6 +109,7 @@ from app.auth.models import AuthUser
 from app.db.connection import get_cursor
 from app.feed.acumatica_client import AcumaticaClient, AcumaticaError
 from app.feed.odoo_client import OdooClient, OdooError
+from app.recommend.push_record import push_record
 from app.repositories.parameter_writeback_postgres_repository import (
     ParameterWritebackPostgresRepository,
 )
@@ -242,6 +268,32 @@ class ParameterWritebackConfirmResponse(BaseModel):
     unchanged: int
     failed: int
     skipped: int
+
+
+class ParameterWritebackPushRecordKind(BaseModel):
+    """One kind of push in the writeback record: the counted
+    pushes of that kind (``pushed``), how many of those the ERPs
+    read back (``read``), how many of the read ones the ERPs
+    kept unchanged (``unchanged``) and ``rate``, ``unchanged /
+    read`` rounded to 4 places, null when ``read`` is 0."""
+
+    pushed: int
+    read: int
+    unchanged: int
+    rate: float | None = None
+
+
+class ParameterWritebackPushRecord(BaseModel):
+    """The response of GET /api/parameter-writeback/record: the
+    measure of the counted pushes per kind — the reorder-point
+    pushes (the counting row carries a decision) and the buffer
+    pushes (it does not).  AISCP keeps no history of the ERP's
+    values between syncs, so a value changed and changed back
+    between two syncs counts as unchanged, and an item-site that
+    no sync lists any more is never read back."""
+
+    reorder_points: ParameterWritebackPushRecordKind
+    buffers: ParameterWritebackPushRecordKind
 
 
 class _HistoryFilters(BaseModel):
@@ -787,3 +839,39 @@ def history(
             limit=limit, offset=offset, item_code=item_code, site_code=site_code
         )
     ]
+
+
+@router.get(
+    "/record",
+    response_model=ParameterWritebackPushRecord,
+    dependencies=[Depends(require_any_authenticated_user)],
+)
+def record() -> dict:
+    """The record of the parameter writebacks: what was pushed and
+    what the ERPs kept.
+
+    Open to any authenticated user, through the same
+    ``require_any_authenticated_user`` dependency as the history
+    route.  No parameters.  The answer is
+    ``app.recommend.push_record.push_record()``:
+    ``{reorder_points, buffers}``, each ``{pushed, read, unchanged,
+    rate}`` — ``pushed`` the counted item-sites whose one counted
+    push (the latest of the item-site's "written" or "unchanged"
+    audit rows with both after values stored, the greatest
+    ``written_at``, ties broken by the greatest ``id``; a "failed"
+    row never counts and never hides an earlier push) is of that
+    kind, a reorder-point push when that row's ``decision_id`` is
+    not null and a buffer push when it is null; ``read`` how many of
+    those are read back (the item-site's ``item_sites`` row exists
+    and its ``synced_at`` is later than the push's ``written_at``);
+    ``unchanged`` how many of the read ones are unchanged (the row's
+    ``reorder_point`` and ``max_qty`` are both not null and each
+    differs by no more than 0.000001 from the push's after values);
+    and ``rate`` ``unchanged / read`` rounded to 4 places, null when
+    ``read`` is 0.  The measure's limits are the sync's: AISCP keeps
+    no history of the ERP's values between syncs, so a value changed
+    and changed back between two syncs counts as unchanged, and an
+    item-site that no sync lists any more is never read back.
+    Reads only: nothing written, no ERP call.
+    """
+    return push_record()

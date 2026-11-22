@@ -224,6 +224,19 @@
 // the release flow and its requests are unchanged, and the screen
 // sends no new request — no new POST, PUT or DELETE.
 //
+// The buffer source badge (issue #1542): a plan line whose
+// source is exactly the string "buffer" shows, in its Item
+// and Site cell (.op-cell-pair), right after the item and
+// site text, one element ([data-testid="orders-line-source"],
+// class op-line-source) reading "Buffer" with the title
+// "Planned from its DDMRP buffer's order signal". A line
+// whose source is anything else — "reorder_point",
+// missing, null or another value — shows no such element,
+// and its cell reads exactly as before. Every other cell,
+// the Why text, the supplier blocks, the CSV download, the
+// release flow and the screen's requests are unchanged, and
+// the screen sends no new request.
+//
 // The supplier minimum line and the short badge (issue #1167): a
 // supplier block whose group carries a `minimum` that is a usable
 // number (a number or a numeric string) shows, right after its
@@ -2179,7 +2192,10 @@
       (short ? ' data-short="true"' : '') +
       (transfer ? ' data-transfer="true"' : '') +
       '>' +
-      '<td class="op-cell-pair">' + esc(pairText(line.item_code, line.site_code)) + '</td>' +
+      '<td class="op-cell-pair">' +
+      esc(pairText(line.item_code, line.site_code)) +
+      bufferSourceHtml(line) +
+      '</td>' +
       '<td class="op-cell-due">' + esc(dueText(line.due_in_days)) + '</td>' +
       '<td class="op-cell-date">' + esc(dateText(line.order_by)) + '</td>' +
       '<td class="op-cell-date">' + esc(dateText(line.arrives_on)) + '</td>' +
@@ -2203,6 +2219,23 @@
       '<span class="op-supplier-reason" data-testid="orders-line-supplier-reason">' +
       esc(reason) +
       '</span>'
+    );
+  }
+
+  // The buffer source badge in the Item and Site cell
+  // (issue #1542): one element right after the item and
+  // site text when the line's source is exactly the string
+  // "buffer" — the line the plan drew from its DDMRP
+  // buffer's order signal. Any other source ("reorder_point",
+  // missing, null or another value) leaves the cell exactly
+  // as before.
+  function bufferSourceHtml(line) {
+    if (line.source !== 'buffer') {
+      return '';
+    }
+    return (
+      '<span class="op-line-source" data-testid="orders-line-source"' +
+      ' title="Planned from its DDMRP buffer\'s order signal">Buffer</span>'
     );
   }
 

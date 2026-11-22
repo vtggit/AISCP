@@ -393,6 +393,8 @@ code is the authority for details.
   today, and `GET /api/exceptions` computes the recommendations once (#1424).
 - The order plan's top-ups answer faster: `GET /api/supply-plan/top-ups` computes the reorder
   recommendations once per call instead of three times, and its answer is unchanged (#1438).
+- The DDMRP plan now reads open purchase and sales-order lines only for the buffered item-sites it
+  plans, not for every item-site in the feed (#1548).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

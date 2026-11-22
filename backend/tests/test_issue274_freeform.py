@@ -186,6 +186,7 @@ def test_issue274_freeform(client, admin_token, user_token):
         "sop.signoff_proposal_max_change",
         "supplier_risk.lead_time_cv_ceiling",
         "supplier_risk.on_time_floor",
+        "supply_plan.plan_buffers_by_signal",
         "supply_plan.prefer_lower_risk_supplier",
         "supply_plan.top_up_lookahead_days",
     ], "ordered by key"
@@ -399,6 +400,7 @@ def test_issue274_freeform(client, admin_token, user_token):
         "sop.signoff_proposal_max_change",
         "supplier_risk.lead_time_cv_ceiling",
         "supplier_risk.on_time_floor",
+        "supply_plan.plan_buffers_by_signal",
         "supply_plan.prefer_lower_risk_supplier",
         "supply_plan.top_up_lookahead_days",
     ]

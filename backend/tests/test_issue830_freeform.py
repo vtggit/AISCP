@@ -301,6 +301,7 @@ def _line_a():
         # strings in the JSON body, the way the release plan does it.
         "value": "1350.00",
         "arithmetic": "raw 256 (shortfall below reorder point) → raised to minimum 300 → rounded to lot 25: 300",
+        "source": "reorder_point",
     }
 
 
@@ -326,6 +327,7 @@ def _line_b():
         "unit_cost": None,
         "value": None,
         "arithmetic": "raw 100 (EOQ): 100",
+        "source": "reorder_point",
     }
 
 

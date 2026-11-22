@@ -303,6 +303,7 @@ def _line(quantity, adjustments, min_order, value, arithmetic, reason=None):
         "unit_cost": 100.0,
         "value": value,
         "arithmetic": arithmetic,
+        "source": "reorder_point",
     }
     if reason is not None:
         line["supplier_reason"] = reason

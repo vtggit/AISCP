@@ -189,6 +189,9 @@ code is the authority for details.
   time on their release rows (#1508).
 - A "Standing grants" card on the Overview shows, for the order-plan and transfer releases, how many
   runs sent everything that was due and what the last run held back for a person (#1503).
+- By default, the order plan plans each buffered item-site from its DDMRP buffer's order signal instead
+  of its reorder point, with a `source` field on every line and the
+  `supply_plan.plan_buffers_by_signal` system setting to turn the behavior off (#1540).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

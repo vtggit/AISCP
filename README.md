@@ -102,6 +102,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - The Overview's Reorder points card shows the drift acceptance measure when the read
   succeeds: the accepted share of decided rows, the share of money at stake when present,
   and the raise/lower direction counts (`app/js/overview.js`).
+- The Overview's Reorder points card also shows the writeback record's reorder-point measure
+  when the read succeeds: how many of the pushed reorder points that were read back were
+  still as pushed, as a percentage, or that none have been read back yet; a failed or
+  unusable read or no pushed reorder points leaves the block out (`app/js/overview.js`).
 - The Overview's Work scorecard card shows, for each step, how many decisions were made, how
   many had a proposal, and how many took the proposal as it stood, when the read succeeds; for
   the two release rows it instead shows how many decisions were made, how many by a standing
@@ -511,7 +515,7 @@ any write to an ERP. Personal settings and saved scenarios are open to any signe
 | DDMRP | `/api/ddmrp` (buffers, zones, plan, candidates, adjustments, adjustment proposals, adjustment record, performance) |
 | Exceptions | `/api/exceptions` (the list, acknowledgements and proposal counts) |
 | Several ERPs | `/api/erp-sources`, `/api/erp-mappings` (with suggested matches), `/api/cross-erp/items`, `/api/erp-currencies` |
-| ERP actions | `/api/replenishment/actions/draft-po`, `/api/parameter-writeback` (preview, confirm, history) |
+| ERP actions | `/api/replenishment/actions/draft-po`, `/api/parameter-writeback` (preview, confirm, history, record) |
 | Settings | `/api/settings` |
 | Guidance | `/api/guidance` (current guidance, item history, stamps) |
 | Feed status | `/api/feed/status` |

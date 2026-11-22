@@ -78,11 +78,10 @@ and grouping are those of any line; with the ``order_signal`` false
 the item-site has no line, whatever its reorder point says, and every
 other item-site is planned exactly as today.  Every line's
 ``source`` reads ``"buffer"`` for a line from a buffer's signal and
-``"reorder_point"`` for every other line; the field stays out of the
-response while it reads ``"reorder_point"`` — a reorder-point line is
-the response's line exactly as before the setting existed — and the
-supplier groups' lines carry it too.  With the setting off every line
-is exactly as today and ``_buffer_rows`` is never called.
+``"reorder_point"`` for every other line, and the supplier groups'
+lines carry it too.  With the setting off every line is exactly as
+today, with ``source`` ``"reorder_point"``, and ``_buffer_rows`` is
+never called.
 
 ``GET /api/supply-plan/top-ups?horizon_days=`` answers, for any
 signed-in user behind the same gate, how the supplier groups of the
@@ -382,9 +381,7 @@ class SupplyPlanLine(BaseModel):
     deliveries`` and/or ``variable lead times``.  ``source`` reads
     ``"buffer"`` for a line from a DDMRP buffer's order signal (the
     ``supply_plan.plan_buffers_by_signal`` setting) and
-    ``"reorder_point"`` for every other line; it stays out of the
-    response while it reads ``"reorder_point"``, the way a null
-    ``supplier_reason`` does.
+    ``"reorder_point"`` for every other line; every line carries it.
     """
 
     item_code: str
@@ -411,15 +408,10 @@ class SupplyPlanLine(BaseModel):
     def _serialize_line(self, handler):
         """The line's fields, without ``supplier_reason`` while the
         default pick stands (the field stays out of the response,
-        exactly as before the lower-risk supplier switch existed) and
-        without ``source`` while it reads ``"reorder_point"`` (a
-        reorder-point line stays the response's line exactly as
-        before the buffer setting existed)."""
+        exactly as before the lower-risk supplier switch existed)."""
         data = handler(self)
         if data.get("supplier_reason") is None:
             data.pop("supplier_reason", None)
-        if data.get("source") == "reorder_point":
-            data.pop("source", None)
         return data
 
 

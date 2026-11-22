@@ -340,7 +340,7 @@ def test_issue1540_freeform(client, monkeypatch) -> None:
         assert b1["lead_time_days"] == 5.0
 
         r1 = lines[ITEM_R1]
-        assert r1.get("source", "reorder_point") == "reorder_point"
+        assert r1["source"] == "reorder_point"
         assert r1["arithmetic"] == R1_ARITHMETIC
 
         # The supplier group's lines carry the source too, under the
@@ -348,10 +348,7 @@ def test_issue1540_freeform(client, monkeypatch) -> None:
         group = next(g for g in on_body["suppliers"] if g["supplier_code"] == SUPPLIER)
         assert group["vendor_code"] == VENDOR_CODE
         assert {line["item_code"] for line in group["lines"]} == {ITEM_B1, ITEM_R1}
-        assert {
-            line["item_code"]: line.get("source", "reorder_point")
-            for line in group["lines"]
-        } == {
+        assert {line["item_code"]: line["source"] for line in group["lines"]} == {
             ITEM_B1: "buffer",
             ITEM_R1: "reorder_point",
         }
@@ -395,7 +392,7 @@ def test_issue1540_freeform(client, monkeypatch) -> None:
         assert set(off_lines) == set(ITEMS)
         for item_code in ITEMS:
             line = off_lines[item_code]
-            assert line.get("source", "reorder_point") == "reorder_point"
+            assert line["source"] == "reorder_point"
             assert line["raw_quantity"] == 25
             assert line["quantity"] == 30
             assert line["position_units"] == 5

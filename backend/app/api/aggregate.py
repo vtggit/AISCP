@@ -114,7 +114,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_serializer
 
 from app.aggregate import tracking
 from app.aggregate.deferral import deferral_candidates
@@ -359,13 +359,29 @@ class ReleaseLine(BaseModel):
 
     The monetary fields are exact decimals — the planned order's
     values, never binary floats — rendered as decimal strings in the
-    JSON body.
+    JSON body.  ``source`` is the order plan line's source —
+    ``buffer`` or ``reorder_point`` — or ``top_up`` for a chosen
+    top-up's line; a line with no source — the aggregate release's
+    lines and the snapshots stored before the field — leaves it out
+    of the answer, the way the plan line's null ``supplier_reason``
+    is left out.
     """
 
     item_code: str
     quantity: int
     unit_cost: Decimal
     value: Decimal
+    source: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize_line(self, handler):
+        """The line's fields, without ``source`` while it is null —
+        the aggregate release's lines and a snapshot stored before
+        the field answer exactly as before."""
+        data = handler(self)
+        if data.get("source") is None:
+            data.pop("source", None)
+        return data
 
 
 class ReleaseGroup(BaseModel):

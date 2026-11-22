@@ -71,9 +71,27 @@ ITEM_T2 = "T2"
 ORIGIN_159 = f"AIERP order plan {AS_OF_STR} site {SITE_159} vendor {SUPPLIER}"
 ORIGIN_160 = f"AIERP order plan {AS_OF_STR} site {SITE_160} vendor {SUPPLIER}"
 
-LINE_D = {"item_code": ITEM_D, "quantity": 4, "unit_cost": "100.0", "value": "400.0"}
-LINE_T1 = {"item_code": ITEM_T1, "quantity": 3, "unit_cost": "150.0", "value": "450.0"}
-LINE_T2 = {"item_code": ITEM_T2, "quantity": 2, "unit_cost": "100.0", "value": "200.0"}
+LINE_D = {
+    "item_code": ITEM_D,
+    "quantity": 4,
+    "unit_cost": "100.0",
+    "value": "400.0",
+    "source": "reorder_point",
+}
+LINE_T1 = {
+    "item_code": ITEM_T1,
+    "quantity": 3,
+    "unit_cost": "150.0",
+    "value": "450.0",
+    "source": "top_up",
+}
+LINE_T2 = {
+    "item_code": ITEM_T2,
+    "quantity": 2,
+    "unit_cost": "100.0",
+    "value": "200.0",
+    "source": "top_up",
+}
 
 
 def _top_up(item_code, site_code, supplier_code=SUPPLIER):

@@ -550,6 +550,7 @@ def _mixed_group_body(outcome: str, order_nbr):
                 "quantity": 125,
                 "unit_cost": "4.5",
                 "value": VALUE_A,
+                "source": "reorder_point",
             },
             # The line without a unit cost: 0 and 0, exactly as
             # today's code answers it.
@@ -558,6 +559,7 @@ def _mixed_group_body(outcome: str, order_nbr):
                 "quantity": 50,
                 "unit_cost": "0",
                 "value": "0",
+                "source": "reorder_point",
             },
         ],
         "value": VALUE_A,
@@ -624,7 +626,13 @@ def _assert_other_group_sent(
     assert releases[-1]["origin"] == ORIGIN_B
     assert releases[-1]["value"] == Decimal(VALUE_B)
     assert releases[-1]["lines"] == [
-        {"item_code": ITEM_B, "quantity": 100, "unit_cost": "10.01", "value": VALUE_B}
+        {
+            "item_code": ITEM_B,
+            "quantity": 100,
+            "unit_cost": "10.01",
+            "value": VALUE_B,
+            "source": "reorder_point",
+        }
     ]
 
 

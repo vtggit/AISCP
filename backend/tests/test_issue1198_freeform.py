@@ -740,6 +740,7 @@ EXPECTED_PREVIEW_A = {
                 "quantity": 125,
                 "unit_cost": "4.5",
                 "value": "562.5",
+                "source": "reorder_point",
             },
             VALUE_A,
             "would_create",
@@ -1035,7 +1036,13 @@ def test_issue1198_freeform(monkeypatch, client, user_token) -> None:
     assert release_row["origin"] == ORIGIN_A
     assert release_row["value"] == Decimal(VALUE_A)
     assert release_row["lines"] == [
-        {"item_code": ITEM_A, "quantity": 125, "unit_cost": "4.5", "value": "562.5"}
+        {
+            "item_code": ITEM_A,
+            "quantity": 125,
+            "unit_cost": "4.5",
+            "value": "562.5",
+            "source": "reorder_point",
+        }
     ]
     assert len(_run_rows()) == 3
 
@@ -1182,7 +1189,13 @@ def test_issue1198_freeform(monkeypatch, client, user_token) -> None:
     assert person_row["outcome"] == "created"
     assert person_row["supplier_code"] == SUPPLIER_A
     assert person_row["lines"] == [
-        {"item_code": ITEM_A, "quantity": 125, "unit_cost": "4.5", "value": "562.5"}
+        {
+            "item_code": ITEM_A,
+            "quantity": 125,
+            "unit_cost": "4.5",
+            "value": "562.5",
+            "source": "reorder_point",
+        }
     ]
     assert create_calls[-1] == [_order_a()]
 

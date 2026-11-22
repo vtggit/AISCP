@@ -570,6 +570,16 @@ register(
 
 register(
     Setting(
+        key="supply_plan.plan_buffers_by_signal",
+        scope="system",
+        type="boolean",
+        default=True,
+        description="Plan each item-site that has a DDMRP buffer from its buffer's order signal instead of its reorder point.",
+    )
+)
+
+register(
+    Setting(
         key="supply_plan.prefer_lower_risk_supplier",
         scope="system",
         type="boolean",

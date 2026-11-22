@@ -204,6 +204,7 @@ def _stand_in_line(item_code, site_code, due_in_days, quantity, unit_cost, value
         "value": value,
         "arithmetic": None,
         "supplier_reason": None,
+        "source": "reorder_point",
     }
 
 

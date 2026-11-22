@@ -52,6 +52,38 @@ times``, joined by ``", "``; while the default pick stands the
 exactly as today, the risk read never happens, and every line's
 ``supplier_reason`` is null.
 
+The ``supply_plan.plan_buffers_by_signal`` system setting (default
+true) plans a designated item-site from its DDMRP buffer's order
+signal instead of its reorder point: with the setting on (the stored
+value, else the default), ``build_supply_plan`` reads the DDMRP plan
+once per call through the module's ``_buffer_rows`` —
+``app.api.ddmrp.ddmrp_zone_rows`` with the plan's as-of, then
+``app.ddmrp.plan.plan_ddmrp`` with the as-of the zone rows answer and
+those rows, answering ``{(item_code, site_code): row}`` for every row
+of that plan's ``rows`` — and a raised read builds the plan exactly
+as with the setting off, the way a raised risk read does.  A
+designated item-site is one in those rows; when the plan's input has
+a recommendation for it with status "ok", the item-site is planned by
+its buffer, not its reorder point: with the row's ``order_signal``
+true it has one line — ``due_in_days`` 0 and ``order_by`` the as-of
+date, ``raw_quantity`` the row's ``suggested_order_units`` fitted to
+the supplier's terms exactly as every line's raw quantity is,
+``position_units`` the row's ``net_flow`` rounded down to whole
+units, ``reorder_point_units`` the row's ``top_of_yellow``, and the
+arithmetic's label "buffer signal: top of green <top of green> minus
+net flow <net flow>, rounded up", the net flow rounded to one decimal
+place the way ``_format_number`` writes numbers — while the daily
+demand, supplier choice, terms, lead time, arrival, unit cost, value
+and grouping are those of any line; with the ``order_signal`` false
+the item-site has no line, whatever its reorder point says, and every
+other item-site is planned exactly as today.  Every line's
+``source`` reads ``"buffer"`` for a line from a buffer's signal and
+``"reorder_point"`` for every other line; the field stays out of the
+response while it reads ``"reorder_point"`` — a reorder-point line is
+the response's line exactly as before the setting existed — and the
+supplier groups' lines carry it too.  With the setting off every line
+is exactly as today and ``_buffer_rows`` is never called.
+
 ``GET /api/supply-plan/top-ups?horizon_days=`` answers, for any
 signed-in user behind the same gate, how the supplier groups of the
 ``horizon_days`` order plan (1 to 60, default 7, exactly as
@@ -234,11 +266,12 @@ from app.api.aggregate import (
     release_groups,
     require_any_authenticated_user,
 )
-from app.api.ddmrp import _stored_system_settings
+from app.api.ddmrp import _stored_system_settings, ddmrp_zone_rows
 from app.api.erp_mappings import require_admin
 from app.auth.models import AuthUser
 from app.db.connection import get_cursor, one_connection
 from app.db.read_cache import read_once
+from app.ddmrp.plan import plan_ddmrp
 from app.ddmrp.zones import setting_value
 from app.feed.acumatica_client import (
     AcumaticaAuthError,
@@ -298,6 +331,11 @@ _ALL_ROWS = 10**9
 # supplier of the item's terms rows (default true).
 _PREFER_LOWER_RISK_SETTING = "supply_plan.prefer_lower_risk_supplier"
 
+# The system setting that plans a designated item-site from its
+# DDMRP buffer's order signal instead of its reorder point
+# (default true).
+_PLAN_BUFFERS_BY_SIGNAL_SETTING = "supply_plan.plan_buffers_by_signal"
+
 # The system setting the top-ups route reads the order plan ahead by,
 # in whole days (default 30).
 _TOP_UP_LOOKAHEAD_SETTING = "supply_plan.top_up_lookahead_days"
@@ -341,7 +379,12 @@ class SupplyPlanLine(BaseModel):
     switched the line to the lower-risk terms row — the name the
     default pick's supplier name from the suppliers table, else its
     code, the risk ``High`` or ``Medium``, and the signs ``late
-    deliveries`` and/or ``variable lead times``.
+    deliveries`` and/or ``variable lead times``.  ``source`` reads
+    ``"buffer"`` for a line from a DDMRP buffer's order signal (the
+    ``supply_plan.plan_buffers_by_signal`` setting) and
+    ``"reorder_point"`` for every other line; it stays out of the
+    response while it reads ``"reorder_point"``, the way a null
+    ``supplier_reason`` does.
     """
 
     item_code: str
@@ -362,15 +405,21 @@ class SupplyPlanLine(BaseModel):
     value: Decimal | None = None
     arithmetic: str
     supplier_reason: str | None = None
+    source: str = "reorder_point"
 
     @model_serializer(mode="wrap")
     def _serialize_line(self, handler):
         """The line's fields, without ``supplier_reason`` while the
         default pick stands (the field stays out of the response,
-        exactly as before the lower-risk supplier switch existed)."""
+        exactly as before the lower-risk supplier switch existed) and
+        without ``source`` while it reads ``"reorder_point"`` (a
+        reorder-point line stays the response's line exactly as
+        before the buffer setting existed)."""
         data = handler(self)
         if data.get("supplier_reason") is None:
             data.pop("supplier_reason", None)
+        if data.get("source") == "reorder_point":
+            data.pop("source", None)
         return data
 
 
@@ -674,6 +723,21 @@ def _prefer_lower_risk_supplier_enabled(stored: dict) -> bool:
     return bool(setting.default)
 
 
+def _plan_buffers_by_signal_enabled(stored: dict) -> bool:
+    """The ``supply_plan.plan_buffers_by_signal`` value of one call's
+    stored settings: the stored value when it is a boolean, else the
+    registry default (true).  A value written out of band that the
+    setting cannot hold (not a boolean) never applies — the default
+    does."""
+    setting = get_setting(_PLAN_BUFFERS_BY_SIGNAL_SETTING)
+    if setting is None:
+        return True
+    value = stored.get(setting.key)
+    if isinstance(value, bool):
+        return value
+    return bool(setting.default)
+
+
 def _top_up_lookahead_days_for(stored: dict) -> int:
     """The top-up look-ahead for one call's stored settings: the stored
     ``supply_plan.top_up_lookahead_days`` value, rounded down to a whole
@@ -736,6 +800,23 @@ def _risk_by_supplier_code() -> dict | None:
             continue
         risk_by_code[code] = entry
     return risk_by_code
+
+
+def _buffer_rows(as_of: date) -> dict | None:
+    """The DDMRP plan of one plan build, keyed by (``item_code``,
+    ``site_code``) — the buffer read the
+    ``supply_plan.plan_buffers_by_signal`` setting turns on, read once
+    per call: ``ddmrp_zone_rows`` with the plan's as-of, then
+    ``plan_ddmrp`` with the as-of the zone rows answer and those rows,
+    answering for every row of that plan's ``rows``.  A raised read
+    answers None — the plan is then built exactly as with the setting
+    off, the way a raised risk read does, never a failure."""
+    try:
+        answered_as_of, zone_rows = ddmrp_zone_rows(as_of)
+        plan = plan_ddmrp(answered_as_of, zone_rows)
+    except Exception:
+        return None
+    return {(row["item_code"], row["site_code"]): row for row in plan["rows"]}
 
 
 def _lower_risk_terms_row(
@@ -820,6 +901,123 @@ def _lower_risk_reason(
     return f"Chosen over {name} ({risk_label} risk: {', '.join(signs)})"
 
 
+def _buffer_plan_line(
+    recommendation: dict,
+    as_of: date,
+    buffer_row: dict,
+    source_system_by_pair: dict[tuple[str, str], str | None],
+    terms_by_item: dict[str, list[dict]],
+    risk_by_code: dict | None,
+    suppliers_by_code: dict,
+) -> dict | None:
+    """One plan line from one DDMRP buffer's order signal, or None
+    when the signal is off: the designated item-site is planned by its
+    buffer, not its reorder point — ``due_in_days`` 0 and ``order_by``
+    the as-of date, ``raw_quantity`` the row's
+    ``suggested_order_units`` fitted to the supplier's terms exactly
+    as every line's raw quantity is, ``position_units`` the row's
+    ``net_flow`` rounded down to whole units,
+    ``reorder_point_units`` the row's ``top_of_yellow``, and the
+    arithmetic's label "buffer signal: top of green <top of green>
+    minus net flow <net flow>, rounded up" — the net flow rounded to
+    one decimal place, the way ``_format_number`` writes numbers —
+    while the daily demand, supplier choice, terms, lead time,
+    arrival, unit cost, value and grouping are those of any line."""
+    if not buffer_row.get("order_signal"):
+        return None
+    item_code = buffer_row.get("item_code")
+    site_code = buffer_row.get("site_code")
+    if not isinstance(item_code, str) or not isinstance(site_code, str):
+        return None
+
+    inputs = recommendation.get("inputs") or {}
+    daily = _number(inputs.get("d"))
+
+    source_system = source_system_by_pair.get((item_code, site_code))
+    terms_row = _pick_terms_row(terms_by_item.get(item_code, []), source_system)
+    supplier_reason = None
+    if terms_row is not None and risk_by_code is not None:
+        default_row = terms_row
+        terms_row, default_entry = _lower_risk_terms_row(
+            terms_by_item.get(item_code, []),
+            source_system,
+            default_row,
+            risk_by_code,
+        )
+        if default_entry is not None:
+            supplier_reason = _lower_risk_reason(
+                default_row, default_entry, suppliers_by_code
+            )
+    terms = None
+    supplier_code = None
+    line_source_system = None
+    lead_time = None
+    if terms_row is not None:
+        supplier_code = terms_row.get("supplier_code")
+        line_source_system = terms_row.get("source_system")
+        terms = {
+            "min_order_qty": _number(terms_row.get("min_order_qty")),
+            "lot_size": _number(terms_row.get("lot_size")),
+            "max_order_qty": _number(terms_row.get("max_order_qty")),
+        }
+        lead_time = _number(terms_row.get("lead_time_days"))
+    if lead_time is None:
+        lead_time = _number(inputs.get("lt"))
+
+    net_flow = _number(buffer_row.get("net_flow"))
+    top_of_yellow = _number(buffer_row.get("top_of_yellow"))
+    top_of_green = _number(buffer_row.get("top_of_green"))
+    suggested = _number(buffer_row.get("suggested_order_units"))
+    raw = math.ceil(suggested) if suggested is not None else 0
+    label = (
+        "buffer signal: top of green "
+        f"{_format_number(top_of_green)} minus net flow "
+        f"{_format_number(round(net_flow, 1) if net_flow is not None else None)}, "
+        "rounded up"
+    )
+
+    order_by = as_of
+    arrives_on = (
+        order_by + timedelta(days=math.ceil(lead_time))
+        if lead_time is not None
+        else None
+    )
+
+    fitted = fit_to_terms(raw, terms)
+    quantity = fitted["quantity"]
+
+    unit_cost = _number(recommendation.get("unit_cost"))
+    value = None
+    if unit_cost is not None:
+        value = (Decimal(str(unit_cost)) * quantity).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+    return {
+        "item_code": item_code,
+        "site_code": site_code,
+        "position_units": int(math.floor(net_flow)) if net_flow is not None else 0,
+        "reorder_point_units": int(top_of_yellow) if top_of_yellow is not None else 0,
+        "daily_demand": daily if daily is not None else 0.0,
+        "due_in_days": 0,
+        "order_by": order_by,
+        "lead_time_days": lead_time,
+        "arrives_on": arrives_on,
+        "raw_quantity": raw,
+        "quantity": quantity,
+        "adjustments": fitted["adjustments"],
+        "short_of_need": fitted["short_of_need"],
+        "terms": terms,
+        "unit_cost": unit_cost,
+        "value": value,
+        "arithmetic": _arithmetic(raw, label, terms, fitted["adjustments"], quantity),
+        "supplier_code": supplier_code,
+        "source_system": line_source_system,
+        "supplier_reason": supplier_reason,
+        "source": "buffer",
+    }
+
+
 def _plan_line(
     recommendation: dict,
     as_of: date,
@@ -828,17 +1026,37 @@ def _plan_line(
     terms_by_item: dict[str, list[dict]],
     risk_by_code: dict | None,
     suppliers_by_code: dict,
+    buffer_rows: dict | None = None,
 ) -> dict | None:
     """One plan line from one recommendation, or None when the
     item-site is not in the plan: not status "ok" without a numeric
     recommended order quantity, not due (no positive daily demand above
-    the reorder point), or due beyond the horizon."""
+    the reorder point), or due beyond the horizon.
+
+    With ``buffer_rows`` — the DDMRP plan's rows keyed by (item_code,
+    site_code), the ``supply_plan.plan_buffers_by_signal`` setting on
+    — a designated item-site whose recommendation has status "ok" is
+    instead planned by its buffer: ``_buffer_plan_line`` answers its
+    one line, or none when the buffer's ``order_signal`` is off,
+    whatever the item-site's reorder point says."""
     if recommendation.get("status") != "ok":
         return None
     item_code = recommendation.get("item_code")
     site_code = recommendation.get("site_code")
     if not isinstance(item_code, str) or not isinstance(site_code, str):
         return None
+    if buffer_rows is not None:
+        buffer_row = buffer_rows.get((item_code, site_code))
+        if buffer_row is not None:
+            return _buffer_plan_line(
+                recommendation,
+                as_of,
+                buffer_row,
+                source_system_by_pair,
+                terms_by_item,
+                risk_by_code,
+                suppliers_by_code,
+            )
     order_quantity = recommendation.get("order_quantity")
     raw_units = (
         _number(order_quantity.get("order_quantity_units")) if order_quantity else None
@@ -943,6 +1161,7 @@ def _plan_line(
         "supplier_code": supplier_code,
         "source_system": line_source_system,
         "supplier_reason": supplier_reason,
+        "source": "reorder_point",
     }
 
 
@@ -1011,6 +1230,7 @@ def _supplier_group(
                     "value",
                     "arithmetic",
                     "supplier_reason",
+                    "source",
                 )
             }
             for line in lines
@@ -1026,10 +1246,16 @@ def build_supply_plan(horizon_days: int, as_of: date | None = None) -> dict:
     ``suppliers``): the algorithm is the one the route documents — the
     due item-sites of the horizon, the raw quantity fitted to the
     item's supplier terms of the pair's ``source_system``, one supplier
-    group per (supplier, source system) — and the resolved as-of
-    (``default_as_of``) the as-of, unless ``as_of`` is given, in which
-    case that date is the as-of and ``default_as_of`` is never
-    consulted.  Read-only.  The release route
+    group per (supplier, source system) — and, with the
+    ``supply_plan.plan_buffers_by_signal`` system setting on (the
+    default), a designated item-site whose recommendation has status
+    "ok" is planned by its DDMRP buffer's order signal instead of its
+    reorder point (the DDMRP plan read once per call through
+    ``_buffer_rows``, a raised read building the plan exactly as with
+    the setting off) — and the resolved as-of (``default_as_of``) the
+    as-of, unless ``as_of`` is given, in which case that date is the
+    as-of and ``default_as_of`` is never consulted.  Read-only.  The
+    release route
     ``POST /api/supply-plan/release`` builds its plan from the same
     lines — passing the latest transaction date in the synced data as
     ``as_of`` so the release's origin tag never names a server date —
@@ -1071,6 +1297,16 @@ def build_supply_plan(horizon_days: int, as_of: date | None = None) -> dict:
         if _prefer_lower_risk_supplier_enabled(stored_settings)
         else None
     )
+    # The buffer read: only with the
+    # supply_plan.plan_buffers_by_signal setting on — the DDMRP plan's
+    # rows keyed by (item_code, site_code), read once per call; a
+    # raised read builds the plan exactly as with the setting off.
+    buffer_rows = None
+    if _plan_buffers_by_signal_enabled(stored_settings):
+        try:
+            buffer_rows = _buffer_rows(as_of)
+        except Exception:
+            buffer_rows = None
 
     lines = [
         line
@@ -1083,6 +1319,7 @@ def build_supply_plan(horizon_days: int, as_of: date | None = None) -> dict:
                 terms_by_item,
                 risk_by_code,
                 suppliers_by_code,
+                buffer_rows,
             )
             for recommendation in recommendations
         )
@@ -1151,7 +1388,19 @@ def supply_plan(
     ``high``; ties to the row marked default, then the lowest
     ``supplier_code``) — everything of the line following the chosen
     row, and the switched line's ``supplier_reason`` naming the
-    default pick's supplier, its risk and its signs.
+    default pick's supplier, its risk and its signs.  With the
+    ``supply_plan.plan_buffers_by_signal`` system setting on (the
+    default), a designated item-site — one of the DDMRP plan's rows,
+    the plan read once per call — whose recommendation has status "ok"
+    is instead planned by its buffer's order signal: with the signal
+    on, one line due now (``due_in_days`` 0, ``order_by`` the as-of),
+    its raw quantity the buffer's suggested order units fitted to the
+    supplier's terms, its ``position_units`` the buffer's net flow
+    rounded down to whole units, its ``reorder_point_units`` the top
+    of yellow, and its ``source`` reading ``"buffer"`` — the
+    arithmetic's label naming the buffer signal; with the signal off
+    the item-site has no line, whatever its reorder point says.
+    Every other line's ``source`` reads ``"reorder_point"``.
     """
     return SupplyPlanResponse(**build_supply_plan(horizon_days))
 

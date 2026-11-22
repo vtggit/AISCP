@@ -353,6 +353,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   the ERPs kept: for each item-site's latest counted push, how many were read back and unchanged,
   by reorder-point and buffer kind (`GET /api/parameter-writeback/record`,
   `backend/app/recommend/push_record.py`).
+- The Push to ERP screen shows the writeback record directly after the bar and before the outstanding pane,
+  with a line for each kind that has pushed values; the block is absent while the read is out, after a
+  failed or malformed read, or when no kind has a line (`app/js/writeback.js`).
 - Draft a single purchase order in Odoo from the Work queue: preview first, then an admin
   confirms; every confirmed action is audited (`backend/app/api/replenishment_actions.py`).
 - ERP code mappings translate AISCP item, site and vendor codes to Odoo codes

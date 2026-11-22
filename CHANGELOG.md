@@ -86,6 +86,9 @@ code is the authority for details.
 - A read-only route, `GET /api/parameter-writeback/record`, for any signed-in user, answers, for pushed
   reorder points and buffer levels, how many were read back from the ERP and how many of those came
   back unchanged, with pushed, read, unchanged and rate for each kind (#1526).
+- The Push to ERP screen now shows, for pushed reorder points and buffer levels, how many the ERP still
+  holds unchanged, as a count and a percentage of the values read back, or that none have been read
+  back yet (#1529).
 
 **DDMRP**
 - Buffer designations by an admin, buffer zones from average daily usage and lead time with the

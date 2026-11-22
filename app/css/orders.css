@@ -241,6 +241,23 @@
   white-space: nowrap;
 }
 
+/* The buffer source badge in the Item and Site cell
+   (issue #1542): the small chip beside the pair text — the line
+   the plan drew from its DDMRP buffer's order signal. A quiet
+   pill, like the block's risk badge, short and unbroken: the
+   table's region scrolls, the page never does. */
+.op-line-source {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Due, dates, quantity and money never break inside the value; the
    Why text wraps, so a long arithmetic line cannot widen the page. */
 .op-cell-due,

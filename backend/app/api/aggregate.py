@@ -804,7 +804,12 @@ class ReleaseTrackingLine(BaseModel):
 
     ``order_qty`` and ``received_qty`` are the ordered and the on-
     receipt (``QtyOnReceipts``) quantities, and ``promised`` the
-    line's promised date as an ISO calendar date, or null.
+    line's promised date as an ISO calendar date, or null.  ``source``
+    is the stored source of the release row's line of the same
+    ``item_code`` — ``buffer``, ``reorder_point`` or ``top_up``
+    — and stays out of the answer, the way a line without
+    ``item_description`` does, when the stored line carries no
+    source or the release stored no line for the item.
     """
 
     item_code: str
@@ -815,6 +820,7 @@ class ReleaseTrackingLine(BaseModel):
     cancelled: bool
     promised: str | None
     item_description: str | None = None
+    source: str | None = None
 
 
 class ReleaseTrackingOrder(BaseModel):

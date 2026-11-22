@@ -21889,6 +21889,17 @@
               }
             ],
             "title": "Item Description"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",
@@ -21902,7 +21913,7 @@
           "promised"
         ],
         "title": "ReleaseTrackingLine",
-        "description": "One order line as Acumatica reports it.\n\n``order_qty`` and ``received_qty`` are the ordered and the on-\nreceipt (``QtyOnReceipts``) quantities, and ``promised`` the\nline's promised date as an ISO calendar date, or null."
+        "description": "One order line as Acumatica reports it.\n\n``order_qty`` and ``received_qty`` are the ordered and the on-\nreceipt (``QtyOnReceipts``) quantities, and ``promised`` the\nline's promised date as an ISO calendar date, or null.  ``source``\nis the stored source of the release row's line of the same\n``item_code`` \u2014 ``buffer``, ``reorder_point`` or ``top_up``\n\u2014 and stays out of the answer, the way a line without\n``item_description`` does, when the stored line carries no\nsource or the release stored no line for the item."
       },
       "ReleaseTrackingOrder": {
         "properties": {

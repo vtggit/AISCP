@@ -5,6 +5,11 @@ no database access at all: they work from an as-of date and a mapping of
 date to quantity for a single (item_code, site_code) pair. The
 ``demand_stats_for_*`` readers pull the aggregates they need from the
 ``demand_events`` table through the standard parameterised cursor.
+``demand_stats_for_all``'s optional ``pairs`` restricts both of its
+reads in SQL to the given (item_code, site_code) pairs — the window's
+daily totals and the first-seen dates — and its cache key carries the
+normalized pair set, so a pair-restricted read never serves an
+all-pair result and vice versa.
 
 Demand is bucketed into consecutive 30-day buckets ending on ``as_of``:
 bucket ``k`` (``k = 0..11``) covers the 30 days ending on
@@ -198,10 +203,10 @@ def _resolve_as_of(cur, as_of: date | None) -> date:
     return default_as_of(cur)
 
 
-@cached_read
 def demand_stats_for_all(
     as_of: date | None = None,
     with_daily: bool = False,
+    pairs: tuple | None = None,
 ) -> list[dict]:
     """Demand stats for every (item_code, site_code) pair in demand_events.
 
@@ -212,6 +217,17 @@ def demand_stats_for_all(
     pair's first-ever ``occurred_on``. Returns one result per pair,
     ordered by item_code then site_code.
 
+    ``pairs``, a tuple of (item_code, site_code) pairs, restricts both
+    reads in SQL to those pairs — the window's daily totals and the
+    first-seen dates, the same predicate on both — so a pair's
+    statistics are the same whether the read is restricted or not.
+    ``None`` (the default) reads every pair exactly as before, and an
+    empty tuple answers ``[]`` without a query.  The read cache's key
+    carries the normalized pair set — the distinct pairs, sorted — so
+    calls naming the same set in any order share one entry, and a
+    pair-restricted read never serves an all-pair result, or an
+    all-pair read a restricted one.
+
     With ``with_daily`` every result also carries ``daily_totals``, the
     pair's ``{date: day_total}`` mapping already read for the window
     (empty when the pair has no event in it), and
@@ -220,22 +236,63 @@ def demand_stats_for_all(
     later. Without it the results are exactly as before, and the
     statements executed are the same either way.
     """
+    return _demand_stats_for_all(as_of, with_daily, _normalized_pairs(pairs))
+
+
+def _normalized_pairs(pairs: tuple | None) -> tuple | None:
+    """The pair set of one call, normalized for the cache key: ``None``
+    when the caller passed ``None`` (every pair), else the distinct
+    (item_code, site_code) pairs sorted — so calls naming the same set
+    in any order share one cache entry, and the SQL predicate binds
+    exactly that set."""
+    if pairs is None:
+        return None
+    return tuple(sorted({(item_code, site_code) for item_code, site_code in pairs}))
+
+
+def _pair_filter(pairs: tuple | None) -> tuple[str, tuple]:
+    """The pair predicate shared by the two reads: empty when the
+    caller passed ``None`` (every pair), else
+    ``(item_code, site_code) IN %s`` binding the normalized pair set
+    — the same predicate on the window's daily totals and on the
+    first-seen dates."""
+    if pairs is None:
+        return "", ()
+    return "(item_code, site_code) IN %s", (pairs,)
+
+
+@cached_read
+def _demand_stats_for_all(
+    as_of: date | None,
+    with_daily: bool,
+    pairs: tuple | None,
+) -> list[dict]:
+    if pairs == ():
+        # The empty set names no pair: answer without a query.
+        return []
+    pair_sql, pair_params = _pair_filter(pairs)
+    daily_sql = (
+        "SELECT item_code, site_code, occurred_on, SUM(quantity) AS day_total "
+        "FROM demand_events "
+        "WHERE occurred_on >= %s AND occurred_on <= %s"
+    )
+    if pair_sql:
+        daily_sql += " AND " + pair_sql
+    first_seen_sql = (
+        "SELECT item_code, site_code, MIN(occurred_on) AS first_seen "
+        "FROM demand_events"
+    )
+    if pair_sql:
+        first_seen_sql += " WHERE " + pair_sql
     with get_cursor() as cur:
         resolved_as_of = _resolve_as_of(cur, as_of)
         window_start = _shift_back(resolved_as_of, DEFAULT_WINDOW_DAYS - 1)
         cur.execute(
-            "SELECT item_code, site_code, occurred_on, SUM(quantity) AS day_total "
-            "FROM demand_events "
-            "WHERE occurred_on >= %s AND occurred_on <= %s "
-            "GROUP BY item_code, site_code, occurred_on",
-            (window_start, resolved_as_of),
+            daily_sql + " GROUP BY item_code, site_code, occurred_on",
+            (window_start, resolved_as_of) + pair_params,
         )
         daily_rows = cur.fetchall()
-        cur.execute(
-            "SELECT item_code, site_code, MIN(occurred_on) AS first_seen "
-            "FROM demand_events "
-            "GROUP BY item_code, site_code"
-        )
+        cur.execute(first_seen_sql + " GROUP BY item_code, site_code", pair_params)
         first_seen_rows = cur.fetchall()
 
     daily_by_pair: dict[tuple[str, str], dict[date, float]] = {}

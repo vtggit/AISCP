@@ -448,7 +448,7 @@ def _stored_system_settings() -> dict:
         return {row["key"]: row["value"] for row in cur.fetchall()}
 
 
-def _ddmrp_stat_context(as_of: date | None = None) -> dict:
+def _ddmrp_stat_context(as_of: date | None = None, pairs: tuple | None = None) -> dict:
     """The one read of every statistic a DDMRP row is built from.
 
         The shared loads of ``ddmrp_zone_rows`` and
@@ -461,7 +461,10 @@ def _ddmrp_stat_context(as_of: date | None = None) -> dict:
         ``demand_events.quantity`` sum in the window ending on that date),
         the demand statistics, the pooled
         lead-time statistics, the reorder recommendations and the
-        item_sites rows.
+        item_sites rows.  ``pairs`` — a tuple of (item_code,
+    site_code) pairs — is passed on to the demand statistics' read,
+    restricting it to those pairs in SQL; ``None`` (the default) reads
+    every pair, as before.
     """
     stored = _stored_system_settings()
     window_days = setting_value(stored, ADU_WINDOW_KEY)
@@ -490,7 +493,7 @@ def _ddmrp_stat_context(as_of: date | None = None) -> dict:
         "window_totals": window_totals,
         "demand_by_pair": {
             (row["item_code"], row["site_code"]): row
-            for row in demand_stats_for_all(as_of)
+            for row in demand_stats_for_all(as_of, pairs=pairs)
         },
         "lead_time_by_item": {
             row["item_code"]: row for row in lead_time_stats_for_all(as_of)
@@ -578,8 +581,18 @@ def ddmrp_zone_rows(as_of: date | None = None) -> tuple[date, list[dict]]:
     ``app.ddmrp.snapshots.capture_ddmrp_snapshot`` stores.  Every
     statistic is read once per call, whatever the number of rows, and
     nothing is written.  Returns the as-of date and the rows.
+
+    The stored designations are read first, and the demand
+    statistics' read is then asked for the designated pairs only —
+    the normalized (item_code, site_code) set of the designations,
+    passed on through ``_ddmrp_stat_context``'s ``pairs`` — never for
+    every pair.
     """
-    context = _ddmrp_stat_context(as_of)
+    designations = _repo.list_all()
+    pairs = tuple(
+        sorted({(buffer["item_code"], buffer["site_code"]) for buffer in designations})
+    )
+    context = _ddmrp_stat_context(as_of, pairs=pairs)
     stored = context["stored"]
 
     # The active adjustment factor per scope, in one read: a stored
@@ -595,7 +608,7 @@ def ddmrp_zone_rows(as_of: date | None = None) -> tuple[date, list[dict]]:
         factors.setdefault(key, float(adjustment["factor"]))
 
     rows = []
-    for buffer in _repo.list_all():
+    for buffer in designations:
         item_code = buffer["item_code"]
         site_code = buffer["site_code"]
         key = (item_code, site_code)

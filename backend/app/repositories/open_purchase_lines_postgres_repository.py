@@ -6,6 +6,28 @@ from uuid import uuid4
 from app.db.connection import get_connection, get_cursor
 from app.db.read_cache import cached_read_method
 
+# The newest sync of each source system: the inner subquery computes
+# the greatest as_of per source system over every row of the table,
+# and the outer query keeps the rows on that sync.
+_LATEST_SQL = (
+    "SELECT latest.id, latest.business_key, latest.item_code, "
+    "latest.site_code, latest.supplier_code, latest.order_type, "
+    "latest.open_units, latest.promised_on, latest.ordered_on, "
+    "latest.as_of, latest.source_system, latest.synced_at "
+    "FROM ( "
+    "SELECT p.*, MAX(p.as_of) OVER (PARTITION BY p.source_system) "
+    "AS source_max_as_of "
+    "FROM open_purchase_lines AS p "
+    ") AS latest "
+    "WHERE latest.as_of = latest.source_max_as_of"
+)
+# The pair filter of ``list_latest(pairs=...)``: only the rows of the
+# given (item_code, site_code) pairs, applied after the newest-sync
+# selection, so a pair whose rows are all in an older sync of its
+# source system gets none.
+_PAIRS_SQL = " AND (latest.item_code, latest.site_code) IN %s"
+_ORDER_SQL = " ORDER BY latest.item_code, latest.site_code, " "latest.business_key"
+
 
 def _row_to_dict(row) -> dict:
     d = dict(row)
@@ -96,26 +118,32 @@ class OpenPurchaseLinePostgresRepository:
         return {"inserted": inserted, "updated": updated}
 
     @cached_read_method
-    def list_latest(self) -> list[dict]:
+    def list_latest(self, pairs=None) -> list[dict]:
         """The newest sync of each source system: for every
         source_system, the rows whose as_of equals that source system's
         greatest as_of, as dicts ordered by
         (item_code, site_code, business_key). Dates come back as ``date``
         and timestamps as ISO strings; an empty table returns ``[]``.
+
+        With ``pairs`` — a tuple of ``(item_code, site_code)`` tuples —
+        only the rows of those pairs are answered, in the same order
+        and shape: the pair filter is in the SQL, so the other pairs'
+        rows are never fetched, and the newest sync of each source
+        system is still chosen over every row of the table, so a pair
+        whose rows are all in an older sync of its source system gets
+        none. An empty tuple answers ``[]`` without a query.  The pairs
+        are hashable, so a ``read_once()`` block caches each distinct
+        ``pairs``.
         """
+        if pairs is None:
+            sql = _LATEST_SQL + _ORDER_SQL
+            params = None
+        else:
+            pair_tuples = tuple(pairs)
+            if not pair_tuples:
+                return []
+            sql = _LATEST_SQL + _PAIRS_SQL + _ORDER_SQL
+            params = (pair_tuples,)
         with get_cursor() as cur:
-            cur.execute(
-                "SELECT latest.id, latest.business_key, latest.item_code, "
-                "latest.site_code, latest.supplier_code, latest.order_type, "
-                "latest.open_units, latest.promised_on, latest.ordered_on, "
-                "latest.as_of, latest.source_system, latest.synced_at "
-                "FROM ( "
-                "SELECT p.*, MAX(p.as_of) OVER (PARTITION BY p.source_system) "
-                "AS source_max_as_of "
-                "FROM open_purchase_lines AS p "
-                ") AS latest "
-                "WHERE latest.as_of = latest.source_max_as_of "
-                "ORDER BY latest.item_code, latest.site_code, "
-                "latest.business_key"
-            )
+            cur.execute(sql, params)
             return [_row_to_dict(r) for r in cur.fetchall()]

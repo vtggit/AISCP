@@ -14,6 +14,18 @@
 //     dismissed hold the finite number count and whose rate is a
 //     finite number or null — leaves the block out, the card renders
 //     exactly as before;
+//   * GET /api/parameter-writeback/record, the Reorder points
+//     card's "pushes" block, the card's own read beside its summary,
+//     list and acceptance reads, with its own catch that answers
+//     null, exactly like the card's acceptance read; a failed read —
+//     any status, a network error — or a body that is not an object
+//     whose reorder_points is an object holding the whole numbers
+//     pushed, read and unchanged, each at least 0, unchanged no
+//     greater than read and read no greater than pushed, leaves the
+//     block out, and the card renders exactly as before: no error
+//     text, no Retry, no new [role="alert"]; a usable answer whose
+//     pushed is 0 also leaves the block out; the buffers kind is not
+//     read on this card;
 //   * GET /api/stockout/proposals, the Stockout risk card's
 //     "proposed remedy" block, the card's own read beside its
 //     summary and list reads; a failed read — any status, a network
@@ -97,11 +109,14 @@
 //   * one region per list card — that kind's summary buckets (accepted
 //     money, applied money, dismissed count) plus the "N to decide"
 //     count of that list; the Reorder points card carries its
-//     "acceptance" block (GET /api/drift/decisions/acceptance), the
-//     Stockout risk card its "proposed remedy" block (GET
-//     /api/stockout/proposals) and the Excess and dead stock card
-//     its "proposed action" block (GET /api/excess/proposals), each
-//     directly after its figures row and
+//     "acceptance" block (GET /api/drift/decisions/acceptance) and
+//     its "pushes" block (GET /api/parameter-writeback/record,
+//     directly after the acceptance block when that block shows,
+//     otherwise directly after the figures row, and left out while
+//     the answer's pushed is 0), the Stockout risk card its
+//     "proposed remedy" block (GET /api/stockout/proposals) and the
+//     Excess and dead stock card its "proposed action" block (GET
+//     /api/excess/proposals), each directly after its figures row and
 //     directly before its Open button; a failed read leaves the block
 //     out — the card renders exactly as before, no error text, no
 //     Retry, no new [role="alert"];
@@ -196,6 +211,7 @@
   var STOCKOUT_PROPOSALS_PATH = '/api/stockout/proposals';
   var EXCESS_PROPOSALS_PATH = '/api/excess/proposals';
   var DRIFT_ACCEPTANCE_PATH = '/api/drift/decisions/acceptance';
+  var WRITEBACK_RECORD_PATH = '/api/parameter-writeback/record';
 
   var KINDS = [
     {
@@ -601,6 +617,16 @@
             return null;
           })
         );
+        // The card's "pushes" block: the writeback record's own
+        // read, beside the summary, the list and the acceptance
+        // read, with its own catch that answers null, exactly like
+        // the acceptance read — a failed read never fails the card,
+        // it only leaves the block out.
+        reads.push(
+          global.Api.get(WRITEBACK_RECORD_PATH).catch(function () {
+            return null;
+          })
+        );
       }
       if (kind === 'stockout') {
         // The card's "proposed remedy" block: its own read beside
@@ -625,7 +651,7 @@
         );
       }
       work = Promise.all(reads).then(function (results) {
-        renderCard(KINDS_BY_KIND[kind], results[0], results[1], results[2]);
+        renderCard(KINDS_BY_KIND[kind], results[0], results[1], results[2], results[3]);
       });
     }
     work.catch(function (error) {
@@ -774,7 +800,7 @@
     );
   }
 
-  function renderCard(kindMeta, summary, list, ownRead) {
+  function renderCard(kindMeta, summary, list, ownRead, recordRead) {
     var kind = kindMeta.kind;
     var buckets =
       summary && typeof summary === 'object' && summary[kind] &&
@@ -816,6 +842,18 @@
       region
         .querySelector('.ov-card-figures')
         .insertAdjacentElement('afterend', driftAcceptanceBlock(ownRead));
+    }
+    // The Reorder points card's "pushes" block: with a usable
+    // answer whose pushed is above 0, directly before the card's
+    // Open button — after the acceptance block when that block
+    // shows, otherwise directly after the figures row; a failed
+    // read, an unusable body or a pushed of 0 leaves it out and
+    // the card renders exactly as before.
+    if (kind === 'drift' && driftPushesValid(recordRead) && recordRead.reorder_points.pushed > 0) {
+      var pushesAnchor =
+        region.querySelector('[data-testid="ov-drift-acceptance"]') ||
+        region.querySelector('.ov-card-figures');
+      pushesAnchor.insertAdjacentElement('afterend', driftPushesBlock(recordRead));
     }
     // The Stockout risk card's "proposed remedy" block: with a
     // usable answer, directly after the figures row and directly
@@ -1151,6 +1189,81 @@
         block.appendChild(direction);
       }
     }
+
+    return block;
+  }
+
+  /* ------------------------ drift pushes ------------------------ */
+
+  // One of the record's counts: a whole number of at least 0, the
+  // Push to ERP screen's check.
+  function driftPushesCountOk(value) {
+    return isMoney(value) && value >= 0 && Math.floor(value) === value;
+  }
+
+  // The Reorder points card's "pushes" measurement: the Push to ERP
+  // screen's writeback record (GET /api/parameter-writeback/record)
+  // narrowed to the reorder-point kind — the buffers kind is not
+  // read on this card. The answer is usable only when it is an
+  // object whose reorder_points is an object holding the whole
+  // numbers pushed, read and unchanged, each at least 0, unchanged
+  // no greater than read and read no greater than pushed; anything
+  // else — the failed read's null, any status, a network error, a
+  // body of another shape — leaves the block out.
+  function driftPushesValid(answer) {
+    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) {
+      return false;
+    }
+    var kind = answer.reorder_points;
+    if (!kind || typeof kind !== 'object' || Array.isArray(kind)) {
+      return false;
+    }
+    return (
+      driftPushesCountOk(kind.pushed) &&
+      driftPushesCountOk(kind.read) &&
+      driftPushesCountOk(kind.unchanged) &&
+      kind.unchanged <= kind.read &&
+      kind.read <= kind.pushed
+    );
+  }
+
+  // The block's line, built node by node with textContent — no API
+  // value goes through innerHTML: with read above 0, "Reorder points
+  // still as pushed in the ERP: <unchanged> of <read> read back
+  // (<pct>%)" with pct = Math.round(100 * unchanged / read) worked
+  // out from the counts, and with read 0, "Reorder points pushed:
+  // <pushed>; none read back by a sync yet" — the Push to ERP
+  // screen's wording, so the Overview and that screen say the same
+  // thing. Every number goes through countLabel, whole with
+  // thousands separators. The block reuses the other cards' blocks'
+  // ov-proposals classes, so the styles come from the same rules.
+  function driftPushesBlock(answer) {
+    var kind = answer.reorder_points;
+
+    var block = document.createElement('div');
+    block.className = 'ov-proposals';
+    block.setAttribute('data-testid', 'ov-drift-pushes');
+
+    var line = document.createElement('p');
+    line.className = 'ov-proposals-line';
+    line.setAttribute('data-testid', 'ov-drift-pushes-line');
+    if (kind.read > 0) {
+      var pct = Math.round((100 * kind.unchanged) / kind.read);
+      line.textContent =
+        'Reorder points still as pushed in the ERP: ' +
+        countLabel(kind.unchanged) +
+        ' of ' +
+        countLabel(kind.read) +
+        ' read back (' +
+        countLabel(pct) +
+        '%)';
+    } else {
+      line.textContent =
+        'Reorder points pushed: ' +
+        countLabel(kind.pushed) +
+        '; none read back by a sync yet';
+    }
+    block.appendChild(line);
 
     return block;
   }

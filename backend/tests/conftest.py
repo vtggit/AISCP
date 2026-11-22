@@ -4,6 +4,11 @@ Provides an isolated test database created and dropped per session, Alembic migr
 applied to it, a FastAPI TestClient, and per-test cleanup so tests never see each
 other's rows.
 
+The suite can run in parallel with pytest-xdist (``pytest -n 2``). Each worker is a
+separate process with its own session and its own database, ``<name>_<worker>`` (for
+example ``aierp_test_db_gw0``), so one worker's cleanup never empties another's tables.
+Without xdist the database name is unchanged.
+
 Named for AIERP deliberately: AIDW's conftest was copied from AICRM at its bootstrap and
 still declares "AICRM" with an aicrm_test_db — harmless but confusing drift that stops
 here.
@@ -33,7 +38,18 @@ def _test_db_name() -> str:
     return os.getenv("AIERP_TEST_DB") or "aierp_test_db"
 
 
-_TEST_DB_NAME = _test_db_name()
+def _worker_db_name(base: str) -> str:
+    """The database name for this pytest process.
+
+    pytest-xdist names each worker process in ``PYTEST_XDIST_WORKER`` (``gw0``, ``gw1``,
+    ...). A worker gets ``<base>_<worker>``, created, migrated, truncated and dropped by
+    its own session. Without xdist the variable is unset and the name is ``base``.
+    """
+    worker = os.getenv("PYTEST_XDIST_WORKER", "")
+    return f"{base}_{worker}" if worker else base
+
+
+_TEST_DB_NAME = _worker_db_name(_test_db_name())
 _DB_HOST = os.getenv("DB_HOST", "localhost")
 _DB_PORT = os.getenv("DB_PORT", "5432")
 _DB_USER = os.getenv("DB_USER", "aierp")

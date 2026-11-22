@@ -402,6 +402,8 @@ code is the authority for details.
   recommendations once per call instead of three times, and its answer is unchanged (#1438).
 - The DDMRP plan now reads open purchase and sales-order lines only for the buffered item-sites it
   plans, not for every item-site in the feed (#1548).
+- Order plan builds now use one database connection for the whole build, and DDMRP zone rows read
+  demand statistics only for the designated buffered item-sites (#1562).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

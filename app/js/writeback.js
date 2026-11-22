@@ -30,6 +30,31 @@
 // basis, an em dash without one or for anything else), the value
 // inserted as text.
 //
+// The writeback record block ([data-testid="writeback-record"], a
+// div directly after the bar and before the outstanding pane)
+// measures what the confirmed pushes did to the ERPs:
+// GET /api/parameter-writeback/record, no query, fetched through
+// app/js/api.js beside the preview and the history — on activation
+// and on the Refresh button, and again after a confirmed push. The
+// preview's and the history's own Retry buttons do not start it, a
+// re-render never does, it keeps its own state and its own
+// request-sequence guard, and reset() bumps the sequence and clears
+// the state. Whether the record read is out never changes the
+// Refresh button's disabled state. While the read is out, after a
+// non-200 answer or a network failure, and after a 200 whose body is
+// malformed (not an object holding the objects reorder_points and
+// buffers, or either of them with pushed, read or unchanged not
+// whole numbers of at least 0, unchanged above read, or read above
+// pushed), the block is absent and nothing says why; the answer's
+// rate field is never read. Each line is a p with the class wb-note,
+// reorder points first, then buffers; a kind whose pushed is 0 has
+// no line, and with no line at all the block is absent. With read
+// above 0 a line reads "<kind> still as pushed in the ERP:
+// <unchanged> of <read> read back (<pct>%)" with pct
+// Math.round(100 * unchanged / read) worked out from the counts;
+// with read 0 it reads "<kind> pushed: <pushed>; none read back by a
+// sync yet", <kind> "Reorder points" or "Buffer levels".
+//
 // Pushing (admin only): the "Push selected to ERP" button
 // ([data-testid="writeback-push"]) is disabled until at least one row
 // is selected, and pressing it does not write — it opens the inline
@@ -63,6 +88,7 @@
 
   var PREVIEW_PATH = '/api/parameter-writeback/preview';
   var HISTORY_PATH = '/api/parameter-writeback/history?limit=50';
+  var RECORD_PATH = '/api/parameter-writeback/record';
   var CONFIRM_PATH = '/api/parameter-writeback/confirm';
   var ME_PATH = '/api/auth/me';
 
@@ -112,8 +138,10 @@
       isAdmin: false, // positive /api/auth/me answer only (fail closed)
       preview: null, // the newest successful preview answer
       historyRows: null, // the newest successful history answer
+      record: null, // the newest valid record answer
       previewLoading: false, // a preview fetch is out
       historyLoading: false, // a history fetch is out
+      recordLoading: false, // a record fetch is out
       previewError: null, // the newest failed preview load: { status, message }
       historyError: null, // the newest failed history load: { status, message }
       selected: {}, // pair key -> true; survives re-loads
@@ -131,6 +159,7 @@
   // a reset) belongs to the past.
   var previewSeq = 0;
   var historySeq = 0;
+  var recordSeq = 0;
   var meSeq = 0;
   // The push generation: a reset (sign-out) invalidates a confirm
   // response still out the door, so it can neither render into the
@@ -281,6 +310,68 @@
       return outcome;
     }
     return 'other';
+  }
+
+  // The record's counts: whole numbers of at least 0, unchanged no
+  // greater than read and read no greater than pushed. The answer's
+  // rate field is never read: the percentage is worked out from the
+  // counts.
+  function recordCountOk(value) {
+    return (
+      typeof value === 'number' &&
+      isFinite(value) &&
+      value >= 0 &&
+      Math.floor(value) === value
+    );
+  }
+
+  function recordKindOk(kind) {
+    return (
+      !!kind &&
+      typeof kind === 'object' &&
+      !Array.isArray(kind) &&
+      recordCountOk(kind.pushed) &&
+      recordCountOk(kind.read) &&
+      recordCountOk(kind.unchanged) &&
+      kind.unchanged <= kind.read &&
+      kind.read <= kind.pushed
+    );
+  }
+
+  // The record body: an object holding the objects reorder_points and
+  // buffers, each passing the count checks; anything else is
+  // malformed, and the block stays absent.
+  function recordOk(payload) {
+    return (
+      !!payload &&
+      typeof payload === 'object' &&
+      !Array.isArray(payload) &&
+      recordKindOk(payload.reorder_points) &&
+      recordKindOk(payload.buffers)
+    );
+  }
+
+  // One record line's text: a kind whose pushed is 0 has no line
+  // (null); with read above 0 the read-back counts and their own
+  // percentage, with read 0 the not-read-back note.
+  function recordLineText(label, kind) {
+    if (kind.pushed === 0) {
+      return null;
+    }
+    if (kind.read > 0) {
+      var pct = Math.round((100 * kind.unchanged) / kind.read);
+      return (
+        label +
+        ' still as pushed in the ERP: ' +
+        kind.unchanged +
+        ' of ' +
+        kind.read +
+        ' read back (' +
+        pct +
+        '%)'
+      );
+    }
+    return label + ' pushed: ' + kind.pushed + '; none read back by a sync yet';
   }
 
   /* ------------------------------ state reads -------------------------- */
@@ -446,17 +537,52 @@
     );
   }
 
+  // GET /api/parameter-writeback/record, no query: beside the
+  // preview and the history, on activation and on Refresh (loadAll)
+  // and after a confirmed push (reloadLists). The preview's and the
+  // history's own Retry buttons do not start it. The answer is kept
+  // only when it passes recordOk; while the read is out, after a
+  // non-200 answer or a network failure, and after a malformed 200,
+  // state.record is null — the block is absent, and nothing says why.
+  function loadRecord() {
+    recordSeq += 1;
+    var mySeq = recordSeq;
+    state.recordLoading = true;
+    state.record = null;
+    render();
+    global.Api.get(RECORD_PATH).then(
+      function (payload) {
+        if (mySeq !== recordSeq) {
+          return; // a newer fetch is out: this answer is stale
+        }
+        state.recordLoading = false;
+        state.record = recordOk(payload) ? payload : null;
+        render();
+      },
+      function () {
+        if (mySeq !== recordSeq) {
+          return;
+        }
+        state.recordLoading = false;
+        state.record = null;
+        render();
+      }
+    );
+  }
+
   // Activation and Refresh both fetch everything again.
   function loadAll() {
     loadMe();
     loadPreview();
     loadHistory();
+    loadRecord();
   }
 
   // After a confirmed push: both lists are fetched again.
   function reloadLists() {
     loadPreview();
     loadHistory();
+    loadRecord();
   }
 
   /* ------------------------------ pushing ------------------------------ */
@@ -587,10 +713,42 @@
     rootEl.innerHTML = shellHtml();
   }
 
+  // The record block: directly after the bar and before the
+  // outstanding pane, one p.wb-note line per kind — reorder points
+  // first, then buffers. Absent while the read is out, after a failed
+  // or malformed load, and when no kind has a line.
+  function recordHtml() {
+    if (!state.record) {
+      return '';
+    }
+    var lines = [];
+    var reorderText = recordLineText('Reorder points', state.record.reorder_points);
+    if (reorderText !== null) {
+      lines.push(
+        '<p class="wb-note" data-testid="writeback-record-reorder-points">' +
+        esc(reorderText) +
+        '</p>'
+      );
+    }
+    var bufferText = recordLineText('Buffer levels', state.record.buffers);
+    if (bufferText !== null) {
+      lines.push(
+        '<p class="wb-note" data-testid="writeback-record-buffers">' +
+        esc(bufferText) +
+        '</p>'
+      );
+    }
+    if (lines.length === 0) {
+      return '';
+    }
+    return '<div class="wb-record" data-testid="writeback-record">' + lines.join('') + '</div>';
+  }
+
   function shellHtml() {
     return (
       '<div class="wb">' +
       barHtml() +
+      recordHtml() +
       outstandingPaneHtml() +
       historyPaneHtml() +
       '</div>'
@@ -929,6 +1087,7 @@
   function reset() {
     previewSeq += 1; // any answer still out the door belongs to a past session
     historySeq += 1;
+    recordSeq += 1;
     meSeq += 1;
     pushGen += 1;
     state = freshState();

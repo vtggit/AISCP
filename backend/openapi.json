@@ -21737,6 +21737,17 @@
           "value": {
             "type": "string",
             "title": "Value"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",
@@ -21747,7 +21758,7 @@
           "value"
         ],
         "title": "ReleaseLine",
-        "description": "One line of one release group, exactly as sent to Acumatica.\n\nThe monetary fields are exact decimals \u2014 the planned order's\nvalues, never binary floats \u2014 rendered as decimal strings in the\nJSON body."
+        "description": "One line of one release group, exactly as sent to Acumatica.\n\nThe monetary fields are exact decimals \u2014 the planned order's\nvalues, never binary floats \u2014 rendered as decimal strings in the\nJSON body.  ``source`` is the order plan line's source \u2014\n``buffer`` or ``reorder_point`` \u2014 or ``top_up`` for a chosen\ntop-up's line; a line with no source \u2014 the aggregate release's\nlines and the snapshots stored before the field \u2014 leaves it out\nof the answer, the way the plan line's null ``supplier_reason``\nis left out."
       },
       "ReleasePlan": {
         "properties": {

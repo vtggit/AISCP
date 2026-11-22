@@ -277,7 +277,13 @@ def _group_a(outcome, order_nbr):
             # The fitted quantity (125, the lot over the raw 120) at
             # the unit cost — 4.50, no rounding needed — as exact
             # decimal strings.
-            {"item_code": ITEM_A, "quantity": 125, "unit_cost": "4.5", "value": "562.5"}
+            {
+                "item_code": ITEM_A,
+                "quantity": 125,
+                "unit_cost": "4.5",
+                "value": "562.5",
+                "source": "reorder_point",
+            }
         ],
         "value": "562.5",
         "outcome": outcome,
@@ -301,6 +307,7 @@ def _group_b(outcome, order_nbr):
                 "quantity": 100,
                 "unit_cost": "10.01",
                 "value": "1001.00",
+                "source": "reorder_point",
             }
         ],
         "value": "1001.00",
@@ -739,7 +746,13 @@ def test_issue842_freeform(monkeypatch, client, user_token) -> None:
     assert row["line_count"] == 1
     assert row["value"] == Decimal("562.5")
     assert row["lines"] == [
-        {"item_code": ITEM_A, "quantity": 125, "unit_cost": "4.5", "value": "562.5"}
+        {
+            "item_code": ITEM_A,
+            "quantity": 125,
+            "unit_cost": "4.5",
+            "value": "562.5",
+            "source": "reorder_point",
+        }
     ]
     assert row["actor"] == "admin"
     assert row["error"] is None
@@ -757,7 +770,13 @@ def test_issue842_freeform(monkeypatch, client, user_token) -> None:
     assert audit_rows[0]["order_nbr"] == "PO-842-001"
     assert audit_rows[0]["value"] == "562.5"
     assert audit_rows[0]["lines"] == [
-        {"item_code": ITEM_A, "quantity": 125, "unit_cost": "4.5", "value": "562.5"}
+        {
+            "item_code": ITEM_A,
+            "quantity": 125,
+            "unit_cost": "4.5",
+            "value": "562.5",
+            "source": "reorder_point",
+        }
     ]
     assert audit_rows[0]["actor"] == "admin"
     assert planner.get(AUDIT).status_code == 403

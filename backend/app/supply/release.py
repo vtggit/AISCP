@@ -20,7 +20,8 @@ are then built, and each named top-up the suggestions hold — the same
 entry whose ``source_system`` is ``acumatica`` — joins its (site,
 supplier) group as a line: the top-up's quantity in whole units, its
 unit cost rounded exactly as a due line's is, its value added to the
-group's and the plan's value — the group created, with the same
+group's and the plan's value, its source ``top_up`` — the group
+created, with the same
 origin tag a due line's group would carry, when the supplier has no
 due line at that site, and a group's lines staying ordered by item
 code.  A named top-up the suggestions do not hold — no longer
@@ -49,12 +50,14 @@ lines by item code — each tagged with its origin
 ``"AIERP order plan <as_of> site <site_code> vendor
 <supplier_code>"``, the idempotency tag the draft PO is written under
 in Acumatica.  Each line is ``{"item_code", "quantity", "unit_cost",
-"value"}``: ``quantity`` the line's fitted quantity in whole units,
-``unit_cost`` the line's unit cost rounded half-up to two decimal
-places exactly the way ``plan_release`` rounds it —
-``Decimal(0)`` when the line has none — and ``value`` the quantity at
-that cost.  A named supplier's lines from another source system never
-enter a group; they come back as ``unreleasable`` as
+"value", "source"}``: ``quantity`` the line's fitted quantity in
+whole units, ``unit_cost`` the line's unit cost rounded half-up to
+two decimal places exactly the way ``plan_release`` rounds it —
+``Decimal(0)`` when the line has none — ``value`` the quantity at
+that cost, and ``source`` the plan line's own source — ``buffer`` or
+``reorder_point`` — for a due line and ``top_up`` for a chosen
+top-up's line.  A named supplier's lines from another source system
+never enter a group; they come back as ``unreleasable`` as
 ``{"item_code", "site_code", "reason": "only Acumatica lines are
 released here"}``.  ``total_value`` is the summed value of every line
 of every group (0 when there are none).  The function writes nothing.
@@ -175,6 +178,7 @@ def order_plan_release(
                         "quantity": quantity,
                         "unit_cost": unit_cost,
                         "value": line_value,
+                        "source": line.get("source"),
                     }
                 )
                 group["value"] += line_value
@@ -254,6 +258,7 @@ def order_plan_release(
                     "quantity": quantity,
                     "unit_cost": unit_cost,
                     "value": line_value,
+                    "source": "top_up",
                 }
             )
             group["value"] += line_value

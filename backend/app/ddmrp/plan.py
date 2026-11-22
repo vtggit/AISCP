@@ -4,7 +4,9 @@ The plan prices every designated item-site whose DDMRP zone row
 (``GET /api/ddmrp/zones``) is "ok" against its buffer zones, from the
 pair's on-hand position and its open purchase supply.  The qualified
 demand is the pair's open sales-order demand from ``open_sales_lines``
-(read once per call from ``list_latest``), limited to the lines with
+(read once per call from ``list_latest`` with the pairs of the "ok"
+zone rows; whether the feed carries any open sales-order lines at all
+is answered by ``has_lines``), limited to the lines with
 ``open_units`` above 0: ``qualified_due`` is the sum of the pair's
 lines with ``ship_on`` at or before the as-of date (a null
 ``ship_on`` counts as due on the as-of date), and
@@ -21,7 +23,8 @@ replaced by "qualified demand <q> units: <d> due, <s> spike", each
 part the float sum rounded to the nearest whole unit (halves up) and
 <q> the sum of the two rounded parts.  The open supply
 sums the ``open_units`` of the pair's ``open_purchase_lines`` rows
-(read once from ``list_latest``) with ``open_units`` above 0 whose
+(read once from ``list_latest`` with the pairs of the "ok" zone
+rows) with ``open_units`` above 0 whose
 ``promised_on`` is null or no more than 90 days before the as-of date:
 future ``promised_on`` dates count, a promise exactly 90 days before
 the as-of date counts, and the excluded lines are counted in the
@@ -260,20 +263,25 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
     Keeps the "ok" rows and enriches each with the fields of
     ``DdmrpPlanRow``: the on hand from ``on_hand`` (0 with the note
     ``"no on-hand record; treated as 0"`` when the pair has none), the
-    open supply of the pair's ``open_purchase_lines`` rows (read once
-    from ``OpenPurchaseLinePostgresRepository.list_latest``; the stale
-    note when any line is excluded), the qualified demand of the
-    pair's ``open_sales_lines`` rows (read once per call from
-    ``OpenSalesLinePostgresRepository.list_latest`` and grouped by
-    item-site: the lines with ``open_units`` above 0, ``qualified_due``
-    the ones due at or before the as-of date — a null ``ship_on``
-    counts as due — and ``qualified_spike`` the ones after the as-of
-    date and within the row's ``dlt_days`` rounded up to whole days
-    whose own ``open_units`` is at least 50% of the row's top of
-    red), the net flow, the planning zone, the order signal, the
-    suggested order units, the planning priority percentage, the
-    on-hand status and the on-hand percentage of the top of red.
-    When the feed carries no open sales-order lines at all every row
+    open supply of the pair's ``open_purchase_lines`` rows and the
+    qualified demand of the pair's ``open_sales_lines`` rows — both
+    feeds read once per call from ``list_latest`` with ``pairs`` set
+    to the sorted distinct ``(item_code, site_code)`` of the zone rows
+    whose status is "ok" (neither feed read when there is no such
+    row), the purchase rows with the stale note when any line is
+    excluded and the sales rows grouped by item-site: the lines with
+    ``open_units`` above 0, ``qualified_due`` the ones due at or
+    before the as-of date — a null ``ship_on`` counts as due — and
+    ``qualified_spike`` the ones after the as-of date and within the
+    row's ``dlt_days`` rounded up to whole days whose own
+    ``open_units`` is at least 50% of the row's top of red — whether
+    the feed carries any open sales-order lines at all is answered by
+    ``OpenSalesLinePostgresRepository.has_lines``, never by the
+    filtered read — the net flow, the planning zone, the order
+    signal, the suggested order units, the planning priority
+    percentage, the on-hand status and the on-hand percentage of the
+    top of red.  When the feed carries no open sales-order lines at
+    all every row
     keeps the note ``"no open sales-order demand in the feed"`` and
     the two part fields stay out of the response; otherwise that note
     is replaced by ``"qualified demand <q> units: <d> due, <s>
@@ -281,15 +289,31 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
     ascending (nulls last), then item_code and site_code, and the
     response carries the summary counts.  Nothing is written.
     """
+    pairs = tuple(
+        sorted(
+            {
+                (row["item_code"], row["site_code"])
+                for row in zone_rows
+                if row["status"] == "ok"
+            }
+        )
+    )
     on_hand_by_key = {
         (row["item_code"], row["site_code"]): row
         for row in _on_hand_repo.list_rows(10**9, 0)
     }
     lines_by_key: dict[tuple[str, str], list[dict]] = {}
-    for line in _open_po_repo.list_latest():
-        lines_by_key.setdefault((line["item_code"], line["site_code"]), []).append(line)
-
-    sales_lines = _open_so_repo.list_latest()
+    sales_lines: list[dict] = []
+    if pairs:
+        for line in _open_po_repo.list_latest(pairs=pairs):
+            lines_by_key.setdefault((line["item_code"], line["site_code"]), []).append(
+                line
+            )
+        sales_lines = _open_so_repo.list_latest(pairs=pairs)
+        feed_has_lines = _open_so_repo.has_lines()
+    else:
+        # No "ok" zone row: neither feed is read.
+        feed_has_lines = False
     sales_by_key: dict[tuple[str, str], list[dict]] = {}
     for line in sales_lines:
         sales_by_key.setdefault((line["item_code"], line["site_code"]), []).append(line)
@@ -313,7 +337,7 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
         if stale:
             notes.append(f"{stale} stale open purchase lines excluded")
 
-        if sales_lines:
+        if feed_has_lines:
             qualified_due, qualified_spike = qualified_demand_for(
                 sales_by_key.get(key, []), as_of, row["dlt_days"], row["top_of_red"]
             )
@@ -354,7 +378,7 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
             ),
             "notes": notes,
         }
-        if not sales_lines:
+        if not feed_has_lines:
             # The feed carries no open sales-order lines at all: the
             # two part fields stay out of the response, exactly as
             # before the feed existed.

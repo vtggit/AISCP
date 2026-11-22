@@ -575,6 +575,15 @@ for the item-sites a planner chooses to buffer.
   - **ERP fit:** a min/max ERP cannot hold the zones directly. The documented approximation is
     top of yellow as the reorder point and top of green as the max. That is pushed through the
     parameter write-back, which is a later slice, and only for designated item-sites.
+- **Ordering on a buffer's signal** (operator decision, 2026-11-22). With the system setting
+  `supply_plan.plan_buffers_by_signal` on (the default), the order plan plans each designated
+  item-site from its DDMRP buffer instead of its reorder point. When the buffer's net flow position
+  is at or below the top of yellow, the item-site's line is due now, for the top of green minus the
+  net flow position, rounded up to whole units (AIERP-D-151), and fitted to the supplier's terms
+  like any line. When the net flow position is above the top of yellow, the item-site has no line,
+  whatever its reorder point says. Every line says whether a buffer or a reorder point produced it.
+  A buffer line is released like any other line, under AIERP-D-2. With the setting off, or when the
+  buffers cannot be read, every item-site is planned from its reorder point.
 - **Slices, in order:**
   - buffer designations and settings;
   - buffer zones (read-only API);

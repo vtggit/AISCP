@@ -7,7 +7,7 @@
 #   ./run_tests.sh -k test_auth # pass extra pytest args
 #
 # This script:
-#   1. Starts an ephemeral postgres:15 container named aierp-test-db
+#   1. Starts an ephemeral postgres:16-alpine container named aierp-test-db
 #      (no persistent volume), publishing host port 5433:5432
 #   2. Waits for it to be ready (pg_isready, up to 30 seconds)
 #   3. Runs pytest with DB_PORT=5433 (test container)
@@ -64,7 +64,7 @@ docker run -d --rm \
     -e "POSTGRES_DB=${DB_NAME}" \
     -e "POSTGRES_USER=${DB_USER}" \
     -e "POSTGRES_PASSWORD=${DB_PASSWORD}" \
-    postgres:15 >/dev/null
+    postgres:16-alpine >/dev/null
 
 echo "==> Waiting for PostgreSQL to be ready..."
 # Wait up to 30 seconds for the DB to accept connections

@@ -194,6 +194,9 @@ code is the authority for details.
   `supply_plan.plan_buffers_by_signal` system setting to turn the behavior off (#1540).
 - The Order plan screen now shows a Buffer badge in the item and site cell of each plan line planned
   from a DDMRP buffer's order signal (#1542).
+- Released order-plan lines now record their source — buffer, reorder point, or top-up — in release
+  previews, confirmed releases, stored release rows and the release audit, while aggregate release
+  lines and older rows omit it (#1549).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

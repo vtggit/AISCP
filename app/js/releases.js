@@ -36,7 +36,15 @@
 // it — or pressing Enter or Space on it — expands a line table
 // beneath it ([data-testid="releases-lines"]): Item (item_description,
 // with the item_code beneath it in the secondary ink token; just the
-// code when there is no description), Warehouse, Ordered, Received,
+// code when there is no description; a line whose source is exactly
+// the string "buffer" — the line the ERP order drew from its
+// DDMRP buffer's order signal — ends with one small badge after
+// the code ([data-testid="releases-line-source"], class
+// rl-line-source) reading "Buffer" with the title "Ordered on its
+// DDMRP buffer's order signal"; any other source —
+// "reorder_point", "top_up", missing, null or another value —
+// shows no such element and the cell reads exactly as before),
+// Warehouse, Ordered, Received,
 // Promised and Status ("Completed", "Cancelled" or empty); a second
 // click collapses it. A row's identity is its
 // index in the answer's orders array, never its order_nbr, so two
@@ -1073,15 +1081,36 @@
   // The line's Item cell: item_description on the primary line, with
   // the item_code beneath it in the secondary ink token; just the
   // code when there is no description; an em dash without either.
+  // A line whose source is exactly the string "buffer" — the line
+  // the ERP order drew from its DDMRP buffer's order signal — ends
+  // with the buffer badge (issue #1560) right after the code; any
+  // other source leaves the cell exactly as before.
   function itemHtml(line) {
     var description = nonEmptyString(line.item_description);
     var code = nonEmptyString(line.item_code);
     if (!description) {
-      return esc(code || EM_DASH);
+      return esc(code || EM_DASH) + bufferSourceHtml(line);
     }
     return (
       '<span class="rl-line-item-desc">' + esc(description) + '</span>' +
-      '<span class="rl-line-item-code">' + esc(code || EM_DASH) + '</span>'
+      '<span class="rl-line-item-code">' + esc(code || EM_DASH) + '</span>' +
+      bufferSourceHtml(line)
+    );
+  }
+
+  // The buffer source badge in the line's Item cell (issue
+  // #1560): one element right after the code when the line's
+  // source is exactly the string "buffer" — the line the ERP
+  // order drew from its DDMRP buffer's order signal. Any other
+  // source ("reorder_point", "top_up", missing, null or another
+  // value) leaves the cell exactly as before.
+  function bufferSourceHtml(line) {
+    if (line.source !== 'buffer') {
+      return '';
+    }
+    return (
+      '<span class="rl-line-source" data-testid="releases-line-source"' +
+      ' title="Ordered on its DDMRP buffer\'s order signal">Buffer</span>'
     );
   }
 

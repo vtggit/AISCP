@@ -116,6 +116,8 @@ code is the authority for details.
   (#1475).
 - The Buffers screen's Planned adjustments section now shows how often an adjustment was saved at
   the proposed factor, with how many were saved below or above it (#1481).
+- The Releases screen now shows a Buffer badge after the item code on release lines ordered on a DDMRP
+  buffer's order signal (#1560).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,

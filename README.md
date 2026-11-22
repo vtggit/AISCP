@@ -356,6 +356,8 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   expected date (`backend/app/aggregate/tracking.py`).
 - The Released cell on the Releases screen reads an order released by `standing-grant:<id>`
   (with `<id>` one or more digits) as `by standing grant #<id>` (`app/js/releases.js`).
+- The Releases screen marks a release line whose `source` is exactly `buffer` with a small "Buffer" badge in
+  its Item cell, titled "Ordered on its DDMRP buffer's order signal" (`app/js/releases.js`).
 - Release chosen transfer suggestions to Acumatica as transfer orders on hold, with the same
   preview, confirm and audit; their status is read back from Acumatica
   (`backend/app/supply/transfer_release.py`).

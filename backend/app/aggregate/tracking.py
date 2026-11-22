@@ -36,7 +36,14 @@ read model (read once through
 ``InventoryItemPostgresRepository.list_all``) carries at least one
 row, every line of every order also gains ``item_description``,
 looked up by the line's ``item_code`` — null for an item missing
-from the read model.  The supplier performance is read once per
+from the read model.  When the release row the order is tracked
+by — the newest ``created`` or ``exists`` row of its order
+number — stored a line for a line's ``item_code`` with a string
+``source``, that line also gains ``source`` — the stored
+line's source; a stored line without a source (the aggregate
+release's lines, a snapshot stored before the field) or no
+stored line at all (an item added to the order in Acumatica)
+leaves the line without the key.  The supplier performance is read once per
 call (never once per order) through
 ``app.recommend.supplier_performance.supplier_performance`` with
 ``as_of`` the resolved date; an as_of after the server's today is
@@ -160,6 +167,33 @@ def _item_descriptions_by_code(items: list) -> dict:
     return descriptions_by_code
 
 
+def _line_sources_by_item(row: dict) -> dict:
+    """item_code -> source over the release row's stored lines.
+
+    Only stored lines that are dicts with a non-empty string
+    ``item_code`` and a string ``source`` count — a stored
+    line without a source, the aggregate release's lines and the
+    snapshots stored before the field, leaves its item out — and
+    a duplicate item_code keeps the first such line, the stored
+    order of the lines.
+    """
+    stored = row.get("lines")
+    if not isinstance(stored, list):
+        return {}
+    sources_by_item: dict = {}
+    for line in stored:
+        if not isinstance(line, dict):
+            continue
+        item_code = line.get("item_code")
+        if not isinstance(item_code, str) or not item_code:
+            continue
+        source = line.get("source")
+        if not isinstance(source, str) or not source:
+            continue
+        sources_by_item.setdefault(item_code, source)
+    return sources_by_item
+
+
 def latest_released_rows(rows: list) -> dict[str, dict]:
     """The newest row of every released order number.
 
@@ -271,7 +305,11 @@ def _classify_order(
     When ``item_descriptions_by_code`` is not None — the inventory
     items read model carried at least one row — every line also gains
     ``item_description``, looked up by the line's ``item_code``;
-    null when the item is missing from it.  When
+    null when the item is missing from it.  Every line also
+    gains ``source`` — the stored source of the release row's
+    line of the same ``item_code`` — only when that stored
+    line carries a string source, so a line with no stored
+    source or no stored line at all gains no key.  When
     ``supplier_entries_by_code`` is not None — the supplier
     performance read was answered, with at least one entry or with
     none — the order also gains ``expected_on`` (the earliest
@@ -296,6 +334,22 @@ def _classify_order(
             }
             for line in lines
         ]
+    # The release row's stored sources, one per item code: each
+    # line Acumatica reports gains the source the row's stored
+    # line of the same item code carried — nothing else about
+    # the line changes — and a stored line without a string
+    # source or no stored line at all leaves the line without
+    # the key.
+    sources_by_item = _line_sources_by_item(row)
+    if sources_by_item:
+        enriched = []
+        for line in lines:
+            item_code = line.get("item_code") if isinstance(line, dict) else None
+            if isinstance(item_code, str) and item_code in sources_by_item:
+                enriched.append({**line, "source": sources_by_item[item_code]})
+            else:
+                enriched.append(line)
+        lines = enriched
     status = erp["status"] if erp is not None else None
     hold = erp["hold"] if erp is not None else None
     promised_on = erp["promised_on"] if erp is not None else None

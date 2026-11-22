@@ -8,7 +8,8 @@
 #   5. Python dependency vulnerability scanning (pip-audit)
 #   6. Secret-pattern scanning (gitleaks)
 #   7. Migrations apply cleanly against a fresh PostgreSQL database
-#   8. The full backend test suite passes (auth, authz, CRUD, audit, migrations)
+#   8. The full backend test suite passes (auth, authz, CRUD, audit, migrations), on two
+#      pytest-xdist workers
 #
 # Lightweight checks (release metadata, quality, security) run without a database
 # so they complete quickly and fail fast. The backend test job requires PostgreSQL.
@@ -197,6 +198,9 @@ jobs:
           DB_PASSWORD=change-me-in-production \
             python3 -m alembic upgrade head
 
+      # Two pytest-xdist workers, the way the CodeAgent gate runs the suite. Each worker gets
+      # its own database: backend/tests/conftest.py names it <base>_<worker> and creates,
+      # migrates, truncates and drops it (#1545), so the workers never share rows.
       - name: Run backend test suite
         run: |
           cd backend
@@ -207,4 +211,4 @@ jobs:
           DB_PASSWORD=change-me-in-production \
           AUTH_MODE=development \
           AUTH_DEV_TOKEN=dev-secret-token \
-            python3 -m pytest tests/ -v --tb=short
+            python3 -m pytest tests/ -n 2 -v --tb=short

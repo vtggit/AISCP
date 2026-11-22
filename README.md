@@ -349,6 +349,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Push accepted reorder points and DDMRP buffer levels into the ERP that owns the item-site
   (Acumatica item-warehouse settings or Odoo reorder rules): preview first, then an admin
   confirms; every write is read back and audited (`backend/app/api/parameter_writeback.py`).
+- The writeback record, open to any signed-in user, measures what the confirm pushed and what
+  the ERPs kept: for each item-site's latest counted push, how many were read back and unchanged,
+  by reorder-point and buffer kind (`GET /api/parameter-writeback/record`,
+  `backend/app/recommend/push_record.py`).
 - Draft a single purchase order in Odoo from the Work queue: preview first, then an admin
   confirms; every confirmed action is audited (`backend/app/api/replenishment_actions.py`).
 - ERP code mappings translate AISCP item, site and vendor codes to Odoo codes

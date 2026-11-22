@@ -83,6 +83,9 @@ code is the authority for details.
   and an audit of every attempt (#715, #716, #717, #718, #719).
 - Odoo item-sites carry their current reorder rule, so drift has an ERP value to compare (#714).
 - The Push to ERP screen, with each row's source: a decision or a DDMRP buffer (#728, #775).
+- A read-only route, `GET /api/parameter-writeback/record`, for any signed-in user, answers, for pushed
+  reorder points and buffer levels, how many were read back from the ERP and how many of those came
+  back unchanged, with pushed, read, unchanged and rate for each kind (#1526).
 
 **DDMRP**
 - Buffer designations by an admin, buffer zones from average daily usage and lead time with the

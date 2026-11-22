@@ -1253,7 +1253,20 @@ def build_supply_plan(horizon_days: int, as_of: date | None = None) -> dict:
     ``as_of`` so the release's origin tag never names a server date —
     so preview, confirm and the GET route never disagree on what is
     due.
+
+    The body runs inside one ``app.db.connection.one_connection``
+    block: every ``get_cursor`` of one build — the plan's own reads
+    and the buffer read's — rides the one connection, opened at the
+    block's first use and closed when it exits.  A caller already
+    inside such a block (``top_ups_by_supplier``, the exceptions
+    inbox) shares that block's connection; the nested block opens
+    nothing.
     """
+    with one_connection():
+        return _build_supply_plan(horizon_days, as_of)
+
+
+def _build_supply_plan(horizon_days: int, as_of: date | None = None) -> dict:
     with get_cursor() as cur:
         if as_of is None:
             as_of = default_as_of(cur)

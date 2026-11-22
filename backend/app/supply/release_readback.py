@@ -25,6 +25,17 @@ row, as ``refresh_transfer_release_statuses`` does.
 nothing: it compares one released purchase order with the readback of
 it and answers whether the ERP shows it unchanged, so the scorecard
 knows which of its read rows came back the way they went out.
+
+``line_unchanged(item_code, quantity, erp_status, erp_lines)`` reads
+and writes nothing: it sums the ``order_qty`` of the ``erp_lines``
+whose ``item_code`` is the released line's and whose ``cancelled`` is
+not true, and answers whether that sum is within the module's
+tolerance of the line's ``quantity`` while ``erp_status`` is not
+``Canceled`` — the one-line judgement of ``release_unchanged``, which
+compares the whole order.  A null ``erp_lines`` is no lines, an item
+with no such ERP line answers False, and unusable data — an
+``erp_lines`` that is not a list, a ``quantity`` that is not a
+number — answers False, never an error.
 """
 
 from decimal import Decimal, InvalidOperation
@@ -171,3 +182,47 @@ def release_unchanged(lines: object, erp_status: object, erp_lines: object) -> b
         if not within_tolerance:
             return False
     return True
+
+
+def line_unchanged(
+    item_code: object, quantity: object, erp_status: object, erp_lines: object
+) -> bool:
+    """Whether the readback shows one released line unchanged.
+
+    Reads and writes nothing.  The ERP side sums ``order_qty`` over
+    the ``erp_lines`` whose ``item_code`` is ``item_code`` and whose
+    ``cancelled`` is not true — a null ``erp_lines`` is no lines, and
+    an item with no such ERP line answers False — and the answer is
+    True only when ``erp_status`` is not ``Canceled`` and the sum
+    differs from ``quantity`` by no more than the module's tolerance
+    of 0.0001: the one-line judgement of ``release_unchanged``, which
+    compares the whole order.  Unusable data answers False, never an
+    error: an ``erp_lines`` that is not a list, a ``quantity`` that
+    is not a number, and an ERP line of the item without a numeric
+    ``order_qty`` all make the readback unverifiable.
+    """
+    if erp_status == "Canceled":
+        return False
+    released = _quantity(quantity)
+    if released is None:
+        return False
+    if erp_lines is not None and not isinstance(erp_lines, list):
+        return False
+    total: Decimal | None = None
+    for row in erp_lines or []:
+        if not isinstance(row, dict) or row.get("item_code") != item_code:
+            continue
+        if row.get("cancelled") is True:
+            continue
+        order_qty = _quantity(row.get("order_qty"))
+        if order_qty is None:
+            return False
+        total = order_qty if total is None else total + order_qty
+    if total is None:
+        return False
+    try:
+        return abs(released - total) <= _UNCHANGED_TOLERANCE
+    except InvalidOperation:
+        # A NaN or an infinite difference (inf over inf) cannot be
+        # within the tolerance.
+        return False

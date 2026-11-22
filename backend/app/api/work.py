@@ -3,10 +3,11 @@
 ``GET /api/work/scorecard`` (the router's prefix is ``/api/work``; the
 router is included in ``app.main`` behind the app's include-time
 authentication gate, like every other API router) answers
-``{"processes": [...]}`` — the ten work processes, in this order:
+``{"processes": [...]}`` — the eleven work processes, in this order:
 ``reorder_points``, ``excess``, ``stockout``, ``exceptions``,
 ``forecast_overrides``, ``sop_signoff``, ``purchase_budget``,
-``ddmrp_adjustment``, ``order_release`` and ``transfer_release``.  It
+``ddmrp_adjustment``, ``order_release``, ``buffer_order`` and
+``transfer_release``.  It
 is open to any signed-in user — the gate answers 401 without a token
 — and it writes nothing.
 
@@ -53,6 +54,13 @@ source function directly (not over HTTP):
   ``released``, ``with_proposal`` is ``read``, ``at_proposal`` is
   ``unchanged``, ``without_proposal`` is 0 and ``automatic`` is
   ``automatic``.
+* ``buffer_order`` — "Order on a buffer's signal" — from this
+  module's own ``buffer_order_counts()``: mapped the same way as
+  ``order_release`` — ``decisions`` is ``released``,
+  ``with_proposal`` is ``read``, ``at_proposal`` is ``unchanged``,
+  ``without_proposal`` is 0 and ``automatic`` is ``automatic`` —
+  over the ``created`` rows' stored lines whose ``source`` is
+  exactly ``"buffer"``.
 * ``transfer_release`` — "Release transfers to the ERP" — from
   ``transfer_release_counts()``: ``decisions`` and ``with_proposal``
   are ``released``, ``at_proposal`` is null, ``without_proposal`` is
@@ -71,7 +79,19 @@ answered — and ``unchanged`` — the read rows for which
 ``app.supply.release_readback.release_unchanged`` of the row's
 ``lines``, ``erp_status`` and ``erp_lines`` is True: the ERP read the
 order back with the same items and quantities as the released side.
-For the eight existing entries ``automatic`` is null; for the two
+``buffer_order_counts`` runs the same SELECT over the same rows and
+answers its four counts over their stored lines whose ``source`` is
+exactly ``"buffer"`` — the lines the buffers' signals ordered, not
+the aggregate releases nor the releases stored before the source was
+written: ``released`` is their number, ``automatic`` the number of
+those in the rows whose ``actor`` starts with ``standing-grant:``,
+``read`` the number of those in the rows whose ``erp_status`` is not
+null, and ``unchanged`` the read lines for which
+``app.supply.release_readback.line_unchanged`` of the line's
+``item_code``, its ``quantity``, the row's ``erp_status`` and
+``erp_lines`` is True; a row whose ``lines`` is not a list counts
+nothing.
+For the eight existing entries ``automatic`` is null; for the three
 release entries it is the count above.
 
 ``rate`` is ``at_proposal / with_proposal`` rounded to 4 decimals, or
@@ -109,7 +129,7 @@ from app.api.stockout_decisions import stockout_proposal_counts
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
 from app.db.connection import get_cursor
-from app.supply.release_readback import release_unchanged
+from app.supply.release_readback import line_unchanged, release_unchanged
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +169,63 @@ def order_release_counts() -> dict:
         read += 1
         if release_unchanged(row["lines"], row["erp_status"], row["erp_lines"]):
             unchanged += 1
+    return {
+        "released": released,
+        "automatic": automatic,
+        "read": read,
+        "unchanged": unchanged,
+    }
+
+
+def buffer_order_counts() -> dict:
+    """The scorecard's ``buffer_order`` counts, over the stored lines
+    of the ``plan_releases`` rows ``order_release_counts`` counts.
+
+    One SELECT through ``app.db.connection.get_cursor``, over the
+    rows whose ``outcome`` is ``created``: the four counts are over
+    the rows' stored lines whose ``source`` is exactly
+    ``"buffer"`` — the lines the buffers' signals ordered, not the
+    aggregate releases nor the releases stored before the source was
+    written — ``released`` is their number, ``automatic`` the number
+    of those in the rows whose ``actor`` starts with
+    ``standing-grant:``, ``read`` the number of those in the rows
+    whose ``erp_status`` is not null, and ``unchanged`` the read
+    lines for which
+    ``app.supply.release_readback.line_unchanged`` of the line's
+    ``item_code``, its ``quantity``, the row's ``erp_status`` and
+    ``erp_lines`` is True.  A row whose ``lines`` is not a list
+    counts nothing.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT actor, lines, erp_status, erp_lines "
+            "FROM plan_releases WHERE outcome = 'created'"
+        )
+        rows = cur.fetchall()
+    released = 0
+    automatic = 0
+    read = 0
+    unchanged = 0
+    for row in rows:
+        lines = row["lines"]
+        if lines is not None and not isinstance(lines, list):
+            continue
+        for line in lines or []:
+            if not isinstance(line, dict) or line.get("source") != "buffer":
+                continue
+            released += 1
+            if (row["actor"] or "").startswith("standing-grant:"):
+                automatic += 1
+            if row["erp_status"] is None:
+                continue
+            read += 1
+            if line_unchanged(
+                line.get("item_code"),
+                line.get("quantity"),
+                row["erp_status"],
+                row["erp_lines"],
+            ):
+                unchanged += 1
     return {
         "released": released,
         "automatic": automatic,
@@ -419,7 +496,7 @@ def _entry(
 def scorecard(
     current_user: AuthUser = Depends(require_any_authenticated_user),
 ) -> dict:
-    """The work scorecard: the ten processes, in their order.
+    """The work scorecard: the eleven processes, in their order.
 
     Open to any signed-in user (the router is mounted behind the
     app's include-time gate, which answers 401 without a valid Bearer
@@ -488,6 +565,12 @@ def scorecard(
                 "Release purchase orders to the ERP",
                 _map_order_release_counts,
                 lambda: order_release_counts(),
+            ),
+            _entry(
+                "buffer_order",
+                "Order on a buffer's signal",
+                _map_order_release_counts,
+                lambda: buffer_order_counts(),
             ),
             _entry(
                 "transfer_release",

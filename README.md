@@ -244,6 +244,8 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   `GET /api/supply-plan/top-ups`).
 - The order plan screen shows a supplier's minimum when present, a below-minimum badge, and
   the suggested top-ups for supplier groups that are short (`app/js/orders.js`).
+- The order plan screen marks a plan line whose `source` is `buffer` with a small "Buffer" badge in its Item
+  and Site cell, titled "Planned from its DDMRP buffer's order signal" (`app/js/orders.js`).
 - For an admin, the order plan screen shows a checkbox on each suggested top-up row and a
   running line showing whether the chosen top-ups meet the minimum; the release preview sends
   the ticked top-ups, and the confirm sends that preview's body with `confirm: true` added; a

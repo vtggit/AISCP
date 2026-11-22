@@ -89,6 +89,9 @@ code is the authority for details.
 - The Push to ERP screen now shows, for pushed reorder points and buffer levels, how many the ERP still
   holds unchanged, as a count and a percentage of the values read back, or that none have been read
   back yet (#1529).
+- The Overview's Reorder points card now shows, for pushed reorder points, how many the ERP still holds
+  unchanged, as a count and a percentage of the values read back, or that none have been read back yet
+  (#1534).
 
 **DDMRP**
 - Buffer designations by an admin, buffer zones from average daily usage and lead time with the

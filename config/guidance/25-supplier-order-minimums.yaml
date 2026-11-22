@@ -61,3 +61,13 @@ items:
       date: 2026-11-11
       under: delegation
       ref: "AIERP#1116"
+
+  - key: AIERP-D-230
+    type: design
+    title: "AIERP suggests the choice for a short order"
+    statement: "For each supplier order below its minimum, AIERP suggests one choice and says why. While none of the order's lines must be ordered within the days the inbox uses (`exceptions.order_minimum_due_days`, 2 by default), it suggests waiting, since more lines fall due before any must go out. Once one must, it suggests adding the top-ups when they reach the minimum, and ordering anyway when they cannot. The holding cost of the top-ups is shown but does not decide, because AIERP does not know the cost of waiting or of a short order. The suggestion is advice: what a release includes is unchanged (AIERP-D-187). Each release of a short order will record the suggestion beside what was chosen, so the scorecard can measure how often they match."
+    decided:
+      by: model:claude
+      date: 2026-11-22
+      under: delegation
+      ref: "AISCP#1567"

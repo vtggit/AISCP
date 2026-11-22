@@ -192,6 +192,8 @@ code is the authority for details.
 - By default, the order plan plans each buffered item-site from its DDMRP buffer's order signal instead
   of its reorder point, with a `source` field on every line and the
   `supply_plan.plan_buffers_by_signal` system setting to turn the behavior off (#1540).
+- The Order plan screen now shows a Buffer badge in the item and site cell of each plan line planned
+  from a DDMRP buffer's order signal (#1542).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

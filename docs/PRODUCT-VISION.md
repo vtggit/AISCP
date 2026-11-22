@@ -663,6 +663,7 @@ The order plan says what to buy from each supplier this week. The decision the E
 - **When the minimum cannot be reached, AIERP says so,** and by how much, rather than padding the order.
 - **Nothing is added silently.** Top-ups are suggestions. A release includes them only when the planner chose them, and it is previewed, confirmed and audited like every other release.
 - **The inbox notices.** An order that is short of its minimum while one of its lines must be ordered within two days is an exception.
+- **AIERP suggests the choice for a short order** (operator direction, 2026-11-22; method decided by Claude under delegation). For each supplier order below its minimum, AIERP suggests one choice and says why. While none of the order's lines must be ordered within the days the inbox uses (`exceptions.order_minimum_due_days`, 2 by default), it suggests waiting, since more lines fall due before any must go out. Once one must, it suggests adding the top-ups when they reach the minimum, and ordering anyway when they cannot. The holding cost of the top-ups is shown but does not decide, because AIERP does not know the cost of waiting or of a short order. The suggestion is advice: what a release includes is unchanged (AIERP-D-187). Each release of a short order will record the suggestion beside what was chosen, so the scorecard can measure how often they match.
 
 ## The exceptions inbox (operator direction, 2026-10-29; method defaults decided by Claude under delegation)
 

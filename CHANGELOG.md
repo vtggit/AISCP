@@ -78,6 +78,8 @@ code is the authority for details.
   unchanged, as a count and a percentage of the released orders read back (#1519).
 - Release tracking lines now carry the stored source of the release row's line for the same item, when
   one was stored (#1559).
+- The Work scorecard now shows, for orders on a buffer's signal, how many were read back from the ERP
+  and how many of those came back unchanged (#1563).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

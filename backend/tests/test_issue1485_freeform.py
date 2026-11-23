@@ -113,6 +113,7 @@ KEYS = [
     "purchase_budget",
     "ddmrp_adjustment",
     "order_release",
+    "buffer_order",
     "transfer_release",
 ]
 
@@ -126,6 +127,7 @@ STEPS = {
     "purchase_budget": "Set each month's purchase budget",
     "ddmrp_adjustment": "Enter planned adjustment factors for a ramp",
     "order_release": "Release purchase orders to the ERP",
+    "buffer_order": "Order on a buffer's signal",
     "transfer_release": "Release transfers to the ERP",
 }
 
@@ -249,6 +251,14 @@ EXPECTED = {
         "rate": 0.3333,
     },
     "order_release": {
+        "decisions": 0,
+        "with_proposal": 0,
+        "at_proposal": 0,
+        "without_proposal": 0,
+        "automatic": 0,
+        "rate": None,
+    },
+    "buffer_order": {
         "decisions": 0,
         "with_proposal": 0,
         "at_proposal": 0,

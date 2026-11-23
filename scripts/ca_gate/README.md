@@ -12,6 +12,8 @@ service.
 |---|---|
 | `contract_lib.py` | **vendored** from `vtggit/CodeAgent` `src/orchestration/contract_lib.py`. The AC-text hash + the `raw_decode` contract extractor. Do not edit by hand — keep it byte-identical to the source so hashes reproduce. |
 | `new_pr_contract.py` | offline generator: turn an issue's `codeagent-contract` into a `codeagent-pr-contract` skeleton (one `proof_map` entry per active AC, `ac_text_hash` filled, `tests:["TODO"]`). |
+| `e2e_proofs.sh` | the merge gate's e2e pass. It brings up the real stack on the runner (the job's Postgres migrated, the PR's backend, a proxy that forwards `/api/`), runs `app/e2e/` in Playwright and appends the junit for the contract gate. |
+| `e2e_stack.py` | the e2e pass's Python half: the proxy (a copy of the engine gate's) and the junit merge that gives each e2e testcase its spec file. |
 
 ## Author workflow (today)
 

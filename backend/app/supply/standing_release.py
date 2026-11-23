@@ -60,7 +60,12 @@ then raised again.  In every case that found a grant in force one
 ``standing_grant_runs`` row is written — ``started_at`` equal to
 ``now`` — and in every send case the groups' count and value are
 what the row's ``documents`` and ``value`` hold, and what count
-toward the day.
+toward the day.  After the confirm answers, the run records the
+release's short suppliers through
+``app.supply.short_orders.record_short_orders`` with the grant's
+horizon days, the confirm's answer and the actor
+``standing-grant:<id>`` — a failure to record is logged as a warning
+inside it and changes nothing of the run's outcome or its row.
 
 ``run_transfer_grant(now=None)`` runs one execution of the
 ``transfer_release`` process under the grant in force for it —
@@ -149,6 +154,7 @@ from app.repositories.standing_grant_runs_postgres_repository import (
     release_grant_run_lock,
 )
 from app.supply.release import order_plan_release
+from app.supply.short_orders import record_short_orders
 from app.supply.transfer_release import transfer_release_plan
 
 # The processes the runs execute, the switch and the horizon setting
@@ -291,7 +297,12 @@ def run_order_plan_grant(now: datetime | None = None) -> dict:
     ``confirm_release_groups`` as
     ``standing-grant:<id>`` (``released``, or ``failed`` with the
     refusal's reason — and the re-raise after the row is written when
-    the send raised something else).  Every run that found a grant in
+    the send raised something else).  After the confirm answers, the
+    run records the release's short suppliers through
+    ``app.supply.short_orders.record_short_orders`` with the grant's
+    horizon days, the answer and the actor ``standing-grant:<id>`` —
+    a failure to record is logged inside it and changes nothing of
+    the run's outcome or its row.  Every run that found a grant in
     force writes exactly one ``standing_grant_runs`` row.
     """
     if now is None:
@@ -429,8 +440,13 @@ def run_order_plan_grant(now: datetime | None = None) -> dict:
             "unreleasable": plan["unreleasable"],
             "total_value": sent_value,
         }
+        actor = f"standing-grant:{grant['id']}"
         try:
-            confirm_release_groups(send_plan, f"standing-grant:{grant['id']}")
+            answer = confirm_release_groups(send_plan, actor)
+            # The short-order record of the release the run went out
+            # for: a failure to record is logged inside it and
+            # changes nothing of the run's outcome.
+            record_short_orders(_horizon_days(stored), answer, actor)
         except HTTPException as exc:
             return _run_row(
                 _PROCESS,

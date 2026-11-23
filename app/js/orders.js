@@ -282,7 +282,18 @@
 // is false and the entry has top-ups, and "Nothing due in the next
 // <lookahead_days> days can top this order up." when the entry has
 // none; a short block with no entry in the answer reads "No
-// top-ups suggested." Every value is inserted as text. The plan
+// top-ups suggested." When the entry carries a `suggestion` of
+// exactly "wait", "add_top_ups" or "order_anyway" and a string
+// `suggestion_reason`, one line
+// ([data-testid="orders-top-ups-suggestion"], class
+// op-top-ups-suggestion) reads, right after the section's heading
+// and before its table, "Suggested: <label>.
+// <suggestion_reason>" — the label "Wait", "Add the top-ups" or
+// "Order anyway" in a strong element of class
+// op-top-ups-suggestion-label; an entry without both fields, or
+// with any other suggestion, shows no such line, and its section
+// reads exactly as before. Every value is inserted as text. The
+// plan
 // read and the supplier-risk read, their order and their counts,
 // the plan's lines, the release flow and the CSV download are
 // unchanged, and the screen sends no new POST, PUT or DELETE.
@@ -362,6 +373,14 @@
   var TOP_UPS_FAILED = 'Top-ups could not be loaded.';
   var TOP_UPS_NONE = 'No top-ups suggested.';
   var TOP_UPS_REACHES = 'Adding these reaches the minimum.';
+  // The suggestion tokens an entry can carry, and the label each
+  // one renders; any other suggestion carries no line. A
+  // null-prototype table, so a reserved token ("__proto__") is a
+  // miss, never a prototype read.
+  var TOP_UPS_SUGGESTIONS = Object.create(null);
+  TOP_UPS_SUGGESTIONS.wait = 'Wait';
+  TOP_UPS_SUGGESTIONS.add_top_ups = 'Add the top-ups';
+  TOP_UPS_SUGGESTIONS.order_anyway = 'Order anyway';
 
   var DOWNLOAD_LABEL = 'Download CSV';
   var CSV_HEADER =
@@ -1154,6 +1173,35 @@
     );
   }
 
+  // The suggestion line, right after the section's heading and
+  // before its table: "Suggested: <label>.
+  // <suggestion_reason>", the label in a strong of class
+  // op-top-ups-suggestion-label — when the entry carries a
+  // suggestion of exactly "wait", "add_top_ups" or
+  // "order_anyway" and a string suggestion_reason. Any other
+  // entry — a missing or non-string reason, any other
+  // suggestion, no suggestion at all — shows no line, and the
+  // section reads exactly as before. Every value is inserted as
+  // text.
+  function topUpsSuggestionHtml(entry) {
+    var suggestion = entry.suggestion;
+    if (typeof suggestion !== 'string') {
+      return ''; // no usable suggestion: no line
+    }
+    var label = TOP_UPS_SUGGESTIONS[suggestion];
+    if (label === undefined || typeof entry.suggestion_reason !== 'string') {
+      return ''; // an unknown suggestion or a missing reason: no line
+    }
+    return (
+      '<p class="op-top-ups-suggestion" data-testid="orders-top-ups-suggestion">' +
+      'Suggested: <strong class="op-top-ups-suggestion-label">' +
+      esc(label) +
+      '</strong>. ' +
+      esc(entry.suggestion_reason) +
+      '</p>'
+    );
+  }
+
   // The top-ups section of one short block: after the lines' table,
   // the "Suggested top-ups" heading and — while the read is out,
   // the looking line; on a failed or malformed read, the failure
@@ -1188,6 +1236,7 @@
       var entry = topUpsEntryFor(group);
       if (entry) {
         html +=
+          topUpsSuggestionHtml(entry) +
           topUpsTableHtml(group, entry) +
           topUpsOutcomeHtml(entry) +
           topUpsChosenLineHtml(group, entry);

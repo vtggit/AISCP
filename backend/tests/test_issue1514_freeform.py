@@ -98,6 +98,7 @@ KEYS = [
     "ddmrp_adjustment",
     "order_release",
     "buffer_order",
+    "short_order",
     "transfer_release",
 ]
 
@@ -112,6 +113,7 @@ STEPS = {
     "ddmrp_adjustment": "Enter planned adjustment factors for a ramp",
     "order_release": "Release purchase orders to the ERP",
     "buffer_order": "Order on a buffer's signal",
+    "short_order": "Decide: wait, order anyway, or add the top-ups",
     "transfer_release": "Release transfers to the ERP",
 }
 
@@ -250,6 +252,14 @@ EXPECTED = {
         "rate": 0.8824,
     },
     "buffer_order": {
+        "decisions": 0,
+        "with_proposal": 0,
+        "at_proposal": 0,
+        "without_proposal": 0,
+        "automatic": 0,
+        "rate": None,
+    },
+    "short_order": {
         "decisions": 0,
         "with_proposal": 0,
         "at_proposal": 0,
@@ -502,7 +512,7 @@ def test_issue1514_freeform(client, monkeypatch):
     # -- Nothing written: the row count before the route's calls. ----------------
     count_before = _plan_releases_row_count()
 
-    # -- The answer for the user role: the eleven keys in order. ------------------
+    # -- The answer for the user role: the twelve keys in order. ------------------
     response = viewer.get(URL)
     assert response.status_code == 200, response.text
     body = response.json()

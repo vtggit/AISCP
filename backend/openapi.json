@@ -12301,7 +12301,7 @@
           "work"
         ],
         "summary": "Scorecard",
-        "description": "The work scorecard: the eleven processes, in their order.\n\nOpen to any signed-in user (the router is mounted behind the\napp's include-time gate, which answers 401 without a valid Bearer\ntoken) and a pure read \u2014 it writes nothing and calls no ERP.\nEach entry is computed by calling its source function directly\n(not over HTTP) and mapping its answer as the module docstring\nstates; ``rate`` is ``at_proposal / with_proposal`` rounded to 4\ndecimals, null when ``with_proposal`` is 0 or ``at_proposal`` is\nnull.  A failed source \u2014 one that raises, or one whose answer\nviolates the scorecard invariants \u2014 keeps its ``key`` and\n``step`` with its six numbers null; the other entries still\nanswer and the route answers 200.",
+        "description": "The work scorecard: the twelve processes, in their order.\n\nOpen to any signed-in user (the router is mounted behind the\napp's include-time gate, which answers 401 without a valid Bearer\ntoken) and a pure read \u2014 it writes nothing and calls no ERP.\nEach entry is computed by calling its source function directly\n(not over HTTP) and mapping its answer as the module docstring\nstates; ``rate`` is ``at_proposal / with_proposal`` rounded to 4\ndecimals, null when ``with_proposal`` is 0 or ``at_proposal`` is\nnull.  A failed source \u2014 one that raises, or one whose answer\nviolates the scorecard invariants \u2014 keeps its ``key`` and\n``step`` with its six numbers null; the other entries still\nanswer and the route answers 200.",
         "operationId": "scorecard_api_work_scorecard_get",
         "security": [
           {

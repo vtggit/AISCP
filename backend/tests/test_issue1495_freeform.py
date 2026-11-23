@@ -3,7 +3,7 @@
 ``GET /api/work/scorecard`` (the router ``app.api.work``, prefix
 ``/api/work``, included in ``app.main`` behind the app's include-time
 authentication gate like every other API router) answers
-``{"processes": [...]}`` — the eleven work processes, in this order:
+``{"processes": [...]}`` — the twelve work processes, in this order:
 ``reorder_points``, ``excess``, ``stockout``, ``exceptions``,
 ``forecast_overrides``, ``sop_signoff``, ``purchase_budget``,
 ``ddmrp_adjustment``, ``order_release`` and ``transfer_release``.  It
@@ -47,7 +47,7 @@ calls, by stand-ins with the fixed answers that
 ``transfer_release_counts`` by one answering
 ``{"released": 6, "automatic": 5}``:
 
-* the answer for the ``user`` role lists the eleven keys in order: the
+* the answer for the ``user`` role lists the twelve keys in order: the
   eight existing entries with that proof's numbers and rates, each
   with ``automatic`` null; ``order_release`` 19/17/15/0 rate 0.8824
   automatic 2; ``transfer_release`` 6/6/null/0 rate null automatic 5;
@@ -111,6 +111,7 @@ KEYS = [
     "ddmrp_adjustment",
     "order_release",
     "buffer_order",
+    "short_order",
     "transfer_release",
 ]
 
@@ -125,6 +126,7 @@ STEPS = {
     "ddmrp_adjustment": "Enter planned adjustment factors for a ramp",
     "order_release": "Release purchase orders to the ERP",
     "buffer_order": "Order on a buffer's signal",
+    "short_order": "Decide: wait, order anyway, or add the top-ups",
     "transfer_release": "Release transfers to the ERP",
 }
 
@@ -258,6 +260,14 @@ EXPECTED = {
         "rate": 0.8824,
     },
     "buffer_order": {
+        "decisions": 0,
+        "with_proposal": 0,
+        "at_proposal": 0,
+        "without_proposal": 0,
+        "automatic": 0,
+        "rate": None,
+    },
+    "short_order": {
         "decisions": 0,
         "with_proposal": 0,
         "at_proposal": 0,
@@ -483,7 +493,7 @@ def test_issue1495_freeform(client, monkeypatch, caplog):
     # -- Nothing written: the row counts before. -------------------------------
     counts_before = _release_row_counts()
 
-    # -- The answer for the user role: the eleven keys in order. -----------------
+    # -- The answer for the user role: the twelve keys in order. -----------------
     response = viewer.get(URL)
     assert response.status_code == 200, response.text
     body = response.json()

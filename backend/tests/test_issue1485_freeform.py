@@ -114,6 +114,7 @@ KEYS = [
     "ddmrp_adjustment",
     "order_release",
     "buffer_order",
+    "short_order",
     "transfer_release",
 ]
 
@@ -128,6 +129,7 @@ STEPS = {
     "ddmrp_adjustment": "Enter planned adjustment factors for a ramp",
     "order_release": "Release purchase orders to the ERP",
     "buffer_order": "Order on a buffer's signal",
+    "short_order": "Decide: wait, order anyway, or add the top-ups",
     "transfer_release": "Release transfers to the ERP",
 }
 
@@ -259,6 +261,14 @@ EXPECTED = {
         "rate": None,
     },
     "buffer_order": {
+        "decisions": 0,
+        "with_proposal": 0,
+        "at_proposal": 0,
+        "without_proposal": 0,
+        "automatic": 0,
+        "rate": None,
+    },
+    "short_order": {
         "decisions": 0,
         "with_proposal": 0,
         "at_proposal": 0,

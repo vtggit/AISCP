@@ -377,8 +377,6 @@ code is the authority for details.
 - A smoke e2e suite now signs in and opens every screen from the app's view table against the real
   backend, failing if a title is missing, API traffic does not settle, or a page error, failed API
   request, or 5xx response is recorded (#1575).
-- The app now pools database connections while serving requests, bounded by `DB_POOL_SIZE` (default
-  10), so repeated requests reuse connections and the process never holds more than the bound (#1570).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a
@@ -421,6 +419,8 @@ code is the authority for details.
   plans, not for every item-site in the feed (#1548).
 - Order plan builds now use one database connection for the whole build, and DDMRP zone rows read
   demand statistics only for the designated buffered item-sites (#1562).
+- The app now pools database connections while serving requests, bounded by `DB_POOL_SIZE` (default
+  10), so repeated requests reuse connections and the process never holds more than the bound (#1570).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

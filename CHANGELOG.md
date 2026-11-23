@@ -208,6 +208,9 @@ code is the authority for details.
   the order-minimum due-days setting and whether the top-ups reach the minimum (#1567).
 - The Order plan screen now shows a suggested choice in each short order's Suggested top-ups section —
   Wait, Add the top-ups, or Order anyway — with the reason, when a suggestion is available (#1569).
+- Confirmed order-plan releases, by a person or a standing grant, now record, for each short supplier
+  released, the top-up suggestion, the choice made (add top-ups or order anyway), and the actor
+  (#1582).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

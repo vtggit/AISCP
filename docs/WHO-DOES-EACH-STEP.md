@@ -80,7 +80,7 @@ Raising an order or moving stock uses the release steps of the order plan and of
 | Track each released Acumatica order (open, late, awaiting approval, partly received, received, cancelled or missing), and raise a failed release, or one waiting in the ERP for `exceptions.release_approval_days` (3 days) or more, in Exceptions | AIERP | — | — |
 | Raise a standing-grant run that failed, sent nothing, held orders back or has not run for a day, in Exceptions (#1208) | AIERP | — | — |
 
-The top-up suggestions also say, for each short supplier group, whether to wait, order anyway, or add the top-ups, with a reason.
+The top-up suggestions also say, for each short supplier group, whether to wait, order anyway, or add the top-ups, with a reason. After a confirmed order-plan release, AIERP records each short supplier the release went out for, with its top-up suggestion and the choice it made (`add_top_ups` or `order_anyway`) in `short_order_releases`.
 
 The Releases screen tracks the Acumatica releases. Odoo draft orders are not on it. The Released cell reads an order released under a standing grant as "by standing grant #<id>". AIERP keeps the released Acumatica purchase orders' current status and lines by reading them back.
 
@@ -160,6 +160,7 @@ The Releases screen tracks the Acumatica releases. Odoo draft orders are not on 
 | Suggest top-ups: the same supplier's lines due next, up to `supply_plan.top_up_lookahead_days` (30 days) ahead, none on the excess list, each with its holding cost; or say how short the order stays | AIERP, in `GET /api/supply-plan/top-ups` and on the Order plan screen | — | — |
 | Decide: wait, order anyway, or add the top-ups | proposed: AIERP (suggests one choice and says why); decided by planner | The choice weighs the holding cost of ordering early, which AIERP shows, against the cost of waiting or of a short order, which it does not know. | The planners' choices recorded beside AIERP's suggestions, which the Order plan screen shows, and a supplier's charge for a short order where the ERP holds one. |
 | Release an order with the chosen top-ups | AIERP, in `POST /api/supply-plan/release` (the body's `top_ups` are passed through, at most 200 entries as sent) | An admin confirms it, and a release under a standing grant adds none (AIERP-D-187). | — |
+| Record the released short supplier's suggestion and choice | AIERP, in `short_order_releases` after a confirmed `POST /api/supply-plan/release` or a standing-grant run | — | — |
 | Raise an order below its minimum, with a line that must go out within `exceptions.order_minimum_due_days` (default 2 days), in Exceptions | AIERP, in `GET /api/exceptions` | — | — |
 
 ## The exceptions inbox

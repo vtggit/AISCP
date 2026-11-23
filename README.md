@@ -242,6 +242,9 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   supplier groups carry the minimum and the shortfall, and a read-only route suggests top-ups
   from the lines due next (`backend/app/api/supplier_order_minimums.py`,
   `GET /api/supply-plan/top-ups`).
+- Each top-up supplier entry also carries a `suggestion` (`wait`, `add_top_ups` or `order_anyway`) and a
+  `suggestion_reason` explaining it, naming the first line that must be ordered within the
+  `exceptions.order_minimum_due_days` setting when one does (`backend/app/api/supply_plan.py`).
 - The order plan screen shows a supplier's minimum when present, a below-minimum badge, and
   the suggested top-ups for supplier groups that are short (`app/js/orders.js`).
 - The order plan screen marks a plan line whose `source` is `buffer` with a small "Buffer" badge in its Item

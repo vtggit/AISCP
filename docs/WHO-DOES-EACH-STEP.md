@@ -80,6 +80,8 @@ Raising an order or moving stock uses the release steps of the order plan and of
 | Track each released Acumatica order (open, late, awaiting approval, partly received, received, cancelled or missing), and raise a failed release, or one waiting in the ERP for `exceptions.release_approval_days` (3 days) or more, in Exceptions | AIERP | — | — |
 | Raise a standing-grant run that failed, sent nothing, held orders back or has not run for a day, in Exceptions (#1208) | AIERP | — | — |
 
+The top-up suggestions also say, for each short supplier group, whether to wait, order anyway, or add the top-ups, with a reason.
+
 The Releases screen tracks the Acumatica releases. Odoo draft orders are not on it. The Released cell reads an order released under a standing grant as "by standing grant #<id>". AIERP keeps the released Acumatica purchase orders' current status and lines by reading them back.
 
 ## Transfers

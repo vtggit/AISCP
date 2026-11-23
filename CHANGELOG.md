@@ -203,6 +203,9 @@ code is the authority for details.
 - Released order-plan lines now record their source — buffer, reorder point, or top-up — in release
   previews, confirmed releases, stored release rows and the release audit, while aggregate release
   lines and older rows omit it (#1549).
+- Each supplier entry in the top-ups answer (`GET /api/supply-plan/top-ups`) now carries an order
+  suggestion and reason — wait, add top-ups, or order anyway — based on whether a line is due within
+  the order-minimum due-days setting and whether the top-ups reach the minimum (#1567).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

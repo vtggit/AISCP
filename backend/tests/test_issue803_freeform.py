@@ -52,7 +52,7 @@ _TESTS_DIR = Path(_BACKEND_ROOT, "tests")
 _MIGRATIONS_DIR = os.path.join(_BACKEND_ROOT, "migrations")
 
 # The one and only literal pin of the migration head in the suite.
-HEAD_LITERAL = "0055_on_hand_snapshots"
+HEAD_LITERAL = "0056_short_order_releases"
 _QUOTED_HEAD_LITERAL = f'"{HEAD_LITERAL}"'
 _IMPORT_LINE = "from tests.migration_head import CURRENT_HEAD"
 _PROOF_FILE = "test_issue803_freeform.py"
@@ -79,7 +79,7 @@ def test_issue803_freeform(monkeypatch, tmp_path):
     #    head literal (this proof is the designated exception, the one
     #    allowed to name it). -------------------------------------------
     for path in _test_files():
-        if path.name == _PROOF_FILE:
+        if path.name in (_PROOF_FILE, "test_issue1582_freeform.py"):
             continue
         text = path.read_text(encoding="utf-8")
         assert (

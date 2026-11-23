@@ -11,8 +11,9 @@ TEXT not null, ``chosen`` TEXT not null with a CHECK limiting it to
 downgrade drops the table.  The database has one head, equal to
 ``CURRENT_HEAD`` imported from ``tests.migration_head.py`` (the
 proof never compares that pin to a constant), the creating revision
-is in the history — ``ScriptDirectory.walk_revisions()`` includes
-it — and the database is upgraded to the head.
+is the one revision that follows ``0055_on_hand_snapshots`` — the
+proof never names the new revision — and the database is upgraded
+to the head.
 
 AC-3/AC-4 — the record, read through the app's test client the way
 ``tests/test_issue1191_freeform.py`` reads the release: the plan
@@ -84,11 +85,10 @@ from tests.migration_head import CURRENT_HEAD
 _BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _MIGRATIONS_DIR = os.path.join(_BACKEND_ROOT, "migrations")
 
-# The creating revision, named so the proof can show it is in the
-# history: the double-quoted head literal's one owner is
-# tests/test_issue803_freeform.py, which exempts this proof from its
-# literal scan.
-CREATING_REVISION = "0056_short_order_releases"
+# The previous revision: this proof's migration is its one successor.
+# The new revision is never named here, because the double-quoted head
+# literal's one owner is tests/test_issue803_freeform.py.
+PREV_REVISION = "0055_on_hand_snapshots"
 
 URL = "/api/supply-plan/release"
 TOP_UPS_URL = "/api/supply-plan/top-ups"
@@ -618,8 +618,8 @@ def test_issue1582_freeform(monkeypatch, client, caplog) -> None:
     try:
         # -- The table: exactly the ten documented columns, the
         #    checks, the one head equal to the shared pin, the
-        #    creating revision in the history, the database on the
-        #    head.  The proof never compares CURRENT_HEAD to a
+        #    creating revision the one successor of the previous
+        #    one, the database on the head.  The proof never compares CURRENT_HEAD to a
         #    constant. -------------------------------------------------
         assert _table_columns() == {
             "id": ("bigint", None, "NO", None, "YES"),
@@ -652,11 +652,13 @@ def test_issue1582_freeform(monkeypatch, client, caplog) -> None:
         # One head, equal to the shared pin.
         heads = ScriptDirectory(_MIGRATIONS_DIR).get_heads()
         assert list(heads) == [CURRENT_HEAD]
-        # The creating revision is in the history.
-        assert CREATING_REVISION in {
-            script.revision
+        # The creating revision is the one successor of the previous one.
+        successors = [
+            script
             for script in ScriptDirectory(_MIGRATIONS_DIR).walk_revisions()
-        }
+            if script.down_revision == PREV_REVISION
+        ]
+        assert len(successors) == 1
         # The database is upgraded to the head.
         assert _db_head() == CURRENT_HEAD
 

@@ -79,7 +79,7 @@ def test_issue803_freeform(monkeypatch, tmp_path):
     #    head literal (this proof is the designated exception, the one
     #    allowed to name it). -------------------------------------------
     for path in _test_files():
-        if path.name in (_PROOF_FILE, "test_issue1582_freeform.py"):
+        if path.name == _PROOF_FILE:
             continue
         text = path.read_text(encoding="utf-8")
         assert (

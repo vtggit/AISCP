@@ -15,11 +15,12 @@ point — and every designated DDMRP buffer whose zone row from
 ``money_at_stake`` null), outstanding when the pair's
 ``item_sites.reorder_point`` or ``max_qty`` is null or differs from
 the proposal (the top of yellow, the top of green) by more than 1.
-When a pair has both a buffer row and an outstanding decision row,
-only the buffer row is kept (a buffered item-site is DDMRP-managed).
-The decision rows keep their order and the buffer rows follow them,
-ordered by item_code then site_code.  A row is writable only when the
-item-site's source system is "acumatica" or "odoo".
+A designated item-site whose zone row is "ok" is DDMRP-managed,
+so its decision row is never listed or written, whether or not its
+buffer row is outstanding.  The decision rows keep their order and
+the buffer rows follow them, ordered by item_code then site_code.
+A row is writable only when the item-site's source system is
+"acumatica" or "odoo".
 
 ``POST /api/parameter-writeback/confirm`` (admin only — the same
 ``require_role("admin")`` the planner decisions use) writes the
@@ -387,11 +388,12 @@ def _preview_rows() -> list[dict]:
 
     Two sources, each read once per call: the outstanding accepted
     decisions (``basis`` "decision") and the DDMRP buffer rows
-    (``basis`` "ddmrp", ``_ddmrp_buffer_rows`` below).  When a pair
-    has both a buffer row and an outstanding decision row, only the
-    buffer row is kept (a buffered item-site is DDMRP-managed).  The
-    decision rows keep their order and the buffer rows follow them,
-    ordered by item_code then site_code.
+    (``basis`` "ddmrp", ``_ddmrp_buffer_rows`` below).  A designated
+    item-site whose zone row is "ok" is DDMRP-managed, so its
+    decision row is never listed or written, whether or not its
+    buffer row is outstanding.  The decision rows keep their order
+    and the buffer rows follow them, ordered by item_code then
+    site_code.
     """
     decision_rows: list[dict] = []
     for row in _repo.outstanding_accepted():
@@ -426,12 +428,11 @@ def _preview_rows() -> list[dict]:
                 "basis": "decision",
             }
         )
-    buffer_rows = _ddmrp_buffer_rows()
-    buffered_pairs = {(row["item_code"], row["site_code"]) for row in buffer_rows}
+    buffer_rows, ok_pairs = _ddmrp_buffer_rows()
     return [
         row
         for row in decision_rows
-        if (row["item_code"], row["site_code"]) not in buffered_pairs
+        if (row["item_code"], row["site_code"]) not in ok_pairs
     ] + buffer_rows
 
 
@@ -458,26 +459,33 @@ def _item_sites_by_pair(pairs: list[tuple[str, str]]) -> dict[tuple[str, str], d
         }
 
 
-def _ddmrp_buffer_rows() -> list[dict]:
-    """The DDMRP buffer rows of the preview, in item-then-site order.
+def _ddmrp_buffer_rows() -> tuple[list[dict], set[tuple[str, str]]]:
+    """The DDMRP buffer rows of the preview, in item-then-site
+    order, and the set of the "ok" pairs.
 
     The preview's second source, read once per call: every designated
     item-site whose zone row from
     ``app.api.ddmrp.ddmrp_zone_rows()`` has status "ok", with the
     values a writeback would push — the top of yellow as the
     proposed reorder point and the top of green as the proposed max
-    quantity.  A pair appears only when it is outstanding: the
-    pair's ``item_sites.reorder_point`` or ``max_qty`` is null, or
-    differs from the proposal by more than 1.  A row carries the same
-    fields as a decision row, with ``decision_id``, ``decided_at``
-    and ``money_at_stake`` null and ``basis`` "ddmrp"; its source
-    system, current values and writable/blocked rules are computed
-    exactly as for decision rows.
+    quantity.  A buffer row appears only when the pair is
+    outstanding: the pair's ``item_sites.reorder_point`` or
+    ``max_qty`` is null, or differs from the proposal by more than
+    1.  A row carries the same fields as a decision row, with
+    ``decision_id``, ``decided_at`` and ``money_at_stake`` null and
+    ``basis`` "ddmrp"; its source system, current values and
+    writable/blocked rules are computed exactly as for decision
+    rows.  The second value is the set of the ``(item_code,
+    site_code)`` of every zone row whose status is "ok", outstanding
+    or not: a designated item-site whose zone row is "ok" is
+    DDMRP-managed, so its decision row is never listed or written,
+    whether or not its buffer row is outstanding.
     """
     _, zone_rows = ddmrp_zone_rows()
     ok_zones = [zone for zone in zone_rows if zone["status"] == "ok"]
+    ok_pairs = {(zone["item_code"], zone["site_code"]) for zone in ok_zones}
     if not ok_zones:
-        return []
+        return [], ok_pairs
     item_sites = _item_sites_by_pair(
         [(zone["item_code"], zone["site_code"]) for zone in ok_zones]
     )
@@ -521,7 +529,7 @@ def _ddmrp_buffer_rows() -> list[dict]:
                 "basis": "ddmrp",
             }
         )
-    return rows
+    return rows, ok_pairs
 
 
 @router.get(

@@ -78,6 +78,10 @@ code is the authority for details.
   unchanged, as a count and a percentage of the released orders read back (#1519).
 - Release tracking lines now carry the stored source of the release row's line for the same item, when
   one was stored (#1559).
+- The Work scorecard now shows, for orders on a buffer's signal, how many were read back from the ERP
+  and how many of those came back unchanged (#1563).
+- The Work scorecard now shows, for short orders, how many decisions were made, how many took the
+  suggested decision, and how many were made by a standing grant (#1583).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica
@@ -116,6 +120,8 @@ code is the authority for details.
   (#1475).
 - The Buffers screen's Planned adjustments section now shows how often an adjustment was saved at
   the proposed factor, with how many were saved below or above it (#1481).
+- The Releases screen now shows a Buffer badge after the item code on release lines ordered on a DDMRP
+  buffer's order signal (#1560).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,
@@ -199,6 +205,14 @@ code is the authority for details.
 - Released order-plan lines now record their source — buffer, reorder point, or top-up — in release
   previews, confirmed releases, stored release rows and the release audit, while aggregate release
   lines and older rows omit it (#1549).
+- Each supplier entry in the top-ups answer (`GET /api/supply-plan/top-ups`) now carries an order
+  suggestion and reason — wait, add top-ups, or order anyway — based on whether a line is due within
+  the order-minimum due-days setting and whether the top-ups reach the minimum (#1567).
+- The Order plan screen now shows a suggested choice in each short order's Suggested top-ups section —
+  Wait, Add the top-ups, or Order anyway — with the reason, when a suggestion is available (#1569).
+- Confirmed order-plan releases, by a person or a standing grant, now record, for each short supplier
+  released, the top-up suggestion, the choice made (add top-ups or order anyway), and the actor
+  (#1582).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,
@@ -360,6 +374,9 @@ code is the authority for details.
   file names but the code does not define (#1175).
 - The order plan's run holds back an order it cannot value (#1301).
 - The nine backend-only API modules are marked with a comment naming the data each serves (#1374).
+- A smoke e2e suite now signs in and opens every screen from the app's view table against the real
+  backend, failing if a title is missing, API traffic does not settle, or a page error, failed API
+  request, or 5xx response is recorded (#1575).
 
 ### Changed
 - The product is published as AISCP, AI supply chain planning: the planning layer over the ERPs a
@@ -400,6 +417,10 @@ code is the authority for details.
   recommendations once per call instead of three times, and its answer is unchanged (#1438).
 - The DDMRP plan now reads open purchase and sales-order lines only for the buffered item-sites it
   plans, not for every item-site in the feed (#1548).
+- Order plan builds now use one database connection for the whole build, and DDMRP zone rows read
+  demand statistics only for the designated buffered item-sites (#1562).
+- The app now pools database connections while serving requests, bounded by `DB_POOL_SIZE` (default
+  10), so repeated requests reuse connections and the process never holds more than the bound (#1570).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

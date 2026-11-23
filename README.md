@@ -242,8 +242,16 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   supplier groups carry the minimum and the shortfall, and a read-only route suggests top-ups
   from the lines due next (`backend/app/api/supplier_order_minimums.py`,
   `GET /api/supply-plan/top-ups`).
+- Each top-up supplier entry also carries a `suggestion` (`wait`, `add_top_ups` or `order_anyway`) and a
+  `suggestion_reason` explaining it, naming the first line that must be ordered within the
+  `exceptions.order_minimum_due_days` setting when one does (`backend/app/api/supply_plan.py`).
 - The order plan screen shows a supplier's minimum when present, a below-minimum badge, and
   the suggested top-ups for supplier groups that are short (`app/js/orders.js`).
+- The order plan screen's suggested-top-ups section shows a suggestion line, right after the
+  section's heading and before its table, for a short supplier group whose top-ups entry carries
+  a `suggestion` of `wait`, `add_top_ups` or `order_anyway` and a `suggestion_reason`:
+  "Suggested: Wait.", "Suggested: Add the top-ups." or "Suggested: Order anyway." followed by the
+  reason, as text (`app/js/orders.js`).
 - The order plan screen marks a plan line whose `source` is `buffer` with a small "Buffer" badge in its Item
   and Site cell, titled "Planned from its DDMRP buffer's order signal" (`app/js/orders.js`).
 - For an admin, the order plan screen shows a checkbox on each suggested top-up row and a
@@ -356,6 +364,8 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   expected date (`backend/app/aggregate/tracking.py`).
 - The Released cell on the Releases screen reads an order released by `standing-grant:<id>`
   (with `<id>` one or more digits) as `by standing grant #<id>` (`app/js/releases.js`).
+- The Releases screen marks a release line whose `source` is exactly `buffer` with a small "Buffer" badge in
+  its Item cell, titled "Ordered on its DDMRP buffer's order signal" (`app/js/releases.js`).
 - Release chosen transfer suggestions to Acumatica as transfer orders on hold, with the same
   preview, confirm and audit; their status is read back from Acumatica
   (`backend/app/supply/transfer_release.py`).

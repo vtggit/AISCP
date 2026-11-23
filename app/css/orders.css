@@ -720,6 +720,20 @@
   overflow-wrap: anywhere;
 }
 
+/* The suggestion line (issue #1569): right after the section's
+   heading and before its table — the outcome line's scale, its
+   label at weight 600, wrapping inside the card. */
+.op-top-ups-suggestion {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.op-top-ups-suggestion-label {
+  font-weight: 600;
+}
+
 /* The entry's table scrolls within its own region, like the
    lines' table: the page never scrolls sideways. */
 .op-top-ups-region {

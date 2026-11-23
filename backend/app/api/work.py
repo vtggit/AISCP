@@ -3,7 +3,7 @@
 ``GET /api/work/scorecard`` (the router's prefix is ``/api/work``; the
 router is included in ``app.main`` behind the app's include-time
 authentication gate, like every other API router) answers
-``{"processes": [...]}`` — the eleven work processes, in this order:
+``{"processes": [...]}`` — the twelve work processes, in this order:
 ``reorder_points``, ``excess``, ``stockout``, ``exceptions``,
 ``forecast_overrides``, ``sop_signoff``, ``purchase_budget``,
 ``ddmrp_adjustment``, ``order_release``, ``buffer_order``,

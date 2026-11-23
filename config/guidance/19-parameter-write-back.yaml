@@ -132,3 +132,23 @@ items:
       date: 2026-11-21
       under: delegation
       ref: "AISCP#1526"
+
+  - key: AIERP-D-231
+    type: design
+    title: "Stop replenishing is carried out in the ERP"
+    statement: "For an item-site whose current excess decision is accepted with the action `stop_replenishing`, while the item-site is on the dead-and-excess list, the parameter write-back proposes a reorder point of 0 and a max of 0 in the ERP that owns it, so the ERP's own replenishment raises no more orders. An admin confirms each push, as for every parameter push (AIERP-D-2). The push is outstanding while the ERP's reorder point or max is above 0: an item-site whose values are 0 or not set has nothing to stop. While the decision stands and the item-site is listed, this push replaces the item-site's reorder-point and buffer pushes, so neither undoes it; once the item-site leaves the list, or a later decision replaces this one, they return. Open orders are not cancelled (AIERP-D-101). The actions `reduce` and `dispose` change nothing in the ERP here: a transfer is released from the transfer suggestions, and scrapping, selling, returns and any write-down stay in the ERP and finance (AIERP-D-50). Each push records what it carried out (an accepted reorder-point decision, buffer levels, or a stop), and the record of pushes counts the three apart; a stop push is unchanged while the ERP holds 0 and 0."
+    decided:
+      by: model:claude
+      date: 2026-11-23
+      under: delegation
+      ref: "AISCP#1588"
+
+  - key: AIERP-D-232
+    type: design
+    title: "A buffered item-site is DDMRP-managed"
+    statement: "A designated item-site whose buffer zones can be computed (its zone row's status is ok) is written from its buffer: the top of yellow as the reorder point and the top of green as the max. Its accepted reorder-point decision is never listed or written, whether or not the buffer's levels are already in the ERP, so the two pushes never undo each other. A designated item-site whose zones cannot be computed keeps its decision push."
+    decided:
+      by: model:claude
+      date: 2026-11-23
+      under: delegation
+      ref: "AISCP#1586"

@@ -6,7 +6,7 @@ items:
   - key: AIERP-D-50
     type: design
     title: "Excess and dead stock"
-    statement: "One decision per item-site listed by the dead-and-excess list. `accepted` names an action: `stop_replenishing`: stop buying it; `reduce`: use it up, transfer it or return it; `dispose`: scrap or sell it. AIERP records the intent only; any write-down belongs to finance, inside the accounting boundary above. `dismissed` requires a reason, for example seasonal stock or strategic spares. `snoozed` lasts at most 90 days. An accepted decision counts as **applied** when the item-site no longer appears in the dead-and-excess list. A dismissal lapses when the row's excess units grow by at least the larger of 1 unit and 10% of the units it was dismissed at."
+    statement: "One decision per item-site listed by the dead-and-excess list. `accepted` names an action: `stop_replenishing`: stop buying it; `reduce`: use it up, transfer it or return it; `dispose`: scrap or sell it. AIERP records the intent, and carries out only `stop_replenishing`, through the parameter write-back (AIERP-D-231); any write-down belongs to finance, inside the accounting boundary above. `dismissed` requires a reason, for example seasonal stock or strategic spares. `snoozed` lasts at most 90 days. An accepted decision counts as **applied** when the item-site no longer appears in the dead-and-excess list. A dismissal lapses when the row's excess units grow by at least the larger of 1 unit and 10% of the units it was dismissed at."
     decided:
       by: model:claude
       date: 2026-10-08

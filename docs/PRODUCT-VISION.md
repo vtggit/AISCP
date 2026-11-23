@@ -259,7 +259,7 @@ Planner decisions on reorder-point drift (above) gave AIERP a memory for one lis
   - `accepted` names an action:
     - `stop_replenishing`: stop buying it;
     - `reduce`: use it up, transfer it or return it;
-    - `dispose`: scrap or sell it. AIERP records the intent only; any write-down belongs to finance, inside the accounting boundary above.
+    - `dispose`: scrap or sell it. AIERP records the intent, and carries out only `stop_replenishing`, through the parameter write-back (AIERP-D-231); any write-down belongs to finance, inside the accounting boundary above.
   - `dismissed` requires a reason, for example seasonal stock or strategic spares.
   - `snoozed` lasts at most 90 days.
   - An accepted decision counts as **applied** when the item-site no longer appears in the dead-and-excess list. A dismissal lapses when the row's excess units grow by at least the larger of 1 unit and 10% of the units it was dismissed at.
@@ -520,6 +520,8 @@ item-site. It covers BOTH ERPs (operator decision): Acumatica and Odoo.
   Pushes of an accepted reorder-point decision and of DDMRP buffer levels are counted apart. AIERP
   keeps no history of the ERP's values between syncs, so a value changed and changed back between
   two syncs counts as unchanged.
+- **A buffered item-site is DDMRP-managed** (decided by Claude under delegation, 2026-11-23). A designated item-site whose buffer zones can be computed (its zone row's status is ok) is written from its buffer: the top of yellow as the reorder point and the top of green as the max. Its accepted reorder-point decision is never listed or written, whether or not the buffer's levels are already in the ERP, so the two pushes never undo each other. A designated item-site whose zones cannot be computed keeps its decision push.
+- **Stop replenishing is carried out in the ERP** (decided by Claude under delegation, 2026-11-23). For an item-site whose current excess decision is accepted with the action `stop_replenishing`, while the item-site is on the dead-and-excess list, the parameter write-back proposes a reorder point of 0 and a max of 0 in the ERP that owns it, so the ERP's own replenishment raises no more orders. An admin confirms each push, as for every parameter push (AIERP-D-2). The push is outstanding while the ERP's reorder point or max is above 0: an item-site whose values are 0 or not set has nothing to stop. While the decision stands and the item-site is listed, this push replaces the item-site's reorder-point and buffer pushes, so neither undoes it; once the item-site leaves the list, or a later decision replaces this one, they return. Open orders are not cancelled (AIERP-D-101). The actions `reduce` and `dispose` change nothing in the ERP here: a transfer is released from the transfer suggestions, and scrapping, selling, returns and any write-down stay in the ERP and finance (AIERP-D-50). Each push records what it carried out (an accepted reorder-point decision, buffer levels, or a stop), and the record of pushes counts the three apart; a stop push is unchanged while the ERP holds 0 and 0.
 - **Slices:** #714–#719, then the planner screen.
 
 ## Demand-driven replenishment (DDMRP) (operator direction, 2026-10-28; method defaults decided by Claude under delegation)

@@ -11923,7 +11923,7 @@
           "supply-plan"
         ],
         "summary": "Supply Plan Top Ups",
-        "description": "The top-ups of the order plan (1 to 60 horizon days, default 7),\nfor any signed-in user.\n\nThe supplier groups of the ``horizon_days`` order plan that have a\nstored minimum and a shortfall above 0 \u2014 the groups\n``GET /api/supply-plan`` reports with its ``minimum`` and\n``shortfall``, in the plan's group order \u2014 each answered with the\nlines of the order plan built for\n``supply_plan.top_up_lookahead_days`` (the stored value rounded\ndown to a whole number of days, else the default) at the same\nas-of that can top the group up: the group's same\n``supplier_code`` and ``source_system`` lines whose\n``due_in_days`` is above the horizon, whose ``value`` is not null\nand whose (``item_code``, ``site_code``) is not on the excess list\n(``excess_ranked`` read once per call).  The candidates are taken\nby ``due_in_days``, then ``item_code``, then ``site_code``, each\nadded until the sum of the values taken is at least the shortfall \u2014\nthe candidate that reaches it included, none after it \u2014 each a\ntop-up with the look-ahead line's ``item_code``, ``site_code``,\n``due_in_days``, ``order_by``, ``quantity``, ``unit_cost`` and\n``value`` plus ``holding_cost`` (the value \u00d7 the effective\n``replenishment.holding_rate`` the recommendations use \u00d7\n``due_in_days`` / 365, rounded to two places half up).\n``top_up_value`` is the top-ups' values summed (0 with none),\n``reaches_minimum`` true when ``total_value`` plus\n``top_up_value`` is at least the stored minimum and ``still_short``\nthe minimum minus the two when that is above 0, else 0.  Read-only.",
+        "description": "The top-ups of the order plan (1 to 60 horizon days, default 7),\nfor any signed-in user.\n\nThe supplier groups of the ``horizon_days`` order plan that have a\nstored minimum and a shortfall above 0 \u2014 the groups\n``GET /api/supply-plan`` reports with its ``minimum`` and\n``shortfall``, in the plan's group order \u2014 each answered with the\nlines of the order plan built for\n``supply_plan.top_up_lookahead_days`` (the stored value rounded\ndown to a whole number of days, else the default) at the same\nas-of that can top the group up: the group's same\n``supplier_code`` and ``source_system`` lines whose\n``due_in_days`` is above the horizon, whose ``value`` is not null\nand whose (``item_code``, ``site_code``) is not on the excess list\n(``excess_ranked`` read once per call).  The candidates are taken\nby ``due_in_days``, then ``item_code``, then ``site_code``, each\nadded until the sum of the values taken is at least the shortfall \u2014\nthe candidate that reaches it included, none after it \u2014 each a\ntop-up with the look-ahead line's ``item_code``, ``site_code``,\n``due_in_days``, ``order_by``, ``quantity``, ``unit_cost`` and\n``value`` plus ``holding_cost`` (the value \u00d7 the effective\n``replenishment.holding_rate`` the recommendations use \u00d7\n``due_in_days`` / 365, rounded to two places half up).\n``top_up_value`` is the top-ups' values summed (0 with none),\n``reaches_minimum`` true when ``total_value`` plus\n``top_up_value`` is at least the stored minimum and ``still_short``\nthe minimum minus the two when that is above 0, else 0.  Each\nentry also carries ``suggestion`` and ``suggestion_reason`` \u2014 the\ngroup's order suggestion, \"wait\" when no line of the group must be\nordered within the\n``exceptions.order_minimum_due_days`` system setting (the stored\nvalue, else the registry default), \"add_top_ups\" when one must and\n``reaches_minimum`` is true, \"order_anyway\" when one must and it is\nfalse \u2014 and the reason naming the group's first line in its order\nthat must be ordered, \"No line must be ordered within N days.\" for\n\"wait\" (written \"within 1 day\" when N is 1 and \"today\" when N is\n0, a whole N written without decimals).  Read-only.",
         "operationId": "supply_plan_top_ups_api_supply_plan_top_ups_get",
         "security": [
           {
@@ -26351,6 +26351,19 @@
           "still_short": {
             "type": "string",
             "title": "Still Short"
+          },
+          "suggestion": {
+            "type": "string",
+            "enum": [
+              "wait",
+              "add_top_ups",
+              "order_anyway"
+            ],
+            "title": "Suggestion"
+          },
+          "suggestion_reason": {
+            "type": "string",
+            "title": "Suggestion Reason"
           }
         },
         "type": "object",
@@ -26361,10 +26374,12 @@
           "top_ups",
           "top_up_value",
           "reaches_minimum",
-          "still_short"
+          "still_short",
+          "suggestion",
+          "suggestion_reason"
         ],
         "title": "SupplyPlanTopUpSupplier",
-        "description": "One supplier group of the order plan that has a stored minimum\nand a shortfall above 0, in the plan's group order:\n``supplier_code``, ``source_system``, ``vendor_code``, ``name``,\n``minimum``, ``total_value`` and ``shortfall`` as the plan's group\nhas them, then the top-up \u2014 the look-ahead plan's lines of the same\nsupplier and source system due after the horizon with a value and\nnot on the excess list, taken by ``due_in_days``, then\n``item_code``, then ``site_code``, each added until the sum of the\nvalues taken is at least the shortfall, the line that reaches it\nincluded and none after it.  ``top_up_value`` is the top-ups'\nvalues summed (0 with none), ``reaches_minimum`` is true when\n``total_value`` plus ``top_up_value`` is at least the ``minimum``\nand ``still_short`` the minimum minus the two when that is above\n0, else 0 \u2014 the money serialized the way the plan serializes the\ngroup's ``total_value``, rounded to two places half up."
+        "description": "One supplier group of the order plan that has a stored minimum\nand a shortfall above 0, in the plan's group order:\n``supplier_code``, ``source_system``, ``vendor_code``, ``name``,\n``minimum``, ``total_value`` and ``shortfall`` as the plan's group\nhas them, then the top-up \u2014 the look-ahead plan's lines of the same\nsupplier and source system due after the horizon with a value and\nnot on the excess list, taken by ``due_in_days``, then\n``item_code``, then ``site_code``, each added until the sum of the\nvalues taken is at least the shortfall, the line that reaches it\nincluded and none after it.  ``top_up_value`` is the top-ups'\nvalues summed (0 with none), ``reaches_minimum`` is true when\n``total_value`` plus ``top_up_value`` is at least the ``minimum``\nand ``still_short`` the minimum minus the two when that is above\n0, else 0 \u2014 the money serialized the way the plan serializes the\ngroup's ``total_value``, rounded to two places half up.\n\n``suggestion`` is the group's order suggestion: ``\"wait\"`` when no\nline of the group in the horizon plan must be ordered within the\n``exceptions.order_minimum_due_days`` system setting (the stored\nvalue, else the registry default \u2014 read the way the exceptions\ninbox reads it), ``\"add_top_ups\"`` when one must be ordered and\n``reaches_minimum`` is true, and ``\"order_anyway\"`` when one must\nbe ordered and ``reaches_minimum`` is false.  The reason,\n``suggestion_reason``, is \"No line must be ordered within N\ndays.\" for ``\"wait\"`` (written \"within 1 day\" when N is 1 and\n\"today\" when N is 0, a whole N written without decimals) and, when\na line must be ordered, \"<item_code> at <site_code> must be\nordered by <order_by>, and the top-ups reach the minimum.\" for\n``\"add_top_ups\"`` and \"<item_code> at <site_code> must be ordered\nby <order_by>, and the top-ups cannot reach the minimum.\" for\n``\"order_anyway\"`` \u2014 the line named the group's first in its order\nwhose ``due_in_days`` is at most N, ``order_by`` read\n``YYYY-MM-DD``."
       },
       "SupplyPlanTopUpsResponse": {
         "properties": {

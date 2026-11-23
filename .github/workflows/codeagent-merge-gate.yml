@@ -11,6 +11,12 @@
 # FRONTEND PR (proof-map nodeids under app/tests/*.spec.js) is proven by the
 # @playwright/test suite run in real Chromium — the checker is junit-format-
 # agnostic, so the same per-AC binding applies with --repo-root app.
+#
+# A frontend proof under app/e2e/ (an [e2e-proof] slice) needs the REAL stack, as in
+# the engine's gate: scripts/ca_gate/e2e_proofs.sh migrates the Postgres service,
+# starts the backend from the PR, serves app/ through a proxy that forwards /api/ as
+# production's nginx does, and runs app/e2e/ in the same Playwright image. A PR
+# proven only by e2e specs skips the mocked suite.
 name: CodeAgent merge gate
 
 on:
@@ -104,6 +110,17 @@ jobs:
             echo "family=backend" >> "$GITHUB_OUTPUT"
             echo "repo_root=backend" >> "$GITHUB_OUTPUT"
           fi
+          # Frontend proofs come in two kinds. A spec under e2e/ runs on the real stack
+          # (the e2e step below); any other spec runs in the mocked suite. A PR proven
+          # only by e2e specs skips the mocked suite, whose junit holds none of them.
+          MOCKED=true; E2E=false
+          if [ "$FAM" = "frontend" ] && [ -n "$NODES" ]; then
+            if printf '%s\n' "$NODES" | grep -q '^e2e/'; then E2E=true; fi
+            if ! printf '%s\n' "$NODES" | grep -v '^e2e/' | grep -q .; then MOCKED=false; fi
+          fi
+          echo "mocked=$MOCKED" >> "$GITHUB_OUTPUT"
+          echo "e2e=$E2E" >> "$GITHUB_OUTPUT"
+          echo "frontend passes: mocked=$MOCKED e2e=$E2E"
 
       - name: Install backend deps
         if: steps.fam.outputs.family == 'backend'
@@ -143,7 +160,7 @@ jobs:
           fi
 
       - name: Run frontend Playwright suite -> junitxml
-        if: steps.fam.outputs.family == 'frontend'
+        if: steps.fam.outputs.family == 'frontend' && steps.fam.outputs.mocked == 'true'
         run: |
           # Serve the static frontend for the suite (AIDW#306): before this, NOTHING
           # listened while the specs ran, every navigating spec died on ECONNREFUSED,
@@ -189,6 +206,30 @@ jobs:
           t.write("report.xml")
           PY
           cp report.xml "${RUNNER_TEMP}/report.xml"
+
+      - name: Install backend deps (e2e proofs)
+        if: steps.fam.outputs.e2e == 'true'
+        run: pip install -r backend/requirements.txt -c backend/constraints.txt
+
+      - name: Run e2e proofs on the real stack -> junitxml
+        if: steps.fam.outputs.e2e == 'true'
+        # The engine's e2e gate, rebuilt on the runner: this job's Postgres service
+        # migrated (and seeded from app/e2e/seed.sql when it exists), the backend from
+        # this PR, a proxy serving app/ with /api/ forwarded, and app/e2e/ in Playwright.
+        # An infrastructure failure fails the job, named; proof verdicts stay with the
+        # contract gate, whose junit this step appends to.
+        timeout-minutes: 20
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: aierp
+          DB_USER: aierp
+          DB_PASSWORD: change-me-in-production
+          AUTH_MODE: development
+          AUTH_DEV_TOKEN: dev-secret-token
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+          JUNIT_OUT: ${{ runner.temp }}/report.xml
+        run: bash scripts/ca_gate/e2e_proofs.sh
 
       - name: Contract gate (enforcing)
         env:

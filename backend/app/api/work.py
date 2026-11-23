@@ -6,8 +6,8 @@ authentication gate, like every other API router) answers
 ``{"processes": [...]}`` — the eleven work processes, in this order:
 ``reorder_points``, ``excess``, ``stockout``, ``exceptions``,
 ``forecast_overrides``, ``sop_signoff``, ``purchase_budget``,
-``ddmrp_adjustment``, ``order_release``, ``buffer_order`` and
-``transfer_release``.  It
+``ddmrp_adjustment``, ``order_release``, ``buffer_order``,
+``short_order`` and ``transfer_release``.  It
 is open to any signed-in user — the gate answers 401 without a token
 — and it writes nothing.
 
@@ -61,6 +61,11 @@ source function directly (not over HTTP):
   ``without_proposal`` is 0 and ``automatic`` is ``automatic`` —
   over the ``created`` rows' stored lines whose ``source`` is
   exactly ``"buffer"``.
+* ``short_order`` — "Decide: wait, order anyway, or add the
+  top-ups" — from this module's own ``short_order_counts()``:
+  ``decisions`` and ``with_proposal`` are ``released``,
+  ``at_proposal`` is ``followed``, ``without_proposal`` is 0 and
+  ``automatic`` is ``automatic``.
 * ``transfer_release`` — "Release transfers to the ERP" — from
   ``transfer_release_counts()``: ``decisions`` and ``with_proposal``
   are ``released``, ``at_proposal`` is null, ``without_proposal`` is
@@ -90,8 +95,13 @@ null, and ``unchanged`` the read lines for which
 ``app.supply.release_readback.line_unchanged`` of the line's
 ``item_code``, its ``quantity``, the row's ``erp_status`` and
 ``erp_lines`` is True; a row whose ``lines`` is not a list counts
-nothing.
-For the eight existing entries ``automatic`` is null; for the three
+nothing.  ``short_order_counts`` runs one SELECT through
+``app.db.connection.get_cursor``, over ``short_order_releases`` —
+the record of the released short orders: ``released`` is the number
+of rows, ``followed`` the rows whose ``chosen`` equals their
+``suggested``, and ``automatic`` the rows whose ``actor`` starts
+with ``standing-grant:``.
+For the eight existing entries ``automatic`` is null; for the four
 release entries it is the count above.
 
 ``rate`` is ``at_proposal / with_proposal`` rounded to 4 decimals, or
@@ -234,6 +244,31 @@ def buffer_order_counts() -> dict:
     }
 
 
+def short_order_counts() -> dict:
+    """The scorecard's ``short_order`` counts, over
+    ``short_order_releases``.
+
+    One SELECT through ``app.db.connection.get_cursor``:
+    ``released`` is the number of rows, ``followed`` the rows whose
+    ``chosen`` equals their ``suggested``, and ``automatic`` the
+    rows whose ``actor`` starts with ``standing-grant:``.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS released, "
+            "COUNT(*) FILTER (WHERE chosen = suggested) AS followed, "
+            "COUNT(*) FILTER (WHERE actor LIKE 'standing-grant:%') "
+            "AS automatic "
+            "FROM short_order_releases"
+        )
+        row = cur.fetchone()
+    return {
+        "released": row["released"],
+        "followed": row["followed"],
+        "automatic": row["automatic"],
+    }
+
+
 def transfer_release_counts() -> dict:
     """The scorecard's ``transfer_release`` counts, over
     ``transfer_releases``.
@@ -370,6 +405,21 @@ def _map_order_release_counts(answer: dict) -> tuple:
     )
 
 
+def _map_short_order_counts(answer: dict) -> tuple:
+    """short_order: the released short orders — the release is the
+    decision and the suggestion its proposal: ``decisions`` and
+    ``with_proposal`` are ``released``, ``at_proposal`` is
+    ``followed`` and ``without_proposal`` is 0, while ``automatic``
+    is the share the standing grants fired."""
+    return (
+        answer["released"],
+        answer["released"],
+        answer["followed"],
+        0,
+        answer["automatic"],
+    )
+
+
 def _map_transfer_release_counts(answer: dict) -> tuple:
     """transfer_release: the releases to the ERP; the release itself
     is the decision — ``decisions`` and ``with_proposal`` are
@@ -496,7 +546,7 @@ def _entry(
 def scorecard(
     current_user: AuthUser = Depends(require_any_authenticated_user),
 ) -> dict:
-    """The work scorecard: the eleven processes, in their order.
+    """The work scorecard: the twelve processes, in their order.
 
     Open to any signed-in user (the router is mounted behind the
     app's include-time gate, which answers 401 without a valid Bearer
@@ -571,6 +621,12 @@ def scorecard(
                 "Order on a buffer's signal",
                 _map_order_release_counts,
                 lambda: buffer_order_counts(),
+            ),
+            _entry(
+                "short_order",
+                "Decide: wait, order anyway, or add the top-ups",
+                _map_short_order_counts,
+                lambda: short_order_counts(),
             ),
             _entry(
                 "transfer_release",

@@ -318,6 +318,10 @@ SUPPLIER_A_DEFAULT = {
     "top_up_value": "850.00",
     "reaches_minimum": True,
     "still_short": "0.00",
+    "suggestion": "add_top_ups",
+    "suggestion_reason": (
+        "A at 159 must be ordered by 2026-09-30, and the top-ups " "reach the minimum."
+    ),
 }
 # S-A with the 15-day look-ahead: X alone (400.00 < 700.00).
 SUPPLIER_A_LOOKAHEAD_15 = {
@@ -326,6 +330,11 @@ SUPPLIER_A_LOOKAHEAD_15 = {
     "top_up_value": "400.00",
     "reaches_minimum": False,
     "still_short": "300.00",
+    "suggestion": "order_anyway",
+    "suggestion_reason": (
+        "A at 159 must be ordered by 2026-09-30, and the top-ups "
+        "cannot reach the minimum."
+    ),
 }
 # S-B: minimum 1000.00, total 200.00, shortfall 800.00; U alone
 # (300.00 < 800.00) — still short 500.00 in either look-ahead.
@@ -341,6 +350,11 @@ SUPPLIER_B = {
     "top_up_value": "300.00",
     "reaches_minimum": False,
     "still_short": "500.00",
+    "suggestion": "order_anyway",
+    "suggestion_reason": (
+        "B at 159 must be ordered by 2026-09-30, and the top-ups "
+        "cannot reach the minimum."
+    ),
 }
 
 

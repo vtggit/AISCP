@@ -26,7 +26,7 @@ for which ``line_unchanged`` of the line's ``item_code``, its
 row whose ``lines`` is not a list counts nothing.
 
 The scorecard gains ``buffer_order`` — "Order on a buffer's signal" —
-right after ``order_release``, eleven in all, mapped the same way as
+right after ``order_release``, twelve in all, mapped the same way as
 ``order_release``.
 
 Proved here, against the test database migrated to head, with the
@@ -50,7 +50,7 @@ inserts them, every NOT NULL column filled:
   D, E, G and H), ``automatic`` 1 (C), ``read`` 5 (all but D) and
   ``unchanged`` 2 (B and G);
 * the route: GET /api/work/scorecard with the planner's token lists
-  the eleven keys in order, ``buffer_order`` right after
+  the twelve keys in order, ``buffer_order`` right after
   ``order_release``, with ``step`` "Order on a buffer's signal",
   ``decisions`` 6, ``with_proposal`` 5, ``at_proposal`` 2,
   ``without_proposal`` 0, ``automatic`` 1 and ``rate`` 0.4 — and the
@@ -91,6 +91,7 @@ KEYS = [
     "ddmrp_adjustment",
     "order_release",
     "buffer_order",
+    "short_order",
     "transfer_release",
 ]
 
@@ -244,7 +245,7 @@ def test_issue1563_freeform(client) -> None:
         assert line_unchanged("B", None, "Open", ERP_P1) is False
         assert line_unchanged("B", True, "Open", ERP_P1) is False
 
-        # -- The route: the eleven keys in order, with the buffer entry. ------
+        # -- The route: the twelve keys in order, with the buffer entry. ------
         count_before = _plan_releases_row_count()
         planner = TestClient(app, headers={"Authorization": f"Bearer {PLANNER_TOKEN}"})
         response = planner.get(URL)

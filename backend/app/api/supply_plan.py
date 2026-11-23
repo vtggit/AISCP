@@ -247,6 +247,7 @@ from __future__ import annotations
 import math
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import (
@@ -513,7 +514,25 @@ class SupplyPlanTopUpSupplier(BaseModel):
     ``total_value`` plus ``top_up_value`` is at least the ``minimum``
     and ``still_short`` the minimum minus the two when that is above
     0, else 0 — the money serialized the way the plan serializes the
-    group's ``total_value``, rounded to two places half up."""
+    group's ``total_value``, rounded to two places half up.
+
+    ``suggestion`` is the group's order suggestion: ``"wait"`` when no
+    line of the group in the horizon plan must be ordered within the
+    ``exceptions.order_minimum_due_days`` system setting (the stored
+    value, else the registry default — read the way the exceptions
+    inbox reads it), ``"add_top_ups"`` when one must be ordered and
+    ``reaches_minimum`` is true, and ``"order_anyway"`` when one must
+    be ordered and ``reaches_minimum`` is false.  The reason,
+    ``suggestion_reason``, is "No line must be ordered within N
+    days." for ``"wait"`` (written "within 1 day" when N is 1 and
+    "today" when N is 0, a whole N written without decimals) and, when
+    a line must be ordered, "<item_code> at <site_code> must be
+    ordered by <order_by>, and the top-ups reach the minimum." for
+    ``"add_top_ups"`` and "<item_code> at <site_code> must be ordered
+    by <order_by>, and the top-ups cannot reach the minimum." for
+    ``"order_anyway"`` — the line named the group's first in its order
+    whose ``due_in_days`` is at most N, ``order_by`` read
+    ``YYYY-MM-DD``."""
 
     supplier_code: str | None = None
     source_system: str | None = None
@@ -526,6 +545,8 @@ class SupplyPlanTopUpSupplier(BaseModel):
     top_up_value: Decimal
     reaches_minimum: bool
     still_short: Decimal
+    suggestion: Literal["wait", "add_top_ups", "order_anyway"]
+    suggestion_reason: str
 
 
 class SupplyPlanTopUpsResponse(BaseModel):
@@ -1410,6 +1431,88 @@ def supply_plan(
     return SupplyPlanResponse(**build_supply_plan(horizon_days))
 
 
+def _within_text(due_days: float) -> str:
+    """The threshold's "within N days" of one reason: "within 1 day"
+    when N is 1 and "today" when N is 0, a whole N written without
+    decimals."""
+    if due_days == 0:
+        return "today"
+    number = int(due_days) if due_days == int(due_days) else due_days
+    if number == 1:
+        return f"within {number} day"
+    return f"within {number} days"
+
+
+def _order_by_text(order_by: object) -> str | None:
+    """The line's ``order_by`` read ``YYYY-MM-DD``, or None when it
+    carries no date — nothing here raises on a hostile value."""
+    if isinstance(order_by, datetime):
+        return order_by.date().isoformat()
+    if isinstance(order_by, date):
+        return order_by.isoformat()
+    if isinstance(order_by, str):
+        try:
+            return date.fromisoformat(order_by[:10]).isoformat()
+        except ValueError:
+            return None
+    return None
+
+
+def _first_due_line(lines: object, due_days: float) -> dict | None:
+    """The group's first line, in its order, whose ``due_in_days`` is
+    at most *due_days* and that a reason can name — a non-empty string
+    ``item_code`` and ``site_code`` and an ``order_by`` that reads a
+    date — else None; nothing here raises on a hostile line."""
+    if not isinstance(lines, list):
+        return None
+    for line in lines:
+        if not isinstance(line, dict):
+            continue
+        due = line.get("due_in_days")
+        if isinstance(due, bool) or not isinstance(due, (int, float)):
+            continue
+        if due > due_days:
+            continue
+        item_code = line.get("item_code")
+        site_code = line.get("site_code")
+        if not isinstance(item_code, str) or not item_code:
+            continue
+        if not isinstance(site_code, str) or not site_code:
+            continue
+        if _order_by_text(line.get("order_by")) is None:
+            continue
+        return line
+    return None
+
+
+def _suggestion_for(
+    lines: object, due_days: float, reaches_minimum: bool
+) -> tuple[str, str]:
+    """An entry's ``suggestion`` and ``suggestion_reason``: "wait"
+    when no line of the group must be ordered within the threshold,
+    "add_top_ups" when one must and the top-ups reach the minimum,
+    "order_anyway" when one must and they do not — the reason naming
+    the first such line in the group's order, the way the exceptions
+    inbox names it."""
+    line = _first_due_line(lines, due_days)
+    if line is None:
+        return "wait", f"No line must be ordered {_within_text(due_days)}."
+    order_by = _order_by_text(line["order_by"])
+    if reaches_minimum:
+        return (
+            "add_top_ups",
+            f"{line['item_code']} at {line['site_code']} must be "
+            f"ordered by {order_by}, and the top-ups reach the "
+            "minimum.",
+        )
+    return (
+        "order_anyway",
+        f"{line['item_code']} at {line['site_code']} must be "
+        f"ordered by {order_by}, and the top-ups cannot reach the "
+        "minimum.",
+    )
+
+
 def top_ups_by_supplier(horizon_days: int, as_of: date | None = None) -> dict:
     """The ``GET /api/supply-plan/top-ups`` answer as a dict: the
     plan's ``as_of``, ``horizon_days``, ``lookahead_days`` — the
@@ -1443,6 +1546,24 @@ def top_ups_by_supplier(horizon_days: int, as_of: date | None = None) -> dict:
     ``top_up_value`` is at least the stored minimum and ``still_short``
     the minimum minus the two when that is above 0, else 0.
 
+    Each entry also carries ``suggestion`` and
+    ``suggestion_reason``: "wait" when no line of the entry's group in
+    the horizon plan must be ordered within the
+    ``exceptions.order_minimum_due_days`` system setting (the stored
+    value, applied with ``setting_value`` on the stored system
+    settings this function already reads, else the registry default —
+    exactly the way the exceptions inbox reads it), "add_top_ups" when
+    a line must be ordered and ``reaches_minimum`` is true, and
+    "order_anyway" when a line must be ordered and
+    ``reaches_minimum`` is false.  The reason names the group's first
+    line in its order whose ``due_in_days`` is at most the threshold —
+    "<item_code> at <site_code> must be ordered by <order_by>, and the
+    top-ups reach the minimum." for "add_top_ups" and "...and the
+    top-ups cannot reach the minimum." for "order_anyway",
+    ``order_by`` read ``YYYY-MM-DD`` — and is "No line must be ordered
+    within N days." for "wait", written "within 1 day" when N is 1 and
+    "today" when N is 0, a whole N written without decimals.
+
     The horizon plan is built with ``build_supply_plan(horizon_days,
     as_of)`` — ``as_of`` None letting the builder resolve the as-of —
     and the look-ahead plan is built for ``lookahead_days`` at the
@@ -1463,12 +1584,22 @@ def top_ups_by_supplier(horizon_days: int, as_of: date | None = None) -> dict:
     (``app.supply.release``) — is the same as without the blocks.
     Read-only.
     """
+    # The import is inside the function: the exceptions module
+    # imports this module's builder, so a module-level import of its
+    # key would cycle.
+    from app.api.exceptions import ORDER_MINIMUM_DUE_DAYS_KEY
+
     with recommendations_memo(), read_once(), one_connection():
         plan = build_supply_plan(horizon_days, as_of)
         as_of = plan["as_of"]
         stored = _stored_system_settings()
         lookahead_days = _top_up_lookahead_days_for(stored)
         holding_rate = _holding_rate_for(stored)
+        # The threshold the suggestion applies, exactly the way the
+        # exceptions inbox reads it: the stored value when it is a
+        # number within the setting's bounds, else the registry
+        # default.
+        due_days = setting_value(stored, ORDER_MINIMUM_DUE_DAYS_KEY)
         lookahead_plan = build_supply_plan(lookahead_days, as_of=as_of)
         excess_pairs = {
             (row.get("item_code"), row.get("site_code")) for row in excess_ranked(as_of)
@@ -1514,6 +1645,10 @@ def top_ups_by_supplier(horizon_days: int, as_of: date | None = None) -> dict:
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
             still_short = minimum - total_value - top_up_value
+            reaches_minimum = total_value + top_up_value >= minimum
+            suggestion, suggestion_reason = _suggestion_for(
+                group.get("lines"), due_days, reaches_minimum
+            )
             suppliers.append(
                 {
                     "supplier_code": group["supplier_code"],
@@ -1539,10 +1674,12 @@ def top_ups_by_supplier(horizon_days: int, as_of: date | None = None) -> dict:
                         for line in top_ups
                     ],
                     "top_up_value": top_up_value,
-                    "reaches_minimum": total_value + top_up_value >= minimum,
+                    "reaches_minimum": reaches_minimum,
                     "still_short": (
                         still_short if still_short > 0 else Decimal(0)
                     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                    "suggestion": suggestion,
+                    "suggestion_reason": suggestion_reason,
                 }
             )
 
@@ -1585,7 +1722,17 @@ def supply_plan_top_ups(
     ``top_up_value`` is the top-ups' values summed (0 with none),
     ``reaches_minimum`` true when ``total_value`` plus
     ``top_up_value`` is at least the stored minimum and ``still_short``
-    the minimum minus the two when that is above 0, else 0.  Read-only.
+    the minimum minus the two when that is above 0, else 0.  Each
+    entry also carries ``suggestion`` and ``suggestion_reason`` — the
+    group's order suggestion, "wait" when no line of the group must be
+    ordered within the
+    ``exceptions.order_minimum_due_days`` system setting (the stored
+    value, else the registry default), "add_top_ups" when one must and
+    ``reaches_minimum`` is true, "order_anyway" when one must and it is
+    false — and the reason naming the group's first line in its order
+    that must be ordered, "No line must be ordered within N days." for
+    "wait" (written "within 1 day" when N is 1 and "today" when N is
+    0, a whole N written without decimals).  Read-only.
     """
     return SupplyPlanTopUpsResponse(**top_ups_by_supplier(horizon_days))
 

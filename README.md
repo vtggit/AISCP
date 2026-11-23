@@ -247,6 +247,11 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   `exceptions.order_minimum_due_days` setting when one does (`backend/app/api/supply_plan.py`).
 - The order plan screen shows a supplier's minimum when present, a below-minimum badge, and
   the suggested top-ups for supplier groups that are short (`app/js/orders.js`).
+- The order plan screen's suggested-top-ups section shows a suggestion line, right after the
+  section's heading and before its table, for a short supplier group whose top-ups entry carries
+  a `suggestion` of `wait`, `add_top_ups` or `order_anyway` and a `suggestion_reason`:
+  "Suggested: Wait.", "Suggested: Add the top-ups." or "Suggested: Order anyway." followed by the
+  reason, as text (`app/js/orders.js`).
 - The order plan screen marks a plan line whose `source` is `buffer` with a small "Buffer" badge in its Item
   and Site cell, titled "Planned from its DDMRP buffer's order signal" (`app/js/orders.js`).
 - For an admin, the order plan screen shows a checkbox on each suggested top-up row and a

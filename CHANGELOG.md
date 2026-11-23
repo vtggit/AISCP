@@ -206,6 +206,8 @@ code is the authority for details.
 - Each supplier entry in the top-ups answer (`GET /api/supply-plan/top-ups`) now carries an order
   suggestion and reason — wait, add top-ups, or order anyway — based on whether a line is due within
   the order-minimum due-days setting and whether the top-ups reach the minimum (#1567).
+- The Order plan screen now shows a suggested choice in each short order's Suggested top-ups section —
+  Wait, Add the top-ups, or Order anyway — with the reason, when a suggestion is available (#1569).
 
 **Monthly S&OP review**
 - The S&OP review (`GET /api/sop/review`) and its screen: demand, supply, planned receipts,

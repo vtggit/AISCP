@@ -151,7 +151,15 @@ and an aborted batch 502 with the rows ``aborted`` — the releases
 appear in ``GET /api/aggregate/release/audit`` and the exceptions
 inbox unchanged, being ordinary ``plan_releases`` rows.  A supplier
 code no line of the plan carries is simply absent: 200 with the
-groups the named suppliers hold, never a 422.
+groups the named suppliers hold, never a 422.  After a confirm, the
+route records the release's short suppliers through
+``app.supply.short_orders.record_short_orders`` with the body's
+horizon days, the answer and the caller's username (or subject) —
+the actor the release's ``plan_releases`` rows record — one
+``short_order_releases`` row per ``acumatica`` supplier the
+top-ups suggestions hold at the release's as-of that the confirm
+created, a failure to record logged as a warning and changing
+nothing of the answer; a preview records nothing.
 
 ``GET /api/supply-plan/transfers`` answers, for any signed-in user
 behind the same gate, which item-site of an item should move stock
@@ -306,6 +314,7 @@ from app.repositories.transfer_releases_postgres_repository import (
 from app.settings.registry import get_setting
 from app.stats.demand import default_as_of
 from app.supply.release import order_plan_release
+from app.supply.short_orders import record_short_orders
 from app.supply.terms import fit_to_terms
 from app.supply.transfer_release import (
     create_transfer_release,
@@ -2008,7 +2017,13 @@ def release_order_plan(
     it.  A named supplier's lines from another source system come back
     as ``unreleasable``; a code no line of the plan carries is simply
     absent — 200 with the groups the named suppliers hold, never a
-    422.
+    422.  After a confirm, the route records the release's short
+    suppliers through
+    ``app.supply.short_orders.record_short_orders`` with the body's
+    horizon days, the answer and the caller's username (or subject) —
+    the actor the release's ``plan_releases`` rows record — and a
+    failure to record is logged as a warning, changing nothing of the
+    answer; a preview records nothing.
     """
     try:
         plan = order_plan_release(
@@ -2021,7 +2036,17 @@ def release_order_plan(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
-    return release_groups(plan, body.confirm, current_user)
+    answer = release_groups(plan, body.confirm, current_user)
+    if body.confirm:
+        # The short-order record of the release the confirm went out
+        # for: a failure to record is logged inside it and changes
+        # nothing of the answer.
+        record_short_orders(
+            body.horizon_days,
+            answer,
+            current_user.username or current_user.sub,
+        )
+    return answer
 
 
 def _canonical_transfer_lines(lines: list[dict]) -> tuple:

@@ -434,7 +434,10 @@ def test_issue1549_freeform(monkeypatch, client) -> None:
         assert confirm.status_code == 200, confirm.text
         assert confirm.json() == EXPECTED_CONFIRM
         assert create_calls == [[WIRE_ORDER]]
-        assert build_calls == [(7, AS_OF), (7, AS_OF), (30, AS_OF)] * 2
+        assert build_calls == [(7, AS_OF), (7, AS_OF), (30, AS_OF)] * 2 + [
+            (7, AS_OF),
+            (30, AS_OF),
+        ]
 
         rows = _plan_release_rows()
         assert len(rows) == 1

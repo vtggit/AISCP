@@ -80,6 +80,8 @@ code is the authority for details.
   one was stored (#1559).
 - The Work scorecard now shows, for orders on a buffer's signal, how many were read back from the ERP
   and how many of those came back unchanged (#1563).
+- The Work scorecard now shows, for short orders, how many decisions were made, how many took the
+  suggested decision, and how many were made by a standing grant (#1583).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

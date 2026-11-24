@@ -145,6 +145,7 @@ ITEM_SITES = [
 EMPTY_RECORD = {
     "reorder_points": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
     "buffers": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
+    "excess": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
 }
 
 # The answer of the seeded data: reorder_points — P1 (T3 decision
@@ -160,6 +161,7 @@ EMPTY_RECORD = {
 EXPECTED_RECORD = {
     "reorder_points": {"pushed": 5, "read": 4, "unchanged": 3, "rate": 0.75},
     "buffers": {"pushed": 3, "read": 2, "unchanged": 1, "rate": 0.5},
+    "excess": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
 }
 
 
@@ -307,8 +309,12 @@ def _assert_openapi_contract() -> None:
     schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     assert schema["$ref"] == "#/components/schemas/ParameterWritebackPushRecord"
     record = committed["components"]["schemas"]["ParameterWritebackPushRecord"]
-    assert set(record["properties"]) == {"reorder_points", "buffers"}
-    for name in ("reorder_points", "buffers"):
+    assert set(record["properties"]) == {
+        "reorder_points",
+        "buffers",
+        "excess",
+    }
+    for name in ("reorder_points", "buffers", "excess"):
         assert record["properties"][name]["$ref"] == (
             "#/components/schemas/ParameterWritebackPushRecordKind"
         )

@@ -140,6 +140,7 @@ PREVIEW_KEYS = {
 EXPECTED_RECORD = {
     "reorder_points": {"pushed": 1, "read": 1, "unchanged": 1, "rate": 1.0},
     "buffers": {"pushed": 1, "read": 1, "unchanged": 1, "rate": 1.0},
+    "excess": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
 }
 
 
@@ -851,4 +852,7 @@ def test_issue1587_freeform(client, monkeypatch):
     # kind — it neither replaces nor joins a counted push.
     response = client.get(RECORD_URL)
     assert response.status_code == 200, response.text
-    assert response.json() == EXPECTED_RECORD
+    assert response.json() == {
+        **EXPECTED_RECORD,
+        "excess": {"pushed": 1, "read": 1, "unchanged": 1, "rate": 1.0},
+    }

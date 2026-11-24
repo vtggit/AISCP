@@ -4,7 +4,7 @@ ERPs kept.
 ``push_record()`` measures, over the append-only
 ``parameter_writebacks`` audit table, how much of what the writeback
 confirm pushed back to the ERPs the ERPs actually kept.  It answers
-``{reorder_points, buffers}``, each kind carrying
+``{reorder_points, buffers, excess}``, each kind carrying
 ``{pushed, read, unchanged, rate}``: ``pushed`` is the number of
 item-sites whose counted push is of that kind, ``read`` how many of
 those are read back, ``unchanged`` how many of the read ones are
@@ -20,13 +20,14 @@ the latest being the greatest ``written_at``, and among equal
 never hides an earlier push: a pair whose newest audit row is a
 failure still counts its latest written or unchanged row.  The
 basis decides the kind: the push is a reorder-point push when that
-row's ``basis`` is "decision" and a buffer push when it is
-"ddmrp"; a push of any other basis (such as "excess") is counted in
-neither kind.
+row's ``basis`` is "decision", a buffer push when it is "ddmrp",
+and an excess push when it is "excess".
 
 The push is read back when the item-site's ``item_sites`` row exists
 and its ``synced_at`` is later than the push's ``written_at`` — the
-first sync that saw the ERP's state after the push.  A push that is
+first sync that saw the ERP's state after the push; a row whose
+``synced_at`` is null (no sync ever recorded) is never read back.
+A push that is
 read back is unchanged when the ``item_sites`` row's ``reorder_point``
 and ``max_qty`` are both not null, and each differs by no more than
 0.000001 from the push's ``after_reorder_point`` and
@@ -87,8 +88,9 @@ def _counted_pushes() -> list[dict]:
 def _item_sites(pairs: set[tuple[str, str]]) -> dict[tuple[str, str], dict]:
     """The item_sites rows of the given pairs, keyed by the pair.
 
-    A pair no sync lists any more simply has no entry — its push is
-    never read back.
+    A pair no sync lists any more simply has no entry, and a row
+    whose ``synced_at`` is null (no sync ever recorded) never counts
+    as a read-back: neither is read back.
     """
     if not pairs:
         return {}
@@ -128,39 +130,47 @@ def push_record() -> dict:
 
     For each item-site, its one counted push (see
     ``_counted_pushes``) is a reorder-point push when its ``basis``
-    is "decision" and a buffer push when its ``basis`` is "ddmrp"
-    (the basis decides the kind, not the ``decision_id``); a counted
-    push of any other basis is counted in neither kind.  The push is
-    read back when the item-site's ``item_sites`` row exists and its
-    ``synced_at`` is later than the push's ``written_at``; a
-    read-back push is unchanged when the row's ``reorder_point`` and
-    ``max_qty`` are both not null and each differs by no more than
-    0.000001 from the push's after values, every other read-back
-    push being changed.  The answer is
-    ``{reorder_points, buffers}``, each ``{pushed, read, unchanged,
-    rate}`` with ``rate`` ``unchanged / read`` rounded to 4 places,
-    null when ``read`` is 0.  Reads only: nothing written, no ERP
-    call.
+    is "decision", a buffer push when its ``basis`` is "ddmrp",
+    and an excess push when its ``basis`` is "excess" (the basis
+    decides the kind, not the ``decision_id``).  The push is
+    read back when the item-site's ``item_sites`` row exists and
+    its ``synced_at`` is later than the push's ``written_at`` (a
+    row whose ``synced_at`` is null — no sync ever recorded — is
+    never read back); a read-back push is unchanged when the row's ``reorder_point``
+    and ``max_qty`` are both not null and each differs by no more
+    than 0.000001 from the push's after values, every other
+    read-back push being changed.  The answer is
+    ``{reorder_points, buffers, excess}``, each ``{pushed, read,
+    unchanged, rate}`` with ``rate`` ``unchanged / read`` rounded
+    to 4 places, null when ``read`` is 0.  Reads only: nothing
+    written, no ERP call.
     """
     pushes = _counted_pushes()
     sites = _item_sites({(push["item_code"], push["site_code"]) for push in pushes})
     kinds = {
         "reorder_points": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
         "buffers": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
+        "excess": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
     }
     for push in pushes:
         if push["basis"] == "decision":
             kind = "reorder_points"
         elif push["basis"] == "ddmrp":
             kind = "buffers"
+        elif push["basis"] == "excess":
+            kind = "excess"
         else:
             # A counted push of any other basis is counted in
-            # neither kind.
+            # no kind.
             continue
         stats = kinds[kind]
         stats["pushed"] += 1
         site = sites.get((push["item_code"], push["site_code"]))
-        if site is None or site["synced_at"] <= push["written_at"]:
+        if (
+            site is None
+            or site["synced_at"] is None
+            or site["synced_at"] <= push["written_at"]
+        ):
             continue
         stats["read"] += 1
         if _is_unchanged(site, push):

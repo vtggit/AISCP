@@ -18,9 +18,11 @@ whose ``outcome`` is "written" or "unchanged" and whose
 the latest being the greatest ``written_at``, and among equal
 ``written_at`` the greatest ``id``.  A "failed" row never counts, and
 never hides an earlier push: a pair whose newest audit row is a
-failure still counts its latest written or unchanged row.  The push
-is a reorder-point push when that row's ``decision_id`` is not null
-and a buffer push when it is null.
+failure still counts its latest written or unchanged row.  The
+basis decides the kind: the push is a reorder-point push when that
+row's ``basis`` is "decision" and a buffer push when it is
+"ddmrp"; a push of any other basis (such as "excess") is counted in
+neither kind.
 
 The push is read back when the item-site's ``item_sites`` row exists
 and its ``synced_at`` is later than the push's ``written_at`` — the
@@ -55,11 +57,13 @@ def _counted_pushes() -> list[dict]:
     "unchanged" and whose after values are both stored, reduced per
     item-site to the latest such row: the greatest ``written_at``,
     ties broken by the greatest ``id``.  A "failed" row never counts
-    and never hides an earlier push.
+    and never hides an earlier push.  Each counted push carries its
+    row's ``basis``, the source discriminator its kind is decided
+    by.
     """
     with get_cursor() as cur:
         cur.execute(
-            "SELECT id, item_code, site_code, decision_id, "
+            "SELECT id, item_code, site_code, decision_id, basis, "
             "after_reorder_point, after_max_qty, written_at "
             "FROM parameter_writebacks "
             "WHERE outcome IN %s "
@@ -123,14 +127,16 @@ def push_record() -> dict:
     """The parameter writeback record of every counted push.
 
     For each item-site, its one counted push (see
-    ``_counted_pushes``) is a reorder-point push when that row's
-    ``decision_id`` is not null and a buffer push when it is null.
-    The push is read back when the item-site's ``item_sites`` row
-    exists and its ``synced_at`` is later than the push's
-    ``written_at``; a read-back push is unchanged when the row's
-    ``reorder_point`` and ``max_qty`` are both not null and each
-    differs by no more than 0.000001 from the push's after values,
-    every other read-back push being changed.  The answer is
+    ``_counted_pushes``) is a reorder-point push when its ``basis``
+    is "decision" and a buffer push when its ``basis`` is "ddmrp"
+    (the basis decides the kind, not the ``decision_id``); a counted
+    push of any other basis is counted in neither kind.  The push is
+    read back when the item-site's ``item_sites`` row exists and its
+    ``synced_at`` is later than the push's ``written_at``; a
+    read-back push is unchanged when the row's ``reorder_point`` and
+    ``max_qty`` are both not null and each differs by no more than
+    0.000001 from the push's after values, every other read-back
+    push being changed.  The answer is
     ``{reorder_points, buffers}``, each ``{pushed, read, unchanged,
     rate}`` with ``rate`` ``unchanged / read`` rounded to 4 places,
     null when ``read`` is 0.  Reads only: nothing written, no ERP
@@ -143,7 +149,14 @@ def push_record() -> dict:
         "buffers": {"pushed": 0, "read": 0, "unchanged": 0, "rate": None},
     }
     for push in pushes:
-        kind = "reorder_points" if push["decision_id"] is not None else "buffers"
+        if push["basis"] == "decision":
+            kind = "reorder_points"
+        elif push["basis"] == "ddmrp":
+            kind = "buffers"
+        else:
+            # A counted push of any other basis is counted in
+            # neither kind.
+            continue
         stats = kinds[kind]
         stats["pushed"] += 1
         site = sites.get((push["item_code"], push["site_code"]))

@@ -10,6 +10,13 @@ reformatting — so a value such as 0.1000 round-trips exactly);
 DESC), optionally narrowed by item_code and/or site_code, paged by
 limit and offset.
 
+``basis`` is what the writeback's values carried — "decision" or
+"ddmrp" the two values the confirm stores from the preview row,
+"excess" the one the check constraint admits for a writeback that
+carries neither.  A caller that leaves ``basis`` out gets it
+derived from the given ``decision_id``: "decision" when the
+``decision_id`` is not null, "ddmrp" otherwise.
+
 The table is append-only: there is deliberately no update or delete
 method, and the migration's downgrade is a no-op, so the audit rows
 survive a rollback.
@@ -28,6 +35,7 @@ _FIELDS = frozenset(
         "site_code",
         "source_system",
         "decision_id",
+        "basis",
         "before_reorder_point",
         "before_max_qty",
         "after_reorder_point",
@@ -52,8 +60,15 @@ class ParameterWritebacksPostgresRepository:
         The row gets a new uuid4 id.  written_at is left to the
         column's server default (now()) unless it is given.  Every
         other value is stored exactly as given, with no rounding or
-        reformatting.
+        reformatting.  A given basis is stored exactly as given; one
+        left out is derived from the given decision_id — "decision"
+        when it is not null, "ddmrp" otherwise.
         """
+        if "basis" not in fields:
+            fields = dict(fields)
+            fields["basis"] = (
+                "decision" if fields.get("decision_id") is not None else "ddmrp"
+            )
         unknown = set(fields) - _FIELDS
         if unknown:
             raise ValueError(

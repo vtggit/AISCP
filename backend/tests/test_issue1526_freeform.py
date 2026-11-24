@@ -202,22 +202,26 @@ def _insert_push(
     requested_max_qty: float,
 ) -> str:
     """Store one audit row with every NOT NULL column filled and its
-    written_at given explicitly; returns its id for the clean-up."""
+    written_at given explicitly — basis "decision" when the row's
+    decision_id is not None, "ddmrp" otherwise; returns its id for
+    the clean-up."""
     row_id = str(uuid4())
+    basis = "decision" if decision_id is not None else "ddmrp"
     _execute(
         "INSERT INTO parameter_writebacks "
-        "(id, item_code, site_code, source_system, decision_id, "
+        "(id, item_code, site_code, source_system, decision_id, basis, "
         "before_reorder_point, before_max_qty, after_reorder_point, "
         "after_max_qty, requested_reorder_point, requested_max_qty, "
         "outcome, error, written_by, written_by_name, written_at) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-        "%s, %s, %s)",
+        "%s, %s, %s, %s)",
         (
             row_id,
             item_code,
             SITE,
             "acumatica",
             decision_id,
+            basis,
             None,
             None,
             after_reorder_point,

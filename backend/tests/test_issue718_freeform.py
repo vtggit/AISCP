@@ -94,6 +94,7 @@ EXPECTED_SHAPE = {
     "site_code": ("character varying", 64, "NO"),
     "source_system": ("character varying", 32, "NO"),
     "decision_id": ("character varying", 36, "YES"),
+    "basis": ("character varying", 16, "NO"),
     "before_reorder_point": ("double precision", None, "YES"),
     "before_max_qty": ("double precision", None, "YES"),
     "after_reorder_point": ("double precision", None, "YES"),
@@ -310,14 +311,15 @@ def test_issue718_freeform(client):
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO parameter_writebacks "
-                "(id, item_code, site_code, source_system, "
+                "(id, item_code, site_code, source_system, basis, "
                 " requested_reorder_point, requested_max_qty, outcome, written_by) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     str(uuid4()),
                     ITEM_A,
                     SITE_A,
                     "acumatica",
+                    "decision",
                     1.0,
                     2.0,
                     "other",
@@ -541,16 +543,22 @@ def test_issue718_freeform(client):
     #    and the upgrade back to head keeps them too. --------------------
     before = _stored_rows()
     assert len(before) == 3
+    # The downgrade drops the basis column by design, so at
+    # PREV_HEAD the stored rows are before minus each row's basis
+    # key.
+    without_basis = [
+        {key: value for key, value in row.items() if key != "basis"} for row in before
+    ]
     try:
         alembic_command.downgrade(cfg, PREV_HEAD)
         assert _alembic_revision() == PREV_HEAD
         assert _table_exists()  # not dropped
-        assert _stored_rows() == before  # nothing deleted or truncated
+        assert _stored_rows() == without_basis  # nothing deleted or truncated
     finally:
         alembic_command.upgrade(cfg, "head")
     assert _alembic_revision() == HEAD
     assert _table_columns() == EXPECTED_SHAPE
-    assert _stored_rows() == before
+    assert _stored_rows() == before  # the backfill restores each basis
 
     # -- 6. Identity: the proof also runs as a NON-ADMIN (role 'user').
     #    Second pass after a full reload: the page boots the production

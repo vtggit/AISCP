@@ -37,7 +37,9 @@ values through the writer for its source system (the Acumatica
 item-warehouse parameter writer on ``AcumaticaClient`` for
 "acumatica", ``OdooClient().write_reorder_rule`` for "odoo"): a
 write that returns
-"written" or "unchanged" stores one audit row and sets the
+"written" or "unchanged" stores one audit row — with the preview
+row's ``basis`` on it, the row's written, unchanged or failed
+audit alike — and sets the
 item-site's ``reorder_point``/``max_qty`` to the after values, with
 ``order_qty`` derived as max minus reorder point when that is
 greater than 0, null otherwise; a writer error (``AcumaticaError``
@@ -69,10 +71,12 @@ counts — the latest of its rows whose outcome is "written" or
 "unchanged" and whose ``after_reorder_point`` and
 ``after_max_qty`` are both not null, the latest the greatest
 ``written_at``, ties broken by the greatest ``id`` (a "failed"
-row never counts and never hides an earlier push) — a
-reorder-point push when that row's ``decision_id`` is not null,
-a buffer push when it is null.  The push is read back when the
-item-site's ``item_sites`` row exists and its ``synced_at`` is
+row never counts and never hides an earlier push) — the basis
+decides the kind: a reorder-point push when that row's ``basis``
+is "decision", a buffer push when it is "ddmrp", and a push of any
+other basis (such as "excess") counted in neither kind.  The push
+is read back when the item-site's ``item_sites`` row exists and its
+``synced_at`` is
 later than the push's ``written_at``, and is unchanged when the
 row's ``reorder_point`` and ``max_qty`` are both not null and
 each differs by no more than 0.000001 from the push's after
@@ -286,9 +290,11 @@ class ParameterWritebackPushRecordKind(BaseModel):
 
 class ParameterWritebackPushRecord(BaseModel):
     """The response of GET /api/parameter-writeback/record: the
-    measure of the counted pushes per kind — the reorder-point
-    pushes (the counting row carries a decision) and the buffer
-    pushes (it does not).  AISCP keeps no history of the ERP's
+    measure of the counted pushes per kind.  The basis decides the
+    kind: a counted push is a reorder-point push when its
+    ``basis`` is "decision" and a buffer push when its ``basis`` is
+    "ddmrp"; a push of any other basis (such as "excess") is
+    counted in neither kind.  AISCP keeps no history of the ERP's
     values between syncs, so a value changed and changed back
     between two syncs counts as unchanged, and an item-site that
     no sync lists any more is never read back."""
@@ -647,7 +653,9 @@ def _confirm_pair(row: dict, user: AuthUser) -> dict:
     ``OdooClient().write_reorder_rule`` for "odoo".  A write that
     returns "written" or "unchanged" stores one audit row (the
     outcome, the ERP's before and after values, the requested
-    values, the decision id — null for a DDMRP buffer row — and the
+    values, the row's ``basis`` — passed explicitly from the
+    preview row — the decision id, null for a DDMRP buffer row, and
+    the
     token subject and display name, as the planner decisions record
     them) and sets the item-site's
     ``reorder_point`` and ``max_qty`` to the after values with
@@ -684,6 +692,7 @@ def _confirm_pair(row: dict, user: AuthUser) -> dict:
             site_code=site_code,
             source_system=row["source_system"],
             decision_id=row["decision_id"],
+            basis=row["basis"],
             before_reorder_point=None,
             before_max_qty=None,
             after_reorder_point=None,
@@ -710,6 +719,7 @@ def _confirm_pair(row: dict, user: AuthUser) -> dict:
         site_code=site_code,
         source_system=row["source_system"],
         decision_id=row["decision_id"],
+        basis=row["basis"],
         before_reorder_point=float(result["before"]["reorder_point"]),
         before_max_qty=float(result["before"]["max_qty"]),
         after_reorder_point=after_reorder_point,
@@ -868,8 +878,10 @@ def record() -> dict:
     audit rows with both after values stored, the greatest
     ``written_at``, ties broken by the greatest ``id``; a "failed"
     row never counts and never hides an earlier push) is of that
-    kind, a reorder-point push when that row's ``decision_id`` is
-    not null and a buffer push when it is null; ``read`` how many of
+    kind — the basis decides the kind: a reorder-point push when
+    that row's ``basis`` is "decision", a buffer push when it is
+    "ddmrp", and a push of any other basis (such as "excess")
+    counted in neither kind; ``read`` how many of
     those are read back (the item-site's ``item_sites`` row exists
     and its ``synced_at`` is later than the push's ``written_at``);
     ``unchanged`` how many of the read ones are unchanged (the row's

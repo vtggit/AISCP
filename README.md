@@ -369,12 +369,13 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Release chosen transfer suggestions to Acumatica as transfer orders on hold, with the same
   preview, confirm and audit; their status is read back from Acumatica
   (`backend/app/supply/transfer_release.py`).
-- Push accepted reorder points and DDMRP buffer levels into the ERP that owns the item-site
+- Push accepted reorder points, DDMRP buffer levels and excess stops (reorder point and max
+  quantity 0) into the ERP that owns the item-site
   (Acumatica item-warehouse settings or Odoo reorder rules): preview first, then an admin
   confirms; every write is read back and audited (`backend/app/api/parameter_writeback.py`).
 - The writeback record, open to any signed-in user, measures what the confirm pushed and what
   the ERPs kept: for each item-site's latest counted push, how many were read back and unchanged,
-  by reorder-point and buffer kind (`GET /api/parameter-writeback/record`,
+  by reorder-point, buffer and excess kinds (`GET /api/parameter-writeback/record`,
   `backend/app/recommend/push_record.py`).
 - The Push to ERP screen shows the writeback record directly after the bar and before the outstanding pane,
   with a line for each kind that has pushed values; the block is absent while the read is out, after a

@@ -100,6 +100,8 @@ code is the authority for details.
   (#1534).
 - Parameter write-back pushes now store their basis, and the record counts them by it, with decision
   pushes as reorder-point, DDMRP pushes as buffer, and excess pushes counted in neither kind (#1587).
+- Excess stops now appear in the Push to ERP preview and confirm, pushing their item-sites to a reorder
+  point and max quantity of 0, and the push record reports them as excess (#1588).
 
 **DDMRP**
 - Buffer designations by an admin, buffer zones from average daily usage and lead time with the

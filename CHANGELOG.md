@@ -98,6 +98,8 @@ code is the authority for details.
 - The Overview's Reorder points card now shows, for pushed reorder points, how many the ERP still holds
   unchanged, as a count and a percentage of the values read back, or that none have been read back yet
   (#1534).
+- Parameter write-back pushes now store their basis, and the record counts them by it, with decision
+  pushes as reorder-point, DDMRP pushes as buffer, and excess pushes counted in neither kind (#1587).
 
 **DDMRP**
 - Buffer designations by an admin, buffer zones from average daily usage and lead time with the

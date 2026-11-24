@@ -554,8 +554,9 @@ for the item-sites a planner chooses to buffer.
   - **Red:** a base of ADU × DLT × lead-time factor, plus a safety part of that base × the
     variability factor.
   - **Yellow:** ADU × DLT.
-  - **Green:** the largest of ADU × order cycle, the red base, and the minimum order quantity (0
-    until the feed carries one).
+  - **Green:** the largest of ADU × order cycle, the red base, and the minimum order quantity: the
+    item's supplier minimum in the supplier terms the order plan uses for the item-site's source
+    system (the default supplier, otherwise the lowest supplier code), 0 when there is none.
   - **Thresholds:** top of red, top of yellow (red + yellow) and top of green (red + yellow +
     green), each in whole units, each with its arithmetic shown.
 - **Planning.**

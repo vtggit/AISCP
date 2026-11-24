@@ -2,30 +2,46 @@
 
 ``GET /api/parameter-writeback/preview`` lists the item-sites whose
 writeback is outstanding, with the values a writeback would push.
-The rows come from two sources, each read once per call: every
+The rows come from three sources, each read once per call: every
 item-site whose current planner decision is "accepted" but outstanding
 by the decision summary's rule (the ERP reorder point is null or
 differs from the recommendation by more than 1) — a row with
 ``basis`` "decision", whose proposed reorder point is the decision's
 ``recommended_reorder_point_units`` and whose proposed max quantity
 keeps the item's order quantity and never drops below the reorder
-point — and every designated DDMRP buffer whose zone row from
+point — every designated DDMRP buffer whose zone row from
 ``app.api.ddmrp.ddmrp_zone_rows()`` has status "ok" (a row with
 ``basis`` "ddmrp", ``decision_id``, ``decided_at`` and
 ``money_at_stake`` null), outstanding when the pair's
 ``item_sites.reorder_point`` or ``max_qty`` is null or differs from
-the proposal (the top of yellow, the top of green) by more than 1.
+the proposal (the top of yellow, the top of green) by more than 1 —
+and the excess stops of AIERP-D-231: every item-site whose current
+excess decision (the latest excess decision per pair, read through
+``ExcessDecisionPostgresRepository().current_all()``) is "accepted"
+with the action "stop_replenishing" and whose pair the current
+excess ranking (``app.recommend.excess.excess_ranked()``, read once
+per call only when such a decision exists) lists — a row with
+``basis`` "excess" and the proposed reorder point and max quantity
+both 0, the ``decision_id`` and ``decided_at`` of the excess
+decision and the listed row's ``money_tied_up`` as
+``money_at_stake``, appearing only when the pair's ``item_sites``
+row exists and its ``reorder_point`` or ``max_qty`` is above 0 —
+an item-site whose values are 0 or null has nothing to stop.
 A designated item-site whose zone row is "ok" is DDMRP-managed,
 so its decision row is never listed or written, whether or not its
-buffer row is outstanding.  The decision rows keep their order and
-the buffer rows follow them, ordered by item_code then site_code.
-A row is writable only when the item-site's source system is
-"acumatica" or "odoo".
+buffer row is outstanding, and a listed excess stop pair is
+excess-managed, so its decision row and its buffer row are never
+listed or written, whether or not its excess row is outstanding.
+The decision rows keep their order, the buffer rows follow them,
+and the excess rows follow them, ordered by item_code then
+site_code.  A row is writable only when the item-site's source
+system is "acumatica" or "odoo".
 
 ``POST /api/parameter-writeback/confirm`` (admin only — the same
 ``require_role("admin")`` the planner decisions use) writes the
-outstanding preview rows (the accepted decisions and the DDMRP
-buffers) back to their ERPs: the body carries 1
+outstanding preview rows (the accepted decisions, the DDMRP
+buffers and the excess stops of AIERP-D-231) back to their ERPs:
+the body carries 1
 to 200 item-site pairs, no duplicate pair (a NUL byte, an empty
 list, more than 200 items, or a duplicate answers 422), and every
 pair is checked against the same preview rows the preview route
@@ -73,17 +89,18 @@ counts — the latest of its rows whose outcome is "written" or
 ``written_at``, ties broken by the greatest ``id`` (a "failed"
 row never counts and never hides an earlier push) — the basis
 decides the kind: a reorder-point push when that row's ``basis``
-is "decision", a buffer push when it is "ddmrp", and a push of any
-other basis (such as "excess") counted in neither kind.  The push
+is "decision", a buffer push when it is "ddmrp", and an excess
+push when it is "excess".  The push
 is read back when the item-site's ``item_sites`` row exists and its
 ``synced_at`` is
 later than the push's ``written_at``, and is unchanged when the
 row's ``reorder_point`` and ``max_qty`` are both not null and
 each differs by no more than 0.000001 from the push's after
 values, every other read-back push being changed.  The answer is
-``{reorder_points, buffers}``, each ``{pushed, read, unchanged,
-rate}`` with ``rate`` ``unchanged / read`` rounded to 4 places,
-null when ``read`` is 0.  The measure's limits are the sync's:
+``{reorder_points, buffers, excess}``, each ``{pushed, read,
+unchanged, rate}`` with ``rate`` ``unchanged / read`` rounded to 4
+places, null when ``read`` is 0.  The measure's limits are
+the sync's:
 AISCP keeps no history of the ERP's values between syncs, so a
 value changed and changed back between two syncs counts as
 unchanged, and an item-site that no sync lists any more is never
@@ -114,7 +131,11 @@ from app.auth.models import AuthUser
 from app.db.connection import get_cursor
 from app.feed.acumatica_client import AcumaticaClient, AcumaticaError
 from app.feed.odoo_client import OdooClient, OdooError
+from app.recommend.excess import excess_ranked
 from app.recommend.push_record import push_record
+from app.repositories.excess_decisions_postgres_repository import (
+    ExcessDecisionPostgresRepository,
+)
 from app.repositories.parameter_writeback_postgres_repository import (
     ParameterWritebackPostgresRepository,
 )
@@ -126,6 +147,7 @@ router = APIRouter(prefix="/api/parameter-writeback", tags=["parameter-writeback
 
 _repo = ParameterWritebackPostgresRepository()
 _writebacks = ParameterWritebacksPostgresRepository()
+_excess_decisions = ExcessDecisionPostgresRepository()
 
 _WRITABLE_SOURCE_SYSTEMS = frozenset({"acumatica", "odoo"})
 _BLOCKED_NO_ITEM_SITES_ROW = "no item_sites row"
@@ -138,8 +160,11 @@ _CONFIRM_FAILED_REASON = "writer_error"
 
 
 class ParameterWritebackRow(BaseModel):
-    """One preview row: the outstanding accepted decision, the
-    item-site's current parameters and the proposed writeback values."""
+    """One preview row: the outstanding writeback — an accepted
+    decision (``basis`` "decision"), a DDMRP buffer (``basis``
+    "ddmrp") or an excess stop of AIERP-D-231 (``basis`` "excess") —
+    the item-site's current parameters and the proposed writeback
+    values."""
 
     item_code: str
     site_code: str
@@ -154,7 +179,7 @@ class ParameterWritebackRow(BaseModel):
     proposed_max_qty: float
     writable: bool
     blocked_reason: str | None = None
-    basis: Literal["decision", "ddmrp"]
+    basis: Literal["decision", "ddmrp", "excess"]
 
 
 class ParameterWritebackPreviewResponse(BaseModel):
@@ -292,15 +317,16 @@ class ParameterWritebackPushRecord(BaseModel):
     """The response of GET /api/parameter-writeback/record: the
     measure of the counted pushes per kind.  The basis decides the
     kind: a counted push is a reorder-point push when its
-    ``basis`` is "decision" and a buffer push when its ``basis`` is
-    "ddmrp"; a push of any other basis (such as "excess") is
-    counted in neither kind.  AISCP keeps no history of the ERP's
-    values between syncs, so a value changed and changed back
-    between two syncs counts as unchanged, and an item-site that
-    no sync lists any more is never read back."""
+    ``basis`` is "decision", a buffer push when its ``basis`` is
+    "ddmrp", and an excess push when its ``basis`` is "excess".
+    AISCP keeps no history of the ERP's values between syncs, so a
+    value changed and changed back between two syncs counts as
+    unchanged, and an item-site that no sync lists any more is
+    never read back."""
 
     reorder_points: ParameterWritebackPushRecordKind
     buffers: ParameterWritebackPushRecordKind
+    excess: ParameterWritebackPushRecordKind
 
 
 class _HistoryFilters(BaseModel):
@@ -392,13 +418,18 @@ def _preview_rows() -> list[dict]:
     different picture of what is outstanding than the preview shows
     (shared, not copied).
 
-    Two sources, each read once per call: the outstanding accepted
-    decisions (``basis`` "decision") and the DDMRP buffer rows
-    (``basis`` "ddmrp", ``_ddmrp_buffer_rows`` below).  A designated
-    item-site whose zone row is "ok" is DDMRP-managed, so its
-    decision row is never listed or written, whether or not its
-    buffer row is outstanding.  The decision rows keep their order
-    and the buffer rows follow them, ordered by item_code then
+    Three sources, each read once per call: the outstanding
+    accepted decisions (``basis`` "decision"), the DDMRP buffer
+    rows (``basis`` "ddmrp", ``_ddmrp_buffer_rows`` below) and the
+    excess stop rows (``basis`` "excess", AIERP-D-231,
+    ``_excess_stop_rows`` below).  A designated item-site whose
+    zone row is "ok" is DDMRP-managed, so its decision row is
+    never listed or written, whether or not its buffer row is
+    outstanding, and a listed excess stop pair is excess-managed,
+    so its decision row and its buffer row are never listed or
+    written, whether or not its excess row is outstanding.  The
+    decision rows keep their order, the buffer rows follow them,
+    and the excess rows follow them, ordered by item_code then
     site_code.
     """
     decision_rows: list[dict] = []
@@ -435,11 +466,21 @@ def _preview_rows() -> list[dict]:
             }
         )
     buffer_rows, ok_pairs = _ddmrp_buffer_rows()
-    return [
-        row
-        for row in decision_rows
-        if (row["item_code"], row["site_code"]) not in ok_pairs
-    ] + buffer_rows
+    excess_rows, stop_pairs = _excess_stop_rows()
+    managed_pairs = ok_pairs | stop_pairs
+    return (
+        [
+            row
+            for row in decision_rows
+            if (row["item_code"], row["site_code"]) not in managed_pairs
+        ]
+        + [
+            row
+            for row in buffer_rows
+            if (row["item_code"], row["site_code"]) not in stop_pairs
+        ]
+        + excess_rows
+    )
 
 
 def _item_sites_by_pair(pairs: list[tuple[str, str]]) -> dict[tuple[str, str], dict]:
@@ -538,21 +579,113 @@ def _ddmrp_buffer_rows() -> tuple[list[dict], set[tuple[str, str]]]:
     return rows, ok_pairs
 
 
+def _excess_stop_rows() -> tuple[list[dict], set[tuple[str, str]]]:
+    """The excess stop rows of the preview, in item-then-site
+    order, and the set of the listed stop pairs (AIERP-D-231).
+
+    The preview's third source, read once per call: the current
+    excess decision of every item-site, through
+    ``ExcessDecisionPostgresRepository().current_all()``, kept
+    where ``decision`` is "accepted" and ``action`` is
+    "stop_replenishing".  With none, the function answers no rows
+    and no pairs, and the excess list is not read.  Otherwise the
+    excess list is read once per call, with
+    ``app.recommend.excess.excess_ranked`` imported by name: the
+    stop pairs are the stops whose pair the excess list lists, and
+    there is one row per stop pair, ordered by item_code then
+    site_code, but only when the pair's ``item_sites`` row exists
+    and its ``reorder_point`` or ``max_qty`` is above 0 — an
+    item-site whose values are 0 or null has nothing to stop.  A
+    row carries ``basis`` "excess" with the proposed reorder point
+    and max quantity both 0, the ``decision_id`` and ``decided_at``
+    of the excess decision and the listed row's ``money_tied_up``
+    as ``money_at_stake``; its current values, source system and
+    writable/blocked rules are computed exactly as for buffer
+    rows.  The second value is the set of the ``(item_code,
+    site_code)`` of every listed stop pair, outstanding or not: a
+    listed stop pair is excess-managed, so its decision row and
+    its buffer row are never listed or written, whether or not its
+    excess row is outstanding.
+    """
+    stops = [
+        decision
+        for decision in _excess_decisions.current_all()
+        if decision["decision"] == "accepted"
+        and decision["action"] == "stop_replenishing"
+    ]
+    if not stops:
+        return [], set()
+    listed = {(row["item_code"], row["site_code"]): row for row in excess_ranked()}
+    stop_pairs = {
+        (decision["item_code"], decision["site_code"])
+        for decision in stops
+        if (decision["item_code"], decision["site_code"]) in listed
+    }
+    if not stop_pairs:
+        return [], stop_pairs
+    item_sites = _item_sites_by_pair(sorted(stop_pairs))
+    stops_by_pair = {
+        (decision["item_code"], decision["site_code"]): decision for decision in stops
+    }
+    rows: list[dict] = []
+    for item_code, site_code in sorted(stop_pairs):
+        site = item_sites.get((item_code, site_code))
+        if site is None:
+            continue
+        reorder_point = site["reorder_point"]
+        max_qty = site["max_qty"]
+        if not (
+            (reorder_point is not None and reorder_point > 0)
+            or (max_qty is not None and max_qty > 0)
+        ):
+            continue
+        decision = stops_by_pair[(item_code, site_code)]
+        source_system = site["source_system"]
+        writable = source_system in _WRITABLE_SOURCE_SYSTEMS
+        blocked_reason = None if writable else _BLOCKED_UNSUPPORTED_SOURCE_SYSTEM
+        rows.append(
+            {
+                "item_code": item_code,
+                "site_code": site_code,
+                "decision_id": decision["id"],
+                "decided_at": decision["decided_at"],
+                "money_at_stake": listed[(item_code, site_code)]["money_tied_up"],
+                "source_system": source_system,
+                "current_reorder_point": reorder_point,
+                "current_max_qty": max_qty,
+                "current_order_qty": site["order_qty"],
+                "proposed_reorder_point": 0.0,
+                "proposed_max_qty": 0.0,
+                "writable": writable,
+                "blocked_reason": blocked_reason,
+                "basis": "excess",
+            }
+        )
+    return rows, stop_pairs
+
+
 @router.get(
     "/preview",
     response_model=ParameterWritebackPreviewResponse,
     dependencies=[Depends(require_any_authenticated_user)],
 )
 def preview() -> dict:
-    """Preview the parameter writeback of the outstanding accepted
-    decisions.
+    """Preview the parameter writebacks: the outstanding accepted
+    decisions, the DDMRP buffers and the excess stops.
 
-    Open to any authenticated user.  Every row is the item-site's
-    current accepted decision that the ERP has not applied yet, with
-    the proposed values a writeback would push; ``count`` is the
-    number of rows and ``writable_count`` the number of them whose
-    source system is "acumatica" or "odoo".  Reads only: no ERP client
-    call, nothing written.
+    Open to any authenticated user.  The rows are the three
+    outstanding sources the module docstring describes, in that
+    order: every accepted decision the ERP has not applied yet,
+    every designated DDMRP buffer whose zone row is "ok" and whose
+    ERP values have not caught up with the zone tops, and — by
+    AIERP-D-231 — every listed excess stop: the item-sites whose
+    current excess decision is "accepted" with the action
+    "stop_replenishing" and whose pair the current excess ranking
+    lists, each with the proposed values a writeback would push —
+    0 and 0 for a stop, so the ERP stops replenishing it.  ``count``
+    is the number of rows and ``writable_count`` the number of them
+    whose source system is "acumatica" or "odoo".  Reads only: no
+    ERP client call, nothing written.
     """
     rows = _preview_rows()
     return {
@@ -754,7 +887,9 @@ def confirm(
     body: ParameterWritebackConfirmBody,
     user: AuthUser = Depends(require_role("admin")),
 ) -> dict:
-    """Write the outstanding accepted decisions back to their ERPs.
+    """Write the outstanding preview rows back to their ERPs: the
+    accepted decisions, the DDMRP buffers and the excess stops of
+    AIERP-D-231.
 
     Admin only — the same ``require_role("admin")`` the planner
     decisions use: a non-admin answers 403 before any repository
@@ -872,16 +1007,16 @@ def record() -> dict:
     ``require_any_authenticated_user`` dependency as the history
     route.  No parameters.  The answer is
     ``app.recommend.push_record.push_record()``:
-    ``{reorder_points, buffers}``, each ``{pushed, read, unchanged,
-    rate}`` — ``pushed`` the counted item-sites whose one counted
-    push (the latest of the item-site's "written" or "unchanged"
-    audit rows with both after values stored, the greatest
-    ``written_at``, ties broken by the greatest ``id``; a "failed"
-    row never counts and never hides an earlier push) is of that
-    kind — the basis decides the kind: a reorder-point push when
-    that row's ``basis`` is "decision", a buffer push when it is
-    "ddmrp", and a push of any other basis (such as "excess")
-    counted in neither kind; ``read`` how many of
+    ``{reorder_points, buffers, excess}``, each ``{pushed, read,
+    unchanged, rate}`` — ``pushed`` the counted item-sites whose
+    one counted push (the latest of the item-site's "written" or
+    "unchanged" audit rows with both after values stored, the
+    greatest ``written_at``, ties broken by the greatest ``id``;
+    a "failed" row never counts and never hides an earlier push)
+    is of that kind — the basis decides the kind: a reorder-point
+    push when that row's ``basis`` is "decision", a buffer push
+    when it is "ddmrp", and an excess push when it is "excess";
+    ``read`` how many of
     those are read back (the item-site's ``item_sites`` row exists
     and its ``synced_at`` is later than the push's ``written_at``);
     ``unchanged`` how many of the read ones are unchanged (the row's

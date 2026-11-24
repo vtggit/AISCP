@@ -96,12 +96,12 @@ items:
   - key: AIERP-D-147
     type: design
     title: "Zones: Green"
-    statement: "**Green:** the largest of ADU × order cycle, the red base, and the minimum order quantity (0 until the feed carries one)."
+    statement: "**Green:** the largest of ADU × order cycle, the red base, and the minimum order quantity. The minimum is the item's supplier minimum order quantity in the supplier terms the order plan uses for the item-site's source system (the default supplier's row, otherwise the lowest supplier code), when it is above 0, and 0 otherwise. The order plan's preference for a lower-risk supplier does not change it."
     decided:
       by: model:claude
-      date: 2026-10-28
+      date: 2026-11-24
       under: delegation
-      ref: "AIERP#720"
+      ref: "AISCP#1602"
 
   - key: AIERP-D-148
     type: design

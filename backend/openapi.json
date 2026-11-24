@@ -8611,7 +8611,7 @@
           "parameter-writeback"
         ],
         "summary": "Preview",
-        "description": "Preview the parameter writeback of the outstanding accepted\ndecisions.\n\nOpen to any authenticated user.  Every row is the item-site's\ncurrent accepted decision that the ERP has not applied yet, with\nthe proposed values a writeback would push; ``count`` is the\nnumber of rows and ``writable_count`` the number of them whose\nsource system is \"acumatica\" or \"odoo\".  Reads only: no ERP client\ncall, nothing written.",
+        "description": "Preview the parameter writebacks: the outstanding accepted\ndecisions, the DDMRP buffers and the excess stops.\n\nOpen to any authenticated user.  The rows are the three\noutstanding sources the module docstring describes, in that\norder: every accepted decision the ERP has not applied yet,\nevery designated DDMRP buffer whose zone row is \"ok\" and whose\nERP values have not caught up with the zone tops, and \u2014 by\nAIERP-D-231 \u2014 every listed excess stop: the item-sites whose\ncurrent excess decision is \"accepted\" with the action\n\"stop_replenishing\" and whose pair the current excess ranking\nlists, each with the proposed values a writeback would push \u2014\n0 and 0 for a stop, so the ERP stops replenishing it.  ``count``\nis the number of rows and ``writable_count`` the number of them\nwhose source system is \"acumatica\" or \"odoo\".  Reads only: no\nERP client call, nothing written.",
         "operationId": "preview_api_parameter_writeback_preview_get",
         "security": [
           {
@@ -8666,7 +8666,7 @@
           "parameter-writeback"
         ],
         "summary": "Confirm",
-        "description": "Write the outstanding accepted decisions back to their ERPs.\n\nAdmin only \u2014 the same ``require_role(\"admin\")`` the planner\ndecisions use: a non-admin answers 403 before any repository\nread, ERP write, or audit row.  The body carries 1 to 200\nitem-site pairs, no duplicate pair; a NUL byte in any code, an\nempty list, more than 200 items, or a duplicate answers 422 in\nFastAPI's HTTPValidationError envelope.\n\nEvery pair is checked, in request order, against the same\npreview rows the preview route builds (shared code, not copied):\na pair with no preview row answers \"skipped\" / \"not outstanding\"\nand a row that is not writable answers \"skipped\" with its\nblocked_reason \u2014 both store no audit row and make no ERP call.\nEvery other pair writes the row's proposed values to its source\nERP; a \"written\" or \"unchanged\" write stores one audit row and\nsets the item-site's parameters to the after values, and a\nwriter error stores one audit row with outcome \"failed\", leaves\nthe item-site untouched, and answers the stable public reason\n\"writer_error\".\n\nThe response carries the per-pair results in request order \u2014\neach with the item-site's before and after values (reorder_point,\nmax_qty, order_qty \u2014 order_qty null when the derived value is\nnot positive) as JSON numbers \u2014 and the outcome counts.",
+        "description": "Write the outstanding preview rows back to their ERPs: the\naccepted decisions, the DDMRP buffers and the excess stops of\nAIERP-D-231.\n\nAdmin only \u2014 the same ``require_role(\"admin\")`` the planner\ndecisions use: a non-admin answers 403 before any repository\nread, ERP write, or audit row.  The body carries 1 to 200\nitem-site pairs, no duplicate pair; a NUL byte in any code, an\nempty list, more than 200 items, or a duplicate answers 422 in\nFastAPI's HTTPValidationError envelope.\n\nEvery pair is checked, in request order, against the same\npreview rows the preview route builds (shared code, not copied):\na pair with no preview row answers \"skipped\" / \"not outstanding\"\nand a row that is not writable answers \"skipped\" with its\nblocked_reason \u2014 both store no audit row and make no ERP call.\nEvery other pair writes the row's proposed values to its source\nERP; a \"written\" or \"unchanged\" write stores one audit row and\nsets the item-site's parameters to the after values, and a\nwriter error stores one audit row with outcome \"failed\", leaves\nthe item-site untouched, and answers the stable public reason\n\"writer_error\".\n\nThe response carries the per-pair results in request order \u2014\neach with the item-site's before and after values (reorder_point,\nmax_qty, order_qty \u2014 order_qty null when the derived value is\nnot positive) as JSON numbers \u2014 and the outcome counts.",
         "operationId": "confirm_api_parameter_writeback_confirm_post",
         "security": [
           {
@@ -8847,7 +8847,7 @@
           "parameter-writeback"
         ],
         "summary": "Record",
-        "description": "The record of the parameter writebacks: what was pushed and\nwhat the ERPs kept.\n\nOpen to any authenticated user, through the same\n``require_any_authenticated_user`` dependency as the history\nroute.  No parameters.  The answer is\n``app.recommend.push_record.push_record()``:\n``{reorder_points, buffers}``, each ``{pushed, read, unchanged,\nrate}`` \u2014 ``pushed`` the counted item-sites whose one counted\npush (the latest of the item-site's \"written\" or \"unchanged\"\naudit rows with both after values stored, the greatest\n``written_at``, ties broken by the greatest ``id``; a \"failed\"\nrow never counts and never hides an earlier push) is of that\nkind \u2014 the basis decides the kind: a reorder-point push when\nthat row's ``basis`` is \"decision\", a buffer push when it is\n\"ddmrp\", and a push of any other basis (such as \"excess\")\ncounted in neither kind; ``read`` how many of\nthose are read back (the item-site's ``item_sites`` row exists\nand its ``synced_at`` is later than the push's ``written_at``);\n``unchanged`` how many of the read ones are unchanged (the row's\n``reorder_point`` and ``max_qty`` are both not null and each\ndiffers by no more than 0.000001 from the push's after values);\nand ``rate`` ``unchanged / read`` rounded to 4 places, null when\n``read`` is 0.  The measure's limits are the sync's: AISCP keeps\nno history of the ERP's values between syncs, so a value changed\nand changed back between two syncs counts as unchanged, and an\nitem-site that no sync lists any more is never read back.\nReads only: nothing written, no ERP call.",
+        "description": "The record of the parameter writebacks: what was pushed and\nwhat the ERPs kept.\n\nOpen to any authenticated user, through the same\n``require_any_authenticated_user`` dependency as the history\nroute.  No parameters.  The answer is\n``app.recommend.push_record.push_record()``:\n``{reorder_points, buffers, excess}``, each ``{pushed, read,\nunchanged, rate}`` \u2014 ``pushed`` the counted item-sites whose\none counted push (the latest of the item-site's \"written\" or\n\"unchanged\" audit rows with both after values stored, the\ngreatest ``written_at``, ties broken by the greatest ``id``;\na \"failed\" row never counts and never hides an earlier push)\nis of that kind \u2014 the basis decides the kind: a reorder-point\npush when that row's ``basis`` is \"decision\", a buffer push\nwhen it is \"ddmrp\", and an excess push when it is \"excess\";\n``read`` how many of\nthose are read back (the item-site's ``item_sites`` row exists\nand its ``synced_at`` is later than the push's ``written_at``);\n``unchanged`` how many of the read ones are unchanged (the row's\n``reorder_point`` and ``max_qty`` are both not null and each\ndiffers by no more than 0.000001 from the push's after values);\nand ``rate`` ``unchanged / read`` rounded to 4 places, null when\n``read`` is 0.  The measure's limits are the sync's: AISCP keeps\nno history of the ERP's values between syncs, so a value changed\nand changed back between two syncs counts as unchanged, and an\nitem-site that no sync lists any more is never read back.\nReads only: nothing written, no ERP call.",
         "operationId": "record_api_parameter_writeback_record_get",
         "security": [
           {
@@ -20507,15 +20507,19 @@
           },
           "buffers": {
             "$ref": "#/components/schemas/ParameterWritebackPushRecordKind"
+          },
+          "excess": {
+            "$ref": "#/components/schemas/ParameterWritebackPushRecordKind"
           }
         },
         "type": "object",
         "required": [
           "reorder_points",
-          "buffers"
+          "buffers",
+          "excess"
         ],
         "title": "ParameterWritebackPushRecord",
-        "description": "The response of GET /api/parameter-writeback/record: the\nmeasure of the counted pushes per kind.  The basis decides the\nkind: a counted push is a reorder-point push when its\n``basis`` is \"decision\" and a buffer push when its ``basis`` is\n\"ddmrp\"; a push of any other basis (such as \"excess\") is\ncounted in neither kind.  AISCP keeps no history of the ERP's\nvalues between syncs, so a value changed and changed back\nbetween two syncs counts as unchanged, and an item-site that\nno sync lists any more is never read back."
+        "description": "The response of GET /api/parameter-writeback/record: the\nmeasure of the counted pushes per kind.  The basis decides the\nkind: a counted push is a reorder-point push when its\n``basis`` is \"decision\", a buffer push when its ``basis`` is\n\"ddmrp\", and an excess push when its ``basis`` is \"excess\".\nAISCP keeps no history of the ERP's values between syncs, so a\nvalue changed and changed back between two syncs counts as\nunchanged, and an item-site that no sync lists any more is\nnever read back."
       },
       "ParameterWritebackPushRecordKind": {
         "properties": {
@@ -20667,7 +20671,8 @@
             "type": "string",
             "enum": [
               "decision",
-              "ddmrp"
+              "ddmrp",
+              "excess"
             ],
             "title": "Basis"
           }
@@ -20682,7 +20687,7 @@
           "basis"
         ],
         "title": "ParameterWritebackRow",
-        "description": "One preview row: the outstanding accepted decision, the\nitem-site's current parameters and the proposed writeback values."
+        "description": "One preview row: the outstanding writeback \u2014 an accepted\ndecision (``basis`` \"decision\"), a DDMRP buffer (``basis``\n\"ddmrp\") or an excess stop of AIERP-D-231 (``basis`` \"excess\") \u2014\nthe item-site's current parameters and the proposed writeback\nvalues."
       },
       "PlanReleaseRow": {
         "properties": {

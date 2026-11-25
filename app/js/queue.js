@@ -83,6 +83,16 @@
 // app/css/queue.css needs no change, and it presses or changes no
 // action button — the decision is unchanged.
 //
+// The list cut line (issue #1600): the server lists at most 1,000
+// rows per list, so a list whose answer is an array of exactly 1,000
+// entries — counted on the answer as received, before any row is
+// filtered out — may hold more than what loaded. While that list's
+// tab is the active one, the list pane shows, directly before its
+// .q-list-body, a status line reading "Showing the first 1,000 rows
+// of this list. There may be more." It is decided again on every
+// load of the three lists, and it does not depend on the decision
+// filter chips or the ERP filter: it describes what was loaded.
+//
 // The answer of GET /api/erp-sources — fetched once with each load of
 // the three lists, and the lists never wait for it — adds two things,
 // only when its `sources` holds two or more entries: an ERP tag,
@@ -261,6 +271,7 @@
     requireActionChoice: true, // decisions.require_action_choice, default true
     defaultFilter: 'open', // queue.default_filter, default "open"
     rows: { drift: null, excess: null, stockout: null },
+    listFull: { drift: false, excess: false, stockout: false }, // issue #1600: per kind, true when the answer as received was an array of exactly 1,000 entries
     listRows: [], // the rows the list pane shows for kind + filter
     selected: null, // { item, site }
     pending: null, // { item, site } from the URL hash
@@ -805,6 +816,7 @@
       '</div>' +
       '<div class="q-split">' +
         '<section class="q-list" aria-label="' + esc(meta.title) + ' rows">' +
+          (state.listFull[state.kind] ? listCutHtml() : '') +
           '<div class="q-list-body">' + renderListBody() + '</div>' +
         '</section>' +
         '<aside class="q-detail" aria-label="Selected row">' +
@@ -925,6 +937,20 @@
         '<span class="q-money">' + esc(moneyLabel(row[meta.moneyField])) + '</span>' +
         '<span class="q-row-badge"><span class="badge ' + badge.cls + '">' + esc(badge.label) + '</span></span>' +
       '</button>'
+    );
+  }
+
+  // The cut line of the list pane (issue #1600): the server lists at
+  // most 1,000 rows, so a full answer means the list may hold more
+  // than what loaded. It shows while that kind is the active tab,
+  // directly before the list body, and does not depend on the
+  // decision filter chips or the ERP filter: it describes what was
+  // loaded, not what the filters show.
+  function listCutHtml() {
+    return (
+      '<p class="q-list-cut" data-testid="queue-list-cut" role="status">' +
+      'Showing the first 1,000 rows of this list. There may be more.' +
+      '</p>'
     );
   }
 
@@ -1712,6 +1738,14 @@
     ];
     Promise.all(calls).then(
       function (results) {
+        // issue #1600: a list is full when its answer as received is
+        // an array of exactly 1,000 entries — counted before asRows
+        // drops anything, and re-decided on every load.
+        state.listFull = {
+          drift: Array.isArray(results[2]) && results[2].length === 1000,
+          excess: Array.isArray(results[3]) && results[3].length === 1000,
+          stockout: Array.isArray(results[4]) && results[4].length === 1000,
+        };
         state.rows = {
           drift: asRows(results[2]),
           excess: asRows(results[3]),
@@ -2515,6 +2549,7 @@
     state.requireActionChoice = true;
     state.defaultFilter = 'open';
     state.rows = { drift: null, excess: null, stockout: null };
+    state.listFull = { drift: false, excess: false, stockout: false };
     state.listRows = [];
     state.selected = null;
     state.pending = null;

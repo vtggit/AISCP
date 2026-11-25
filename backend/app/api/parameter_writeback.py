@@ -48,22 +48,28 @@ pair is checked against the same preview rows the preview route
 builds — shared code, not copied.  A pair with no preview row
 answers "skipped" / "not outstanding" and a row that is not writable
 answers "skipped" with its blocked_reason — both store no audit row
-and make no ERP call.  Every other pair writes the row's proposed
-values through the writer for its source system (the Acumatica
-item-warehouse parameter writer on ``AcumaticaClient`` for
-"acumatica", ``OdooClient().write_reorder_rule`` for "odoo"): a
-write that returns
-"written" or "unchanged" stores one audit row — with the preview
-row's ``basis`` on it, the row's written, unchanged or failed
-audit alike — and sets the
-item-site's ``reorder_point``/``max_qty`` to the after values, with
-``order_qty`` derived as max minus reorder point when that is
-greater than 0, null otherwise; a writer error (``AcumaticaError``
-or ``OdooError``) stores one audit row with outcome "failed" and the
-exception's class name and message, leaves the item-site untouched,
-answers the stable public reason "writer_error" — never the
-exception's class name, message, or provider internals — and
-processing continues with the next pair.  The response carries the
+and make no ERP call.  Every other pair first stores its one audit
+row with outcome "pending" — the before and after values and the
+error null, the requested values set — so the row exists while the
+write is in flight: a row still "pending" means the result is
+unknown.  It then writes the row's proposed values through the
+writer for its source system (the Acumatica item-warehouse
+parameter writer on ``AcumaticaClient`` for "acumatica",
+``OdooClient().write_reorder_rule`` for "odoo"), and the writer's
+answer or error sets that same row's outcome after the call — a
+write that returns "written" or "unchanged" sets the outcome to it,
+the ERP's before and after values, and the error null, with the
+preview row's ``basis`` on the row, the row's written, unchanged or
+failed audit alike, and sets the item-site's
+``reorder_point``/``max_qty`` to the after values, with ``order_qty``
+derived as max minus reorder point when that is greater than 0, null
+otherwise; a writer error (``AcumaticaError`` or ``OdooError``)
+sets the outcome to "failed" and the error to the exception's class
+name and message, leaves the item-site untouched, answers the stable
+public reason "writer_error" — never the exception's class name,
+message, or provider internals — and processing continues with the
+next pair.  If storing the pending row raises, the ERP is not
+called and the exception propagates.  The response carries the
 per-pair results in request order — each with the item-site's before
 and after values as JSON numbers — and the outcome counts.
 
@@ -777,30 +783,40 @@ def _writer_for(source_system: str):
 
 
 def _confirm_pair(row: dict, user: AuthUser) -> dict:
-    """One writable preview row: the ERP write, the audit row and the
-    item-site update, in that order.
+    """One writable preview row: the pending audit row, the ERP
+    write, the row's outcome, and the item-site update, in that
+    order.
 
-    The writer for the row's source system is called with the row's
-    proposed values: the Acumatica item-warehouse parameter writer on
-    ``AcumaticaClient()`` for "acumatica" and
-    ``OdooClient().write_reorder_rule`` for "odoo".  A write that
-    returns "written" or "unchanged" stores one audit row (the
-    outcome, the ERP's before and after values, the requested
-    values, the row's ``basis`` — passed explicitly from the
-    preview row — the decision id, null for a DDMRP buffer row, and
-    the
-    token subject and display name, as the planner decisions record
-    them) and sets the item-site's
-    ``reorder_point`` and ``max_qty`` to the after values with
-    ``order_qty`` derived as max minus reorder point when that is
-    greater than 0, null otherwise.  A writer error
+    The row's audit row is stored first, through the repository's
+    ``insert_pending``: outcome "pending", the before and after
+    values and the error null, the requested values, the row's
+    ``basis`` — passed explicitly from the preview row — the
+    decision id, null for a DDMRP buffer row, and the token subject
+    and display name, as the planner decisions record them.  The row
+    is written pending before the ERP call — the attempt is recorded
+    before its result is known, and a row still "pending" means the
+    result is unknown — so if storing it raises, the ERP is not
+    called and the exception propagates.
+
+    The writer for the row's source system is then called with the
+    row's proposed values: the Acumatica item-warehouse parameter
+    writer on ``AcumaticaClient()`` for "acumatica" and
+    ``OdooClient().write_reorder_rule`` for "odoo".  The writer's
+    answer or error sets that same row's outcome after the call,
+    through the repository's ``update_outcome`` — a write that
+    returns "written" or "unchanged" sets the outcome, the ERP's
+    before and after values and the error null, and the item-site's
+    ``reorder_point`` and ``max_qty`` are set to the after values
+    with ``order_qty`` derived as max minus reorder point when that
+    is greater than 0, null otherwise; a writer error
     (``AcumaticaError`` or ``OdooError`` — writes disabled, auth, a
-    missing rule, a failed read-back, and so on) stores one audit row
-    with outcome "failed" and the exception's class name and message,
+    missing rule, a failed read-back, and so on) sets the outcome
+    "failed" and the error to the exception's class name and message,
     leaves the item-site untouched, and answers the stable public
     reason "writer_error" — never the exception's class name,
     message, or provider internals — so the caller can continue with
-    the next pair.
+    the next pair.  Either way the pair stores exactly one audit row
+    — the pending row, whose outcome changes once, from "pending".
     """
     item_code = row["item_code"]
     site_code = row["site_code"]
@@ -811,6 +827,17 @@ def _confirm_pair(row: dict, user: AuthUser) -> dict:
         "max_qty": row["current_max_qty"],
         "order_qty": row["current_order_qty"],
     }
+    pending = _writebacks.insert_pending(
+        item_code=item_code,
+        site_code=site_code,
+        source_system=row["source_system"],
+        decision_id=row["decision_id"],
+        basis=row["basis"],
+        requested_reorder_point=proposed_reorder_point,
+        requested_max_qty=proposed_max_qty,
+        written_by=user.sub,
+        written_by_name=display_name(user),
+    )
     writer = _writer_for(row["source_system"])
     try:
         result = writer(
@@ -820,22 +847,14 @@ def _confirm_pair(row: dict, user: AuthUser) -> dict:
             max_qty=proposed_max_qty,
         )
     except (AcumaticaError, OdooError) as exc:
-        _writebacks.insert(
-            item_code=item_code,
-            site_code=site_code,
-            source_system=row["source_system"],
-            decision_id=row["decision_id"],
-            basis=row["basis"],
+        _writebacks.update_outcome(
+            pending["id"],
+            outcome="failed",
             before_reorder_point=None,
             before_max_qty=None,
             after_reorder_point=None,
             after_max_qty=None,
-            requested_reorder_point=proposed_reorder_point,
-            requested_max_qty=proposed_max_qty,
-            outcome="failed",
             error=f"{type(exc).__name__}: {exc}",
-            written_by=user.sub,
-            written_by_name=display_name(user),
         )
         return {
             "item_code": item_code,
@@ -847,22 +866,14 @@ def _confirm_pair(row: dict, user: AuthUser) -> dict:
         }
     after_reorder_point = float(result["after"]["reorder_point"])
     after_max_qty = float(result["after"]["max_qty"])
-    _writebacks.insert(
-        item_code=item_code,
-        site_code=site_code,
-        source_system=row["source_system"],
-        decision_id=row["decision_id"],
-        basis=row["basis"],
+    _writebacks.update_outcome(
+        pending["id"],
+        outcome=result["outcome"],
         before_reorder_point=float(result["before"]["reorder_point"]),
         before_max_qty=float(result["before"]["max_qty"]),
         after_reorder_point=after_reorder_point,
         after_max_qty=after_max_qty,
-        requested_reorder_point=proposed_reorder_point,
-        requested_max_qty=proposed_max_qty,
-        outcome=result["outcome"],
         error=None,
-        written_by=user.sub,
-        written_by_name=display_name(user),
     )
     _apply_item_site(item_code, site_code, after_reorder_point, after_max_qty)
     return {
@@ -903,12 +914,17 @@ def confirm(
     a pair with no preview row answers "skipped" / "not outstanding"
     and a row that is not writable answers "skipped" with its
     blocked_reason — both store no audit row and make no ERP call.
-    Every other pair writes the row's proposed values to its source
-    ERP; a "written" or "unchanged" write stores one audit row and
-    sets the item-site's parameters to the after values, and a
-    writer error stores one audit row with outcome "failed", leaves
-    the item-site untouched, and answers the stable public reason
-    "writer_error".
+    Every other pair stores its one audit row with outcome "pending"
+    before the ERP call — the before and after values and the error
+    null: a row still "pending" means the write's result is unknown,
+    and if storing it raises, the ERP is not called and the
+    exception propagates — and writes the row's proposed values to
+    its source ERP; a "written" or "unchanged" write then sets that
+    row's outcome to it, its before and after values and the error
+    null, and sets the item-site's parameters to the after values,
+    and a writer error sets the row's outcome "failed" and its
+    error, leaves the item-site untouched, and answers the stable
+    public reason "writer_error".
 
     The response carries the per-pair results in request order —
     each with the item-site's before and after values (reorder_point,

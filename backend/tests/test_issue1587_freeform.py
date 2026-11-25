@@ -597,13 +597,15 @@ def test_issue1587_freeform(client, monkeypatch):
     # every audit row the route stores — written, unchanged and
     # failed alike.
     insert_calls: list[dict] = []
-    real_insert = parameter_writeback._writebacks.insert
+    real_insert = parameter_writeback._writebacks.insert_pending
 
     def recording_insert(**fields):
         insert_calls.append(fields)
         return real_insert(**fields)
 
-    monkeypatch.setattr(parameter_writeback._writebacks, "insert", recording_insert)
+    monkeypatch.setattr(
+        parameter_writeback._writebacks, "insert_pending", recording_insert
+    )
 
     response = admin.post(
         CONFIRM_URL,

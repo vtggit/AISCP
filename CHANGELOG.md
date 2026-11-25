@@ -102,6 +102,9 @@ code is the authority for details.
   pushes as reorder-point, DDMRP pushes as buffer, and excess pushes counted in neither kind (#1587).
 - Excess stops now appear in the Push to ERP preview and confirm, pushing their item-sites to a reorder
   point and max quantity of 0, and the push record reports them as excess (#1588).
+- The Push to ERP screen now labels excess rows as stop replenishing, counts them in the summary, and
+  reports how many of their pushed values the ERP still holds unchanged, as a count and a percentage of
+  the values read back, or that none have been read back yet (#1589).
 
 **DDMRP**
 - Buffer designations by an admin, buffer zones from average daily usage and lead time with the

@@ -305,6 +305,8 @@ code is the authority for details.
 - The currency each ERP reports in, read from Odoo and Acumatica (`GET /api/erp-currencies`),
   a reporting-currency setting, and each side's currency on the Across ERPs screen (#1019,
   #1026, #1027, #1038).
+- Odoo open purchase, open sales and demand line quantities are converted to the item's base unit
+  before they are used (#1592).
 
 **Supplier risk**
 - A risk rating per supplier (`GET /api/supplier-risk`): Medium for late deliveries or variable

@@ -1989,7 +1989,8 @@ class OdooClient:
         errors) holds:
 
         - the product is the one ``product.product`` whose
-          ``default_code`` equals ``item_code``;
+          ``default_code`` equals ``item_code``, read with the fields
+          ``id`` and ``uom_id``;
         - the vendor is the one ``res.partner`` whose ``ref`` equals
           ``supplier_code`` when any vendor has that non-empty
           ``ref``, else the one whose ``name`` equals it;
@@ -2000,7 +2001,10 @@ class OdooClient:
         Each must resolve to exactly one record with a usable id (a
         warehouse must also have an ``in_type_id``); zero or multiple
         matches raise ``OdooError`` naming which one failed, and
-        nothing is created.
+        nothing is created. A product whose ``uom_id`` is not usable
+        raises ``OdooError`` "item '<item code>' has no unit of
+        measure in Odoo" right after that one product read — before
+        the idempotency search and before any create.
 
         The origin tag is the given ``origin``, or when none is given
         the namespaced default ``"AIERP:replenishment:" +
@@ -2015,9 +2019,11 @@ class OdooClient:
         ``already_existed`` True and no create is issued (multiple
         such orders fail closed). Otherwise one ``purchase.order``
         ``create`` posts ``{partner_id, picking_type_id, origin,
-        order_line: [(0, 0, {product_id, product_qty, price_unit})]}``
-        and the order is left in its default ``draft`` state — the
-        method never calls ``button_confirm``, ``button_cancel``,
+        order_line: [(0, 0, {product_id, product_qty, price_unit,
+        uom_id})]}`` — the ``uom_id`` is the product's base unit id
+        from the one product read — and the order is left in its
+        default ``draft`` state — the method never calls
+        ``button_confirm``, ``button_cancel``,
         ``write``, or ``unlink``. The result is read back via
         ``search_read`` of ``["id", "name", "state"]`` and returned as
         ``{"odoo_id": int, "name": str, "state": str,
@@ -2053,7 +2059,12 @@ class OdooClient:
                 + quote(site_code, safe="")
             )
 
-        product_id = self._resolve_draft_po_product(item_code)
+        product_id, product = self._resolve_draft_po_product_record(
+            item_code, ["id", "uom_id"]
+        )
+        uom_id = _ref_id(product.get("uom_id"))
+        if uom_id is None:
+            raise OdooError(f"item '{item_code}' has no unit of measure in Odoo")
         partner_id = self._resolve_draft_po_partner(supplier_code)
         picking_type_id = self._resolve_draft_po_picking_type(site_code)
 
@@ -2079,6 +2090,7 @@ class OdooClient:
                         "product_id": product_id,
                         "product_qty": quantity,
                         "price_unit": unit_price,
+                        "uom_id": uom_id,
                     },
                 )
             ],
@@ -2381,15 +2393,18 @@ class OdooClient:
             },
         }
 
-    def _resolve_draft_po_product(self, item_code: str) -> int:
-        """Return the id of the one product whose ``default_code`` matches.
+    def _resolve_draft_po_product_record(
+        self, item_code: str, fields: list[str]
+    ) -> tuple[int, dict]:
+        """Return the id and row of the one matching ``product.product``.
 
-        Zero or multiple matches, or a match without a usable id, raise
-        ``OdooError`` naming the product; nothing has been written yet,
-        so nothing is created either way.
+        The row is read with exactly ``fields``. Zero or multiple
+        matches, or a match without a usable id, raise ``OdooError``
+        naming the product; nothing has been written yet, so nothing
+        is created either way.
         """
         records = self.search_read(
-            "product.product", [["default_code", "=", item_code]], ["id"]
+            "product.product", [["default_code", "=", item_code]], fields
         )
         if not records:
             raise OdooError(f"no product matches item code '{item_code}'")
@@ -2398,6 +2413,17 @@ class OdooClient:
         product_id = _ref_id(records[0].get("id"))
         if product_id is None:
             raise OdooError(f"the product matching item code '{item_code}' has no id")
+        return product_id, records[0]
+
+    def _resolve_draft_po_product(self, item_code: str) -> int:
+        """Return the id of the one product whose ``default_code`` matches.
+
+        The row is read with the fields ``id`` only. Zero or multiple
+        matches, or a match without a usable id, raise ``OdooError``
+        naming the product; nothing has been written yet, so nothing
+        is created either way.
+        """
+        product_id, _record = self._resolve_draft_po_product_record(item_code, ["id"])
         return product_id
 
     def _resolve_draft_po_partner(self, supplier_code: str) -> int:

@@ -75,7 +75,7 @@ CONFIG_VARS = ("ODOO_BASE_URL", "ODOO_DB", "ODOO_LOGIN", "ODOO_API_KEY")
 ITEM_CODE = "WIDGET-1"
 SITE_CODE = "WH-1"
 SUPPLIER_CODE = "VENDOR-9"
-PRODUCT = {"id": 11, "default_code": ITEM_CODE}
+PRODUCT = {"id": 11, "default_code": ITEM_CODE, "uom_id": [1, "Units"]}
 PARTNER = {"id": 501, "ref": SUPPLIER_CODE, "name": "Vendor Nine"}
 WAREHOUSE = {"id": 201, "code": SITE_CODE, "in_type_id": 301}
 DEFAULT_TAG = (
@@ -400,7 +400,16 @@ def test_issue445_freeform(monkeypatch):
             "picking_type_id": 301,
             "origin": DEFAULT_TAG,
             "order_line": [
-                [0, 0, {"product_id": 11, "product_qty": 12, "price_unit": 4.25}]
+                [
+                    0,
+                    0,
+                    {
+                        "product_id": 11,
+                        "product_qty": 12,
+                        "price_unit": 4.25,
+                        "uom_id": 1,
+                    },
+                ]
             ],
         }
     ]
@@ -444,7 +453,16 @@ def test_issue445_freeform(monkeypatch):
             "picking_type_id": 301,
             "origin": DEFAULT_TAG,
             "order_line": [
-                [0, 0, {"product_id": 11, "product_qty": 12, "price_unit": 4.25}]
+                [
+                    0,
+                    0,
+                    {
+                        "product_id": 11,
+                        "product_qty": 12,
+                        "price_unit": 4.25,
+                        "uom_id": 1,
+                    },
+                ]
             ],
         }
     ]
@@ -542,7 +560,7 @@ def test_issue445_freeform(monkeypatch):
     assert tag_colon_b == "AIERP:replenishment:A:B%3AC"
     assert tag_colon_a != tag_colon_b
     colon_stub = _OdooStub(
-        products=[{"id": 13, "default_code": "A:B"}],
+        products=[{"id": 13, "default_code": "A:B", "uom_id": [1, "Units"]}],
         partners=[PARTNER],
         warehouses=[{"id": 203, "code": "C", "in_type_id": 303}],
     )

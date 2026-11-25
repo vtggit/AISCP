@@ -80,6 +80,16 @@
 // case the preview's answer is dropped when it lands and the admin
 // previews again; choosing another horizon does it for every block,
 // and a tick in one block leaves the other blocks' panels open. A
+// confirm in flight holds the block still: from the click on its
+// Confirm button until the confirm answers, the horizon select,
+// the Refresh button and every top-up checkbox of that block are
+// disabled, and their change and click handlers do nothing — a
+// preview in flight disables none of them (the block's busy flag
+// covers the preview, so the confirm carries its own marker), the
+// other blocks' top-up checkboxes stay live and a tick in one
+// never touches the block that is confirming, and when the confirm
+// answers the block shows its outcome or error exactly as before,
+// and the controls are enabled again. A
 // 403 shows
 // "Only an admin can release orders.", a 409 or 503 the server's
 // detail, any other failure "The release could not be completed." —
@@ -1057,11 +1067,16 @@
       ' to this order';
     var table = state.chosenTopUps[group.supplier_code];
     var checked = !!(table && table[topUpKey(item, site)]);
+    // While the block's own confirm is out the door the checkbox
+    // holds still; the other blocks' stay live (their marker is
+    // not set).
+    var held = blockConfirming(String(group.supplier_code));
     return (
       '<input type="checkbox" class="op-top-up-choose" data-testid="orders-top-up-choose"' +
       ' data-item="' + esc(item) + '" data-site="' + esc(site) + '"' +
       ' aria-label="' + esc(label) + '"' +
       (checked ? ' checked' : '') +
+      (held ? ' disabled' : '') +
       '>'
     );
   }
@@ -1415,6 +1430,11 @@
   //   answered — a preview or confirm answer has landed (the panel's
   //              group listing is the answer's, not a guess)
   //   busy     — a preview or confirm request is out (buttons disabled)
+  //   confirming — the confirm's request is out: the block's own
+  //              marker (busy covers the preview too) — while it is
+  //              set the horizon select, the Refresh button and the
+  //              block's top-up checkboxes are disabled, and their
+  //              change and click handlers do nothing
   //   body     — the preview's request body, kept with the state so
   //              the confirm sends it back with only "confirm": true
   //   confirmed — a confirm answer has landed (the outcome lines show)
@@ -1423,6 +1443,7 @@
     return {
       answered: false,
       busy: false,
+      confirming: false,
       body: null,
       confirmed: false,
       groups: [],
@@ -1435,6 +1456,29 @@
   // (even an empty one) or a failed request's error.
   function releasePanelOpen(rel) {
     return !!rel && (rel.answered || !!rel.error);
+  }
+
+  // The block's own confirm marker: the confirm's request is out
+  // the door. A preview in flight sets no marker — it disables
+  // none of the horizon select, the Refresh button or the block's
+  // top-up checkboxes.
+  function blockConfirming(supplierCode) {
+    var rel = state.release[supplierCode];
+    return !!(rel && rel.confirming);
+  }
+
+  // Any block's confirm out the door: the horizon select and the
+  // Refresh button hold still while one is, whatever block it is.
+  function anyConfirming() {
+    for (var code in state.release) {
+      if (Object.prototype.hasOwnProperty.call(state.release, code)) {
+        var rel = state.release[code];
+        if (rel && rel.confirming) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   function groupValue(group) {
@@ -1602,6 +1646,7 @@
           return; // a reset or a closed release: this answer belongs to a past state
         }
         rel.busy = false;
+        rel.confirming = false;
         rel.answered = true;
         if (confirm) {
           rel.confirmed = true;
@@ -1616,6 +1661,7 @@
           return; // a reset or a closed release: this answer belongs to a past state
         }
         rel.busy = false;
+        rel.confirming = false;
         rel.error = releaseErrorMessage(error);
         render();
       }
@@ -1653,6 +1699,7 @@
       return;
     }
     rel.busy = true;
+    rel.confirming = true; // the confirm's own marker: the block holds still
     rel.error = null;
     render();
     sendRelease(supplierCode, confirmBodyOf(supplierCode, rel), true);
@@ -1957,12 +2004,12 @@
       '<div class="op-bar">' +
       '<label class="op-horizon-label" for="orders-horizon">Horizon</label>' +
       '<select class="op-horizon" id="orders-horizon" data-testid="orders-horizon"' +
-      (state.loading ? ' disabled' : '') + '>' +
+      (state.loading || anyConfirming() ? ' disabled' : '') + '>' +
       options +
       '</select>' +
       '<button type="button" class="btn btn-secondary op-refresh"' +
       ' data-testid="orders-refresh"' +
-      (state.loading ? ' disabled' : '') +
+      (state.loading || anyConfirming() ? ' disabled' : '') +
       '>Refresh</button>' +
       (showDownload
         ? '<button type="button" class="btn btn-secondary op-download"' +
@@ -2727,6 +2774,10 @@
   // then a re-render: the running line follows. An identity that is
   // not resolved to admin fails closed: the checkbox renders for an
   // admin only.
+  // A block whose own confirm is out the door does nothing: its
+  // checkboxes are disabled then, and this guard stands behind the
+  // disabled attribute — a tick in another block's checkbox is not
+  // held, and it never touches the confirming block's release.
   function chooseTopUpRow(checkbox) {
     if (state.role !== ROLE_ADMIN) {
       return;
@@ -2738,6 +2789,9 @@
     var code = wrap.getAttribute('data-supplier-code');
     if (code === null || code === '') {
       return;
+    }
+    if (blockConfirming(code)) {
+      return; // a held confirm: the block's checkboxes do nothing
     }
     var item = checkbox.getAttribute('data-item') || '';
     var site = checkbox.getAttribute('data-site') || '';
@@ -2766,6 +2820,9 @@
     }
     if (target.getAttribute('data-testid') !== 'orders-horizon') {
       return;
+    }
+    if (anyConfirming()) {
+      return; // a held confirm: the horizon change does nothing
     }
     var days = parseInt(target.value, 10);
     if (!isFinite(days) || days <= 0) {
@@ -2797,6 +2854,9 @@
       return;
     }
     if (event.target.closest('[data-testid="orders-refresh"]')) {
+      if (anyConfirming()) {
+        return; // a held confirm: the refresh does nothing
+      }
       load();
       return;
     }

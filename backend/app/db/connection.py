@@ -312,7 +312,12 @@ class _PooledConnection:
     ``close()`` gives the connection back to the pool — reset, so it
     carries no open transaction or other state to the next user —
     instead of closing it.  For the holder the connection is gone
-    all the same: later use fails the way a closed connection fails.
+    all the same: once ``close()`` has given it back, no attribute of
+    the handle, public or private, still holds the connection, every
+    other use fails the way a closed connection fails, and leaving a
+    ``with`` block on the handle commits nothing and rolls back
+    nothing.  A cursor the holder opened before ``close()`` is the
+    holder's to close, as ``get_cursor()`` closes its own.
     """
 
     __slots__ = ("_conn", "_factory", "_returned")
@@ -339,11 +344,15 @@ class _PooledConnection:
             object.__getattribute__(self, "_conn"),
             object.__getattribute__(self, "_factory"),
         )
+        object.__setattr__(self, "_conn", None)
+        object.__setattr__(self, "_factory", None)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        if object.__getattribute__(self, "_returned"):
+            return False
         conn = object.__getattribute__(self, "_conn")
         if exc_type is None:
             conn.commit()
@@ -438,6 +447,12 @@ def get_cursor():
     the connection is closed when the outermost block exits, an
     exception included.
 
+    When the cursor cannot be opened, the caller gets the error that
+    stopped it — never one raised by the clean-up — and, outside a
+    block, the connection is closed, or given back to the pool,
+    before that error reaches the caller; inside a block the block's
+    connection stays the block's, as above.
+
     Inside the app's request handling the connection it opens — its
     own, or the block's — comes from the process-wide pool and is
     given back at the end, reset, for the next user.
@@ -446,28 +461,36 @@ def get_cursor():
     if conn is None:
         # Outside any block: its own connection, opened and closed here.
         conn = _pool.checkout() if _pool_active() else get_connection()
+        cur = None
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             yield cur
             conn.commit()
         except Exception:
-            conn.rollback()
+            with suppress(Exception):
+                conn.rollback()
             raise
         finally:
-            cur.close()
-            conn.close()
+            if cur is not None:
+                with suppress(Exception):
+                    cur.close()
+            _close_quietly(conn)
         return
     if conn is _UNOPENED or conn.closed:
         # The block's first use — or its connection was dropped: open
         # the one connection and keep it for the rest of the block.
         conn = _pool.checkout() if _pool_active() else get_connection()
         _block_connection.set(conn)
+    cur = None
     try:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         yield cur
         conn.commit()
     except Exception:
-        conn.rollback()
+        with suppress(Exception):
+            conn.rollback()
         raise
     finally:
-        cur.close()
+        if cur is not None:
+            with suppress(Exception):
+                cur.close()

@@ -34,7 +34,13 @@ has closed is dropped, never handed out again.  When ``psycopg2.connect``
 is rebound at call time — a test counting the connections and
 statements the app opens — the pool drops every connection an
 earlier factory made, so the rebound factory opens, and counts,
-every connection the app uses from then on.
+every connection the app uses from then on.  A changed factory never
+stalls a checkout: an idle connection an earlier factory made is
+closed for good at the next checkout — before any connection the
+current factory opens — so that checkout hands out one the current
+factory made instead of waiting on the old factory's idle
+connections, and the process never holds more connections open than
+the bound while it closes them.
 
 Outside the app's request handling — a test body, a script, a
 background worker — the pool stays out of the way: ``get_cursor()``
@@ -203,29 +209,38 @@ def _reset(conn) -> bool:
 class _Pool:
     """The process-wide bound of reused connections.
 
-    At most ``_pool_size()`` connections live at once — idle in the
-    pool or handed out — so the process never holds more connections
-    than the bound.  Every connection rides with the
-    ``psycopg2.connect`` factory that made it: when the factory
-    changes, the pool drops the old factory's connections, so the new
-    factory — and anything counting through it — sees every
-    connection the app opens from then on, and no connection it did
-    not make is ever handed out.
+    At most ``_pool_size()`` connections are open at once — idle in
+    the pool, handed out, or in the middle of being closed — so the
+    process never holds more connections open than the bound, each
+    connection counted open until it is closed.  Every connection
+    rides with the ``psycopg2.connect`` factory that made it: when
+    the factory changes, the pool closes the old factory's idle
+    connections at the next checkout — before any connection the new
+    factory opens — so the new factory, and anything counting
+    through it, sees every connection the app opens from then on,
+    and no connection it did not make is ever handed out.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._wake = threading.Condition(self._lock)
         self._idle: list[tuple[object, object]] = []  # (connection, factory)
-        self._live = 0  # created, not yet closed for good
+        self._live = 0  # open, not in the middle of being closed
+        self._closing = 0  # open, in the middle of being closed
 
     def checkout(self):
         """Hand out one connection: an idle one, or a new one.
 
-        Blocks while every connection of the bound is held out, the
+        Blocks only while every connection of the bound is still
+        open — checked out, or in the middle of being closed — the
         way a caller of the database waits for the database: a
         request served while the pool is full waits for a
-        connection, never opens one past the bound.
+        connection, never opens one past the bound.  A changed
+        factory never stalls it: an idle connection an earlier
+        factory made is closed for good before any connection the
+        current factory opens, so the checkout hands out one the
+        current factory made instead of waiting on the old factory's
+        idle connections.
         """
         while True:
             stale = []
@@ -237,21 +252,30 @@ class _Pool:
                 for conn, factory in self._idle:
                     (kept if factory is current else stale).append((conn, factory))
                 self._idle = kept
+                if stale:
+                    # An earlier factory's idle connections are never
+                    # handed out: counted as open until each is closed
+                    # for good below — before any new connection is
+                    # opened, so the bound holds and the changed
+                    # factory never stalls this checkout.
+                    self._live -= len(stale)
+                    self._closing += len(stale)
                 if kept:
                     entry = kept.pop()
-                elif self._live < _pool_size():
-                    make_new = True
-                    self._live += 1
-                else:
-                    self._wake.wait()
             for dead, _factory in stale:
-                self._abandon(dead)
+                self._settle(dead)
             if entry is not None:
                 conn, factory = entry
                 if _probe(conn):
                     return _PooledConnection(conn, factory)
                 self._abandon(conn)
                 continue
+            with self._wake:
+                if self._live + self._closing < _pool_size():
+                    make_new = True
+                    self._live += 1
+                else:
+                    self._wake.wait()
             if make_new:
                 try:
                     conn = psycopg2.connect(**get_connection_params())
@@ -273,10 +297,9 @@ class _Pool:
                 reusable = True
             else:
                 reusable = False
-                self._live -= 1
-                self._wake.notify_all()
+                self._mark_closing()
         if not reusable:
-            _close_quietly(conn)
+            self._settle(conn)
             return
         if _reset(conn):
             with self._wake:
@@ -284,16 +307,32 @@ class _Pool:
                 self._wake.notify_all()
         else:
             with self._wake:
-                self._live -= 1
-                self._wake.notify_all()
-            _close_quietly(conn)
+                self._mark_closing()
+            self._settle(conn)
+
+    def _mark_closing(self) -> None:
+        """Move one open connection into the middle of being closed.
+
+        Called with the pool's lock held: the connection stops
+        counting as live, but keeps counting as open — as
+        ``_closing`` — until ``_settle`` has closed it, so the bound
+        holds while the close is in flight off the lock.
+        """
+        self._live -= 1
+        self._closing += 1
+
+    def _settle(self, conn) -> None:
+        """Close a closing connection for good and count it down."""
+        _close_quietly(conn)
+        with self._wake:
+            self._closing -= 1
+            self._wake.notify_all()
 
     def _abandon(self, conn) -> None:
-        """Close a connection for good and count it down."""
+        """Close a connection for good, counted open until it is closed."""
         with self._wake:
-            self._live -= 1
-            self._wake.notify_all()
-        _close_quietly(conn)
+            self._mark_closing()
+        self._settle(conn)
 
     def _forget(self) -> None:
         """Count down a connection that was counted but never opened."""
@@ -308,16 +347,19 @@ _pool = _Pool()
 class _PooledConnection:
     """A checked-out pooled connection.
 
-    Delegates everything to the psycopg2 connection it holds; its
-    ``close()`` gives the connection back to the pool — reset, so it
-    carries no open transaction or other state to the next user —
-    instead of closing it.  For the holder the connection is gone
-    all the same: once ``close()`` has given it back, no attribute of
-    the handle, public or private, still holds the connection, every
-    other use fails the way a closed connection fails, and leaving a
-    ``with`` block on the handle commits nothing and rolls back
-    nothing.  A cursor the holder opened before ``close()`` is the
-    holder's to close, as ``get_cursor()`` closes its own.
+    Delegates everything to the psycopg2 connection it holds — a
+    read of an attribute of the handle, a call of one, or an
+    assignment to it reaches the connection, the way it would on the
+    connection itself — and its ``close()`` gives the connection
+    back to the pool, reset, so it carries no open transaction or
+    other state to the next user, instead of closing it.  For the
+    holder the connection is gone all the same: once ``close()`` has
+    given it back, no attribute of the handle, public or private,
+    still holds the connection, every other use fails the way a
+    closed connection fails, and leaving a ``with`` block on the
+    handle commits nothing and rolls back nothing.  A cursor the
+    holder opened before ``close()`` is the holder's to close, as
+    ``get_cursor()`` closes its own.
     """
 
     __slots__ = ("_conn", "_factory", "_returned")
@@ -335,6 +377,15 @@ class _PooledConnection:
                 return 1
             raise psycopg2.InterfaceError("connection already closed")
         return getattr(object.__getattribute__(self, "_conn"), name)
+
+    def __setattr__(self, name, value):
+        if name.startswith("_"):
+            # The handle's own state only, as on any object.
+            object.__setattr__(self, name, value)
+            return
+        if object.__getattribute__(self, "_returned"):
+            raise psycopg2.InterfaceError("connection already closed")
+        setattr(object.__getattribute__(self, "_conn"), name, value)
 
     def close(self) -> None:
         if object.__getattribute__(self, "_returned"):

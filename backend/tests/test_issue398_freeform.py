@@ -304,10 +304,12 @@ def test_issue398_freeform(monkeypatch):
     assert move_info["domains"] == [
         [["state", "=", "done"], ["location_dest_id.usage", "=", "customer"]]
     ]
-    assert move_info["fields"] == [["product_id", "location_id", "quantity", "date"]]
+    assert move_info["fields"] == [
+        ["product_id", "location_id", "quantity", "date", "uom_id"]
+    ]
     assert move_info["kwargs"] == [
         {
-            "fields": ["product_id", "location_id", "quantity", "date"],
+            "fields": ["product_id", "location_id", "quantity", "date", "uom_id"],
             "offset": 0,
             "order": "id asc",
         }
@@ -318,9 +320,9 @@ def test_issue398_freeform(monkeypatch):
     #    call per move.
     assert server.models["product.product"]["calls"] == 1
     assert server.models["product.product"]["domains"] == [[["id", "in", [11, 12, 13]]]]
-    assert server.models["product.product"]["fields"] == [["default_code"]]
+    assert server.models["product.product"]["fields"] == [["default_code", "uom_id"]]
     assert server.models["product.product"]["kwargs"] == [
-        {"fields": ["default_code"], "offset": 0, "order": "id asc"}
+        {"fields": ["default_code", "uom_id"], "offset": 0, "order": "id asc"}
     ]
     assert server.models["stock.location"]["calls"] == 1
     assert server.models["stock.location"]["domains"] == [

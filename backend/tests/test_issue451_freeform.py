@@ -81,7 +81,7 @@ SUPPLIER_CODE = "VENDOR-9"
 PRODUCT_ID = 11
 PARTNER_ID = 501
 PICKING_TYPE_ID = 301
-PRODUCT = {"id": PRODUCT_ID, "default_code": ITEM_CODE}
+PRODUCT = {"id": PRODUCT_ID, "default_code": ITEM_CODE, "uom_id": [1, "Units"]}
 PARTNER = {"id": PARTNER_ID, "ref": SUPPLIER_CODE, "name": "Vendor Nine"}
 WAREHOUSE = {"id": 201, "code": SITE_CODE, "in_type_id": PICKING_TYPE_ID}
 DEFAULT_ORIGIN = (
@@ -357,7 +357,16 @@ def test_issue451_freeform(monkeypatch, client, caplog):
         "picking_type_id": PICKING_TYPE_ID,
         "origin": DEFAULT_ORIGIN,
         "order_line": [
-            [0, 0, {"product_id": PRODUCT_ID, "product_qty": 12.0, "price_unit": 4.25}]
+            [
+                0,
+                0,
+                {
+                    "product_id": PRODUCT_ID,
+                    "product_qty": 12.0,
+                    "price_unit": 4.25,
+                    "uom_id": 1,
+                },
+            ]
         ],
     }
     # Exactly one structured audit line for the confirm, carrying the

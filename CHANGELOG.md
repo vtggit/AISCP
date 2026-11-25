@@ -166,6 +166,8 @@ code is the authority for details.
   periods (60 by default); an admin makes the switch in Settings (#1397).
 - The demand-basis switch proposal now shows under the Settings card's verdict, and the Exceptions
   screen labels its rows "Demand basis to review" (#1401).
+- The Exceptions inbox now logs a warning when a source fails, naming the source and the exception
+  class (#1596).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the

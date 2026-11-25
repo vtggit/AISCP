@@ -9,7 +9,7 @@
 #   6. Secret-pattern scanning (gitleaks)
 #   7. Migrations apply cleanly against a fresh PostgreSQL database
 #   8. The full backend test suite passes (auth, authz, CRUD, audit, migrations), on two
-#      pytest-xdist workers
+#      pytest-xdist workers, with line coverage of app/ reported (not enforced)
 #
 # Lightweight checks (release metadata, quality, security) run without a database
 # so they complete quickly and fail fast. The backend test job requires PostgreSQL.
@@ -211,4 +211,20 @@ jobs:
           DB_PASSWORD=change-me-in-production \
           AUTH_MODE=development \
           AUTH_DEV_TOKEN=dev-secret-token \
-            python3 -m pytest tests/ -n 2 -v --tb=short
+            python3 -m pytest tests/ -n 2 -v --tb=short \
+              --cov=app --cov-report=xml:coverage.xml --cov-report=term:skip-covered
+
+      # Coverage is reported, not enforced: the job page shows the total, each package and
+      # the least-covered modules, and coverage.xml is kept as an artifact. Both run after a
+      # failed suite too, and neither changes the job's result.
+      - name: Coverage summary
+        if: always()
+        run: python3 scripts/coverage_summary.py backend/coverage.xml >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: ignore

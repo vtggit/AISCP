@@ -383,6 +383,8 @@ code is the authority for details.
   at 1,000 rows (#1601).
 
 **Documentation and CI**
+- Backend line coverage in CI, reported and not enforced: the total, each package and the
+  least-covered modules on the test job's summary, and `coverage.xml` as an artifact.
 - A 20-minute demo walkthrough (`docs/DEMO.md`) (#915).
 - The product vision gained new sections and is kept as a register of keyed guidance items
   (#1121).

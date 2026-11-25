@@ -597,6 +597,10 @@ Database migrations live in `backend/migrations/versions/` (Alembic).
   them against a PostgreSQL service with `AUTH_MODE=development`, after checking that the
   migrations apply cleanly. They can run in parallel with pytest-xdist (`pytest -n 2`):
   each worker gets its own test database (`backend/tests/conftest.py`).
+- **Coverage** of `backend/app` is reported by CI, not enforced: the backend test job's
+  summary shows the total, each package and the least-covered modules, and the full
+  `coverage.xml` is its `backend-coverage` artifact. Locally, from `backend/`:
+  `pytest -n 2 --cov=app --cov-report=term:skip-covered`.
 - **Frontend tests** (Playwright) are in `app/tests/`. Without `BASE_URL` set, the
   Playwright config serves `app/` itself; with it set, the specs run against that address.
 - **Merge-gate tests** are in `tests/ca_gate/`.

@@ -469,6 +469,8 @@ code is the authority for details.
   other blocks enabled, so the confirm's outcome or error is shown when it answers (#1594).
 - The SBA intermittent-demand forecast now starts its smoothed interval at the first non-zero
   quantity's position, counted from 1, instead of at 1 (#1599).
+- A returned pooled database connection is no longer reachable through its handle, and a cursor that
+  cannot be opened no longer masks the original error (#1610).
 
 ### Security
 - `opentelemetry-api` is pinned to 1.45.2, which fixes CVE-2026-126360 (#1180).

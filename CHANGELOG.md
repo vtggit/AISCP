@@ -82,6 +82,8 @@ code is the authority for details.
   and how many of those came back unchanged (#1563).
 - The Work scorecard now shows, for short orders, how many decisions were made, how many took the
   suggested decision, and how many were made by a standing grant (#1583).
+- Odoo draft purchase order lines now include the item's base unit of measure, and a product without
+  one fails before the order is created (#1593).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

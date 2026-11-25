@@ -55,7 +55,8 @@ FORMULAS = {
     "sba": (
         "starting from the first non-zero quantity, the demand size and the "
         "interval between non-zero quantities are each smoothed with alpha "
-        "(the interval starts at 1) at every non-zero quantity; "
+        "(the interval starts at the first non-zero quantity's position, "
+        "counted from 1) at every non-zero quantity; "
         "forecast = (1 - alpha / 2) * size / interval, repeated; a history "
         "with no non-zero quantity gives zeros"
     ),
@@ -85,7 +86,10 @@ def validate_history(history, method: str, min_buckets: int = 1) -> list[float]:
     for quantity in history:
         if isinstance(quantity, bool) or not isinstance(quantity, (int, float)):
             raise _fail(method, "history quantities must be numbers")
-        value = float(quantity)
+        try:
+            value = float(quantity)
+        except OverflowError:
+            raise _fail(method, "history quantities must be finite")
         if not math.isfinite(value):
             raise _fail(method, "history quantities must be finite")
         values.append(value)
@@ -306,7 +310,7 @@ def explain_sba(history, h, alpha: float = 0.1) -> dict:
         )
     first_index, first_quantity = non_zero[0]
     size = float(first_quantity)
-    interval = 1.0
+    interval = float(first_index + 1)
     previous_index = first_index
     for index, quantity in non_zero[1:]:
         gap = index - previous_index

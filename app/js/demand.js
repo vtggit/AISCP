@@ -16,7 +16,15 @@
 //   * a list pane (left): a sticky column header (item, site, class,
 //     method, the 12-bucket forecast total, the backtest error as a
 //     percentage — an em dash when there is no backtest) above the
-//     rows, which scroll under it — at 900px and below, where the
+//     rows, which scroll under it; the list read is limited to
+//     1,000 entries, so when the answer arrives as an array of
+//     exactly 1,000 the pane says so — above the rows and the
+//     column header, one line
+//     [data-testid="demand-list-cut"] reading "Showing the first
+//     1,000 item-sites. There may be more." — a shorter answer,
+//     the loading skeleton, an error and the empty note show no
+//     line, and the line describes what was loaded, so a pressed
+//     demand-class chip never changes it — at 900px and below, where the
 //     panes stack, the view scrolls vertically instead of the panes
 //     filling it: the root and the split take flex: none, the list
 //     keeps a fixed height (clamp(240px, 50vh, 520px)) whose body
@@ -318,6 +326,7 @@
     ready: false,
     error: null,
     rows: [], // the rows from GET /api/forecast, in API order
+    listFull: false, // the list answer was an array of exactly 1,000 entries — the read's limit
     filter: 'all', // 'all' or one demand class value
     selected: null, // { item, site }
     detail: null, // the by-key response for the chosen row
@@ -1015,12 +1024,30 @@
       renderRealisedCorrectionsLine() +
       '<div class="d-split">' +
         '<section class="d-list" aria-label="Forecast rows">' +
+          renderListCut() +
           '<div class="d-list-body">' + renderHead() + renderRows() + '</div>' +
         '</section>' +
         '<aside class="d-detail" aria-label="Chosen forecast">' +
           renderDetail() +
         '</aside>' +
       '</div>'
+    );
+  }
+
+  // The list read is limited to 1,000 entries: when the answer
+  // arrived as an array of exactly that many, the list may be cut,
+  // and the pane says so — above its rows and its column header,
+  // one line. The line describes what was loaded, not what the
+  // filter shows: a pressed demand-class chip never changes it, and
+  // a shorter answer, the loading skeleton, an error or no rows
+  // leave it out.
+  function renderListCut() {
+    if (!state.listFull) {
+      return '';
+    }
+    return (
+      '<p class="dm-list-cut" data-testid="demand-list-cut" role="status">' +
+        'Showing the first 1,000 item-sites. There may be more.'
     );
   }
 
@@ -2264,6 +2291,7 @@
       return;
     }
     state.loading = true;
+    state.listFull = false;
     state.error = null;
     render();
     var seq = ++listSeq;
@@ -2277,6 +2305,10 @@
         if (seq !== listSeq) {
           return;
         }
+        // The read is limited to 1,000 entries: an answer that
+        // arrives as exactly that many is cut, and the list pane
+        // says so — whatever the rows keep afterwards.
+        state.listFull = Array.isArray(rows) && rows.length === 1000;
         state.rows = asForecastRows(rows);
         state.loading = false;
         state.ready = true;
@@ -3410,6 +3442,7 @@
     state.ready = false;
     state.error = null;
     state.rows = [];
+    state.listFull = false;
     state.filter = 'all';
     state.selected = null;
     state.detail = null;

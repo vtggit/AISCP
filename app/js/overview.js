@@ -108,7 +108,13 @@
 //     money + count);
 //   * one region per list card — that kind's summary buckets (accepted
 //     money, applied money, dismissed count) plus the "N to decide"
-//     count of that list; the Reorder points card carries its
+//     count of that list — the count that card's own list read
+//     holds, the undecided rows of it; the list read is limited to
+//     1,000 entries, so when the answer arrives as an array of
+//     exactly 1,000, the count can only cover what was loaded and
+//     the label reads "at least N to decide" — a shorter answer,
+//     or a non-array, reads "N to decide" exactly as before; the
+//     Reorder points card carries its
 //     "acceptance" block (GET /api/drift/decisions/acceptance) and
 //     its "pushes" block (GET /api/parameter-writeback/record,
 //     directly after the acceptance block when that block shows,
@@ -815,11 +821,19 @@
       }
     });
 
+    // The list read is limited to 1,000 entries: when the answer
+    // arrives as an array of exactly that many, the count covers
+    // only what was loaded, so the label says "at least" — a
+    // shorter answer, or a non-array, reads exactly as before.
+    var listFull = Array.isArray(list) && list.length === 1000;
+
     var region = regionEls['ov-region-card-' + kind];
     region.innerHTML =
       '<div class="ov-card-head">' +
         '<h2 class="ov-card-title">' + esc(kindMeta.title) + '</h2>' +
-        '<span class="ov-card-to-decide">' + countLabel(toDecide) + ' to decide</span>' +
+        '<span class="ov-card-to-decide">' +
+          (listFull ? 'at least ' : '') +
+          countLabel(toDecide) + ' to decide</span>' +
       '</div>' +
       '<span class="ov-card-blurb">' + esc(kindMeta.blurb) + '</span>' +
       '<div class="ov-card-figures">' +

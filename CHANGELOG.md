@@ -458,6 +458,8 @@ code is the authority for details.
 
 ### Security
 - `opentelemetry-api` is pinned to 1.45.2, which fixes CVE-2026-126360 (#1180).
+- Admin access is now granted only by the admin role, and an admin group no longer grants admin rights
+  (#1595).
 
 ## [0.2.0] - 2026-10-25
 

@@ -16,8 +16,11 @@
 // The summary line ([data-testid="writeback-summary"]) reads
 // "<count> outstanding · <writable_count> ready to push", gaining
 // " · <n> from buffers" whenever any row's basis is "ddmrp" (n the
-// number of such rows) and nothing otherwise. The outstanding table
-// ([data-testid="writeback-table"]) scrolls within its own region,
+// number of such rows) and, after that part when it is shown,
+// " · <n> to stop replenishing" whenever any row's basis is "excess"
+// (n the number of such rows) and nothing otherwise. The outstanding
+// table ([data-testid="writeback-table"]) scrolls within its own
+// region,
 // one row per preview row in the answer's order:
 // Select (admin only, and only on writable rows,
 // [data-testid="writeback-select"]), Item and Site, ERP ("Acumatica"
@@ -27,8 +30,8 @@
 // Money at stake (whole dollars, an em dash when null), Status
 // ("Ready" when writable, the blocked_reason otherwise) and Source
 // ("Decision" for a "decision" basis, "DDMRP buffer" for a "ddmrp"
-// basis, an em dash without one or for anything else), the value
-// inserted as text.
+// basis, "Stop replenishing" for an "excess" basis, an em dash
+// without one or for anything else), the value inserted as text.
 //
 // The writeback record block ([data-testid="writeback-record"], a
 // div directly after the bar and before the outstanding pane)
@@ -43,17 +46,20 @@
 // Refresh button's disabled state. While the read is out, after a
 // non-200 answer or a network failure, and after a 200 whose body is
 // malformed (not an object holding the objects reorder_points and
-// buffers, or either of them with pushed, read or unchanged not
-// whole numbers of at least 0, unchanged above read, or read above
-// pushed), the block is absent and nothing says why; the answer's
-// rate field is never read. Each line is a p with the class wb-note,
-// reorder points first, then buffers; a kind whose pushed is 0 has
-// no line, and with no line at all the block is absent. With read
-// above 0 a line reads "<kind> still as pushed in the ERP:
+// buffers, or any of them — and the excess, when the answer carries
+// one — with pushed, read or unchanged not whole numbers of at
+// least 0, unchanged above read, or read above pushed), the block is
+// absent and nothing says why; the answer's rate field is never
+// read. Each line is a p with the class wb-note, reorder points
+// first, then buffers, then the excess stops, whose line carries
+// [data-testid="writeback-record-excess"]; a kind whose pushed is
+// 0 has no line, and with no line at all the block is absent. With
+// read above 0 a line reads "<kind> still as pushed in the ERP:
 // <unchanged> of <read> read back (<pct>%)" with pct
 // Math.round(100 * unchanged / read) worked out from the counts;
 // with read 0 it reads "<kind> pushed: <pushed>; none read back by a
-// sync yet", <kind> "Reorder points" or "Buffer levels".
+// sync yet", <kind> "Reorder points", "Buffer levels" or
+// "Replenishment stops".
 //
 // Pushing (admin only): the "Push selected to ERP" button
 // ([data-testid="writeback-push"]) is disabled until at least one row
@@ -238,14 +244,17 @@
   }
 
   // The "Source" cell: "Decision" for a "decision" basis, "DDMRP
-  // buffer" for a "ddmrp" basis, an em dash when the basis is missing
-  // or anything else.
+  // buffer" for a "ddmrp" basis, "Stop replenishing" for an "excess"
+  // basis, an em dash when the basis is missing or anything else.
   function sourceText(basis) {
     if (basis === 'decision') {
       return 'Decision';
     }
     if (basis === 'ddmrp') {
       return 'DDMRP buffer';
+    }
+    if (basis === 'excess') {
+      return 'Stop replenishing';
     }
     return EM_DASH;
   }
@@ -339,16 +348,23 @@
   }
 
   // The record body: an object holding the objects reorder_points and
-  // buffers, each passing the count checks; anything else is
+  // buffers, each passing the count checks, and — when the answer
+  // carries one — an excess that passes them too; anything else is
   // malformed, and the block stays absent.
   function recordOk(payload) {
-    return (
-      !!payload &&
-      typeof payload === 'object' &&
-      !Array.isArray(payload) &&
-      recordKindOk(payload.reorder_points) &&
-      recordKindOk(payload.buffers)
-    );
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      Array.isArray(payload) ||
+      !recordKindOk(payload.reorder_points) ||
+      !recordKindOk(payload.buffers)
+    ) {
+      return false;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'excess')) {
+      return recordKindOk(payload.excess);
+    }
+    return true;
   }
 
   // One record line's text: a kind whose pushed is 0 has no line
@@ -433,6 +449,15 @@
     }
     if (buffered > 0) {
       text += ' ' + MIDDLE_DOT + ' ' + buffered + ' from buffers';
+    }
+    var stopping = 0;
+    for (var s = 0; s < rows.length; s++) {
+      if (rows[s] && rows[s].basis === 'excess') {
+        stopping += 1;
+      }
+    }
+    if (stopping > 0) {
+      text += ' ' + MIDDLE_DOT + ' ' + stopping + ' to stop replenishing';
     }
     return text;
   }
@@ -715,8 +740,9 @@
 
   // The record block: directly after the bar and before the
   // outstanding pane, one p.wb-note line per kind — reorder points
-  // first, then buffers. Absent while the read is out, after a failed
-  // or malformed load, and when no kind has a line.
+  // first, then buffers, then the excess stops. Absent while the read
+  // is out, after a failed or malformed load, and when no kind has a
+  // line.
   function recordHtml() {
     if (!state.record) {
       return '';
@@ -737,6 +763,18 @@
         esc(bufferText) +
         '</p>'
       );
+    }
+    // The excess stops: a third line after the buffers line. The
+    // answer without an excess shows the other lines as before.
+    if (state.record.excess) {
+      var excessText = recordLineText('Replenishment stops', state.record.excess);
+      if (excessText !== null) {
+        lines.push(
+          '<p class="wb-note" data-testid="writeback-record-excess">' +
+          esc(excessText) +
+          '</p>'
+        );
+      }
     }
     if (lines.length === 0) {
       return '';

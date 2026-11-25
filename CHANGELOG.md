@@ -107,6 +107,8 @@ code is the authority for details.
 - The Push to ERP screen now labels excess rows as stop replenishing, counts them in the summary, and
   reports how many of their pushed values the ERP still holds unchanged, as a count and a percentage of
   the values read back, or that none have been read back yet (#1589).
+- Parameter write-back pushes now store their audit row as pending before the ERP call and set the
+  row's outcome after the write, so a row still pending means the result is unknown (#1604).
 
 **DDMRP**
 - Buffer designations by an admin, buffer zones from average daily usage and lead time with the

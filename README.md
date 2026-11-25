@@ -499,6 +499,8 @@ views are:
 - **Guidance**: the guidance AISCP is built under, by type and area, with each item's history
   and a find box that also looks up a stamp.
 
+The Work queue and Decision log say when a list is cut at 1,000 rows.
+
 The sidebar says when the feed last synced, and the header the date the data runs through
 (`app/js/feedstatus.js`).
 

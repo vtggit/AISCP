@@ -373,6 +373,8 @@ code is the authority for details.
 - The current guidance, an item's history and what a stamp names (`GET /api/guidance` and two
   read routes), and the Guidance screen with each item's history, a find box that also looks
   up a stamp, and formatted statements (#1125, #1126, #1128, #1129, #1130, #1151).
+- The Work queue and Decision log now show a status line when a list is cut at 1,000 rows, naming the
+  full lists in the log (#1600).
 
 **Documentation and CI**
 - A 20-minute demo walkthrough (`docs/DEMO.md`) (#915).

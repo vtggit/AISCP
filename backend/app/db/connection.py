@@ -46,12 +46,22 @@ Outside the app's request handling — a test body, a script, a
 background worker — the pool stays out of the way: ``get_cursor()``
 and ``get_connection()`` open and close their own connection,
 exactly as before the pool.
+
+A pooled connection is never lost to the collector either: one whose
+holder drops it before its ``close()`` runs is handed back by the
+handle's finalizer — without the finalizer waiting on a lock, the
+pool's own lock included, whatever thread it runs on and whatever
+that thread holds — and the pool's reaper thread settles it off the
+request paths, resetting it for the next user or closing it for
+good, counted open until the close is done, so the bound never
+breaks and a checkout that waits on it is woken when it settles.
 """
 
 import asyncio
 import contextvars
 import os
 import threading
+import time
 from contextlib import contextmanager, suppress
 
 import psycopg2
@@ -76,6 +86,13 @@ _POOL_SIZE_ENV = "DB_POOL_SIZE"
 # alike: a request's database work runs on one of those threads, or,
 # for an asynchronous endpoint, on the event loop's own thread.
 _ANYIO_WORKER_THREAD_NAME = "AnyIO worker thread"
+
+# How long the pool's reaper thread sleeps between draining the
+# handoff list: short enough that a checkout waiting on a bound
+# the collector just freed does not notice the wait, light enough
+# that a process that finalizes nothing pays for the reaper with
+# one list check a hundred times a second.
+_FINALIZE_POLL_SECONDS = 0.01
 
 
 def get_connection_params() -> dict:
@@ -218,7 +235,14 @@ class _Pool:
     connections at the next checkout — before any connection the new
     factory opens — so the new factory, and anything counting
     through it, sees every connection the app opens from then on,
-    and no connection it did not make is ever handed out.
+    and no connection it did not make is ever handed out.  A
+    connection whose handle the collector finalized before its
+    ``close()`` ran rides with the handoff list instead: the
+    finalizer appends it without waiting on any lock — the pool's
+    own lock included, whatever thread it runs on and whatever that
+    thread holds — and the reaper thread drains the list and settles
+    each connection through ``return_``, counted open until the
+    close is done.
     """
 
     def __init__(self) -> None:
@@ -227,6 +251,21 @@ class _Pool:
         self._idle: list[tuple[object, object]] = []  # (connection, factory)
         self._live = 0  # open, not in the middle of being closed
         self._closing = 0  # open, in the middle of being closed
+        # (connection, factory) pairs whose handles the collector
+        # finalized before close() ran: the finalizer appends here
+        # without waiting on any lock, and the reaper thread drains
+        # the list and settles each one through return_.
+        self._finalized: list[tuple[object, object]] = []
+        self._reaper: threading.Thread | None = None
+        # The lazy start is racy by design — a finalizer must wait
+        # on no lock, so two finalizers may both find no reaper and
+        # each start one — and this claim, taken by the reapers on
+        # their own thread, settles that race: the first reaper to
+        # claim it drains the handoff list, every reaper after it
+        # exits without settling anything, and a finalized
+        # connection is settled exactly once.
+        self._reaper_claim = threading.Lock()
+        self._reaper_claimed = False
 
     def checkout(self):
         """Hand out one connection: an idle one, or a new one.
@@ -310,6 +349,59 @@ class _Pool:
                 self._mark_closing()
             self._settle(conn)
 
+    def finalize(self, conn, factory) -> None:
+        """Hand off a connection whose handle the collector finalized.
+
+        Called from ``_PooledConnection.__del__``, which the
+        collector may run on any thread — one holding this pool's
+        own lock among them — so it waits on no lock, the pool's
+        included: it appends the connection to the handoff list, and
+        the reaper thread settles it through the ordinary
+        ``return_`` path — reset and idle for the next user, or
+        closed for good — where it keeps counting as open until the
+        close is done, so the bound never breaks and a checkout that
+        waits on it is woken when it settles.  Two finalizers may
+        race this start — it waits on no lock, so the race is a fact,
+        not a fear — and start two reapers; the reapers claim the
+        settling among themselves, on their own thread, and the
+        connection is settled exactly once.
+        """
+        self._finalized.append((conn, factory))
+        if self._reaper is None:
+            self._reaper = threading.Thread(
+                target=self._reap,
+                name="aierp-db-pool-reaper",
+                daemon=True,
+            )
+            self._reaper.start()
+
+    def _reap(self) -> None:
+        """The reaper loop: settle every finalized connection.
+
+        Runs on a dedicated daemon thread, off the request paths:
+        the only thread that ever settles a collector-finalized
+        connection, so it is the one that takes the pool's lock
+        where the count must move — a finalizer never does — and it
+        sleeps between drains, so a process that finalizes nothing
+        pays for it with one list check a hundred times a second.
+        The racing start may have spawned a twin reaper, and two
+        reapers on one handoff list would settle a connection twice:
+        the claim below is where they meet, on their own thread, a
+        finalizer never taking it — the first to claim drains the
+        list, the rest exit without settling anything.
+        """
+        with self._reaper_claim:
+            if self._reaper_claimed:
+                return
+            self._reaper_claimed = True
+        while True:
+            pending, self._finalized = self._finalized, []
+            for conn, factory in pending:
+                with suppress(Exception):
+                    self.return_(conn, factory)
+            if not pending:
+                time.sleep(_FINALIZE_POLL_SECONDS)
+
     def _mark_closing(self) -> None:
         """Move one open connection into the middle of being closed.
 
@@ -359,7 +451,15 @@ class _PooledConnection:
     closed connection fails, and leaving a ``with`` block on the
     handle commits nothing and rolls back nothing.  A cursor the
     holder opened before ``close()`` is the holder's to close, as
-    ``get_cursor()`` closes its own.
+    ``get_cursor()`` closes its own.  Left without a ``close()`` —
+    a holder that dies with the connection still checked out — the
+    collector finalizes the handle, and the connection is still
+    given back: the finalizer hands it to the pool without waiting
+    on any lock, the pool's own lock included, whatever thread it
+    runs on and whatever that thread holds, and the pool's reaper
+    thread settles it off the request paths — reset and idle for
+    the next user, or closed for good — counted open until the
+    close is done.
     """
 
     __slots__ = ("_conn", "_factory", "_returned")
@@ -412,13 +512,19 @@ class _PooledConnection:
         return False
 
     def __del__(self) -> None:
+        # The collector may run this on any thread — one holding the
+        # pool's own lock among them — so it waits on no lock: the
+        # connection is handed to the pool's reaper, which settles
+        # it off the request paths, instead of being returned here.
         try:
             if not object.__getattribute__(self, "_returned"):
                 object.__setattr__(self, "_returned", True)
-                _pool.return_(
-                    object.__getattribute__(self, "_conn"),
-                    object.__getattribute__(self, "_factory"),
-                )
+                conn = object.__getattribute__(self, "_conn")
+                factory = object.__getattribute__(self, "_factory")
+                if conn is not None:
+                    object.__setattr__(self, "_conn", None)
+                    object.__setattr__(self, "_factory", None)
+                    _pool.finalize(conn, factory)
         except Exception:
             pass
 

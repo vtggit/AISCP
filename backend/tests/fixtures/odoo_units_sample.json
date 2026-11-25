@@ -1,0 +1,22 @@
+{
+ "purchase_order_lines": [
+  {"id": 21, "product_id": [31, "[FURN_0269] Office Chair Black"], "product_qty": 10.0, "qty_received": 0.0, "date_planned": "2026-10-15 00:00:00", "order_id": [10, "P00010"], "uom_id": [3, "Dozens"]},
+  {"id": 35, "product_id": [34, "[FURN_9001] Flipover"], "product_qty": 88.0, "qty_received": 0.0, "date_planned": "2026-10-20 12:00:00", "order_id": [18, "P00018"], "uom_id": [1, "Units"]}
+ ],
+ "sale_order_lines": [
+  {"id": 8, "order_id": [4, "S00004"], "product_id": [3, "Virtual Interior Design"], "product_uom_qty": 16.0, "qty_delivered": 0.0, "warehouse_id": [1, "My Company"], "product_uom_id": [4, "Hours"]}
+ ],
+ "stock_moves": [
+  {"id": 62, "product_id": [23, "Large Desk (Wood)"], "location_id": [6, "WH/Stock"], "quantity": 3.0, "date": "2025-11-16 19:40:32", "uom_id": [1, "Units"]}
+ ],
+ "products": [
+  {"id": 3, "default_code": false, "uom_id": [4, "Hours"]},
+  {"id": 23, "default_code": false, "uom_id": [1, "Units"]},
+  {"id": 31, "default_code": "FURN_0269", "uom_id": [1, "Units"]},
+  {"id": 34, "default_code": "FURN_9001", "uom_id": [1, "Units"]}
+ ],
+ "units": [
+  {"id": 1, "factor": 1.0},
+  {"id": 3, "factor": 12.0}
+ ]
+}

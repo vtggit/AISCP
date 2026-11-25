@@ -378,6 +378,50 @@ def _finite_float(value: object) -> float | None:
         return None
 
 
+def _usable_unit_factor(factors: dict, unit_id: int | None) -> float | None:
+    """Return the unit's factor when it is a usable base-unit factor.
+
+    A usable factor is a finite number greater than zero; a missing
+    unit, and a missing, zero, negative, or non-finite factor, yield
+    None.
+    """
+    if unit_id is None:
+        return None
+    factor = _finite_float(factors.get(unit_id))
+    if factor is None or factor <= 0:
+        return None
+    return factor
+
+
+def _to_base_unit(
+    quantity: float,
+    line_unit: int | None,
+    product_unit: int | None,
+    factors: dict,
+) -> float | None:
+    """Convert a line quantity to the product's base unit.
+
+    A line with no unit, or whose unit is the product's own unit, is
+    taken as is. A line whose unit differs from the product's unit
+    yields ``quantity * factor(line unit) / factor(product unit)``, or
+    None when the conversion is unusable: the product has no unit,
+    either factor is missing, zero, negative, or non-finite, or the
+    converted quantity is not finite.
+    """
+    if line_unit is None or line_unit == product_unit:
+        return quantity
+    line_factor = _usable_unit_factor(factors, line_unit)
+    if line_factor is None:
+        return None
+    product_factor = _usable_unit_factor(factors, product_unit)
+    if product_factor is None:
+        return None
+    converted = quantity * line_factor / product_factor
+    if not math.isfinite(converted):
+        return None
+    return converted
+
+
 class OdooClient:
     """Fail-closed client for one Odoo database's JSON-RPC endpoint.
 
@@ -588,6 +632,81 @@ class OdooClient:
         ):
             raise OdooError(f"{subject} returned a malformed result")
         return result
+
+    def _read_product_code_and_unit(
+        self, product_ids: set[int], order: str | None = None
+    ) -> tuple[dict[int, str], dict[int, int | None]]:
+        """One ``product.product`` read for ``default_code`` and ``uom_id``.
+
+        Over the given product ids (an ``id in [...]`` domain), omitted
+        entirely when no id is seen. Returns ``(product_code,
+        product_unit)``; ``product_code`` holds only ids with a
+        non-empty code, and ``product_unit`` maps every resolved
+        product id to its unit id or None (the product has no unit).
+        Shared by the readers that convert line quantities to the
+        product's base unit: :meth:`read_demand_events`,
+        :meth:`read_open_purchase_lines` and
+        :meth:`read_open_sales_lines`.
+        """
+        product_code: dict[int, str] = {}
+        product_unit: dict[int, int | None] = {}
+        if product_ids:
+            for record in self.search_read(
+                "product.product",
+                [["id", "in", sorted(product_ids)]],
+                ["default_code", "uom_id"],
+                order=order,
+            ):
+                record_id = _ref_id(record.get("id"))
+                if record_id is None:
+                    continue
+                code = record.get("default_code")
+                if isinstance(code, str) and code:
+                    product_code[record_id] = code
+                product_unit[record_id] = _ref_id(record.get("uom_id"))
+        return product_code, product_unit
+
+    def _read_line_unit_factors(
+        self,
+        lines: list[dict],
+        unit_field: str,
+        product_unit: dict[int, int | None],
+    ) -> dict[int, object]:
+        """One ``uom.uom`` read of the factors the lines' units need.
+
+        Issued only when at least one line's unit differs from its
+        product's unit, after the method's other reads: the sorted ids
+        of those lines' units and their products' units, with the
+        active clause, so a deactivated unit still answers its factor.
+        Returns the unit id to raw ``factor`` map (empty when no read
+        was issued).
+        """
+        unit_ids: set[int] = set()
+        for line in lines:
+            line_unit = _ref_id(line.get(unit_field))
+            if line_unit is None:
+                continue
+            product_unit_id = product_unit.get(_ref_id(line.get("product_id")))
+            if line_unit == product_unit_id:
+                continue
+            unit_ids.add(line_unit)
+            if product_unit_id is not None:
+                unit_ids.add(product_unit_id)
+        if not unit_ids:
+            return {}
+        factors: dict[int, object] = {}
+        for record in self.search_read(
+            "uom.uom",
+            [
+                ["id", "in", sorted(unit_ids)],
+                ["active", "in", [True, False]],
+            ],
+            ["factor"],
+        ):
+            record_id = _ref_id(record.get("id"))
+            if record_id is not None:
+                factors[record_id] = record.get("factor")
+        return factors
 
     def read_products(self) -> list[dict]:
         """Read ``product.product`` records shaped for ``InventoryItemCreate``.
@@ -989,8 +1108,11 @@ class OdooClient:
           system, database, or entity;
         - ``item_code``: the move's product ``default_code``;
         - ``site_code``: the move's source location's warehouse ``code``;
-        - ``quantity``: the move's ``quantity`` as a positive float (its
-          absolute value);
+        - ``quantity``: the move's ``quantity``, converted to the
+          product's base unit (quantity × factor of the move's unit ÷
+          factor of the product's unit; a move with no unit, or whose
+          unit is the product's unit, is taken as is), as a positive
+          float (its absolute value);
         - ``occurred_on``: the date part of the move's ``date`` as
           ``YYYY-MM-DD``;
         - ``event_type``: ``"shipment"``;
@@ -1000,12 +1122,19 @@ class OdooClient:
         product has no ``default_code``, its source location resolves to
         no warehouse or to a warehouse with no ``code``, its
         ``quantity`` is missing, zero, non-numeric, non-finite, or too
-        large to represent as a finite float, or its ``date`` is missing
-        or not a parseable date. Each kept move is
-        one row; moves are never summed. The product, location and
-        warehouse lookups are one ``search_read`` each over the ids
-        actually seen (an ``id in [...]`` domain), each omitted entirely
-        when no id is seen. The method only reads through
+        large to represent as a finite float, it is unusable — its unit
+        differs from the product's unit while the product has no unit,
+        or either unit's factor is missing, zero, negative, or
+        non-finite — or its ``date`` is missing or not a parseable
+        date. Each kept move is one row; moves are never summed. The
+        product, location and warehouse lookups are one ``search_read``
+        each over the ids actually seen (an ``id in [...]`` domain),
+        each omitted entirely when no id is seen, and the product
+        lookup asks ``default_code`` and ``uom_id``; when at least one
+        move's unit differs from its product's unit, one more
+        ``uom.uom`` lookup (``factor``, with the active clause) is made
+        after the other ones, over the sorted ids of those moves' units
+        and their products' units. The method only reads through
         :meth:`search_read`; it writes nothing.
         """
         _origin, db, _login, _api_key, _ca_bundle, _timeout = self._load_config()
@@ -1013,7 +1142,7 @@ class OdooClient:
         moves = self.search_read(
             "stock.move",
             [["state", "=", "done"], ["location_dest_id.usage", "=", "customer"]],
-            ["product_id", "location_id", "quantity", "date"],
+            ["product_id", "location_id", "quantity", "date", "uom_id"],
             order="id asc",
         )
 
@@ -1027,18 +1156,21 @@ class OdooClient:
             if location_id is not None:
                 location_ids.add(location_id)
 
-        product_code, location_warehouse, warehouse_code = (
-            self._resolve_product_location_warehouse(
-                product_ids, location_ids, order="id asc"
-            )
+        product_code, product_unit = self._read_product_code_and_unit(
+            product_ids, order="id asc"
         )
+        location_warehouse, warehouse_code = self._resolve_location_warehouse(
+            location_ids, order="id asc"
+        )
+        factors = self._read_line_unit_factors(moves, "uom_id", product_unit)
 
         rows: list[dict] = []
         for move in moves:
             move_id = _ref_id(move.get("id"))
             if move_id is None:
                 continue
-            item_code = product_code.get(_ref_id(move.get("product_id")))
+            product_id = _ref_id(move.get("product_id"))
+            item_code = product_code.get(product_id)
             if item_code is None:
                 continue
             warehouse_id = location_warehouse.get(_ref_id(move.get("location_id")))
@@ -1049,6 +1181,14 @@ class OdooClient:
                 continue
             quantity = _finite_float(move.get("quantity"))
             if quantity is None or quantity == 0:
+                continue
+            quantity = _to_base_unit(
+                quantity,
+                _ref_id(move.get("uom_id")),
+                product_unit.get(product_id),
+                factors,
+            )
+            if quantity is None:
                 continue
             occurred_on = _date_part(move.get("date"))
             if occurred_on is None:
@@ -1252,7 +1392,10 @@ class OdooClient:
           the vendor has neither;
         - ``order_type``: ``"purchase"``;
         - ``open_units``: ``product_qty`` minus ``qty_received`` as a
-          float;
+          float, both quantities first converted to the product's base
+          unit (quantity × factor of the line's unit ÷ factor of the
+          product's unit; a line with no unit, or whose unit is the
+          product's unit, is taken as is);
         - ``promised_on``: the date part of the line's ``date_planned``
           as ``YYYY-MM-DD``, or null;
         - ``ordered_on``: the date part of the PO's ``date_order`` as
@@ -1265,18 +1408,25 @@ class OdooClient:
         A line is skipped, never an error, when it has no id, its
         product has no ``default_code``, its order does not resolve to
         a warehouse with a ``code`` (no picking type, no warehouse, or
-        the warehouse has no code), or its ``open_units`` is not a
-        positive finite number. A null or missing ``qty_received`` is
-        treated as ``0.0``, so ``open_units`` equals ``product_qty``
-        and the line is kept, not skipped. Each kept line is one row;
-        lines are never folded together. The purchase order, picking
-        type, warehouse, vendor and product lookups are one
-        ``search_read`` each over the ids actually seen (an ``id in
-        [...]`` domain), each omitted entirely when no id is seen; the
-        product, warehouse and vendor resolution follows the other
-        readers (a ``default_code`` lookup, a warehouse ``code``
-        lookup, and the vendor's ``ref``-else-``name``). The method
-        only reads through :meth:`search_read`; it writes nothing.
+        the warehouse has no code), it is unusable — its unit differs
+        from the product's unit while the product has no unit, or
+        either unit's factor is missing, zero, negative, or non-
+        finite — or its ``open_units`` is not a positive finite
+        number. A null or missing ``qty_received`` is treated as
+        ``0.0``, so ``open_units`` equals ``product_qty`` and the line
+        is kept, not skipped. Each kept line is one row; lines are
+        never folded together. The purchase order, picking type,
+        warehouse, vendor and product lookups are one ``search_read``
+        each over the ids actually seen (an ``id in [...]`` domain),
+        each omitted entirely when no id is seen, and the product
+        lookup asks ``default_code`` and ``uom_id``; when at least one
+        line's unit differs from its product's unit, one more
+        ``uom.uom`` lookup (``factor``, with the active clause) is made
+        after the other ones, over the sorted ids of those lines' units
+        and their products' units; the warehouse and vendor resolution
+        follows the other readers (a warehouse ``code`` lookup, and
+        the vendor's ``ref``-else-``name``). The method only reads
+        through :meth:`search_read`; it writes nothing.
         """
         if not isinstance(as_of, str) or not as_of:
             as_of = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1286,7 +1436,14 @@ class OdooClient:
         lines = self.search_read(
             "purchase.order.line",
             [["order_id.state", "in", ["purchase", "done"]]],
-            ["product_id", "product_qty", "qty_received", "date_planned", "order_id"],
+            [
+                "product_id",
+                "product_qty",
+                "qty_received",
+                "date_planned",
+                "order_id",
+                "uom_id",
+            ],
         )
 
         product_ids: set[int] = set()
@@ -1368,24 +1525,16 @@ class OdooClient:
                 if record_id is not None and code is not None:
                     partner_code[record_id] = code
 
-        product_code: dict[int, str] = {}
-        if product_ids:
-            for record in self.search_read(
-                "product.product",
-                [["id", "in", sorted(product_ids)]],
-                ["default_code"],
-            ):
-                record_id = _ref_id(record.get("id"))
-                code = record.get("default_code")
-                if record_id is not None and isinstance(code, str) and code:
-                    product_code[record_id] = code
+        product_code, product_unit = self._read_product_code_and_unit(product_ids)
+        factors = self._read_line_unit_factors(lines, "uom_id", product_unit)
 
         rows: list[dict] = []
         for line in lines:
             line_id = _ref_id(line.get("id"))
             if line_id is None:
                 continue
-            item_code = product_code.get(_ref_id(line.get("product_id")))
+            product_id = _ref_id(line.get("product_id"))
+            item_code = product_code.get(product_id)
             if item_code is None:
                 continue
             order_id = _ref_id(line.get("order_id"))
@@ -1405,6 +1554,17 @@ class OdooClient:
             qty_received = _finite_float(line.get("qty_received"))
             if qty_received is None:
                 qty_received = 0.0
+            line_unit = _ref_id(line.get("uom_id"))
+            product_qty = _to_base_unit(
+                product_qty, line_unit, product_unit.get(product_id), factors
+            )
+            if product_qty is None:
+                continue
+            qty_received = _to_base_unit(
+                qty_received, line_unit, product_unit.get(product_id), factors
+            )
+            if qty_received is None:
+                continue
             open_units = product_qty - qty_received
             if not math.isfinite(open_units) or open_units <= 0:
                 continue
@@ -1445,9 +1605,13 @@ class OdooClient:
         - ``open_units``: ``product_uom_qty`` minus ``qty_delivered``
           as a float, floored at 0, when the parent order's state is
           ``sale`` — decided in Python when computing ``open_units``
-          because an Odoo domain cannot compare two fields — and 0
-          when the state is ``done`` or ``cancel``, so a line whose
-          parent order closed is zeroed on the next sync;
+          because an Odoo domain cannot compare two fields, both
+          quantities first converted to the product's base unit
+          (quantity × factor of the line's unit ÷ factor of the
+          product's unit; a line with no unit, or whose unit is the
+          product's unit, is taken as is) — and 0 when the state is
+          ``done`` or ``cancel``, so a line whose parent order closed
+          is zeroed on the next sync;
         - ``ship_on``: the date part of the order's
           ``commitment_date`` as ``YYYY-MM-DD``, else of its
           ``expected_date``, else null;
@@ -1458,15 +1622,24 @@ class OdooClient:
 
         A line is skipped, never an error, when it has no id, its
         order does not resolve to an id, its product has no
-        ``default_code``, or its warehouse has no ``code``. A fully
-        delivered line is kept with ``open_units`` 0, because the read
-        model is upsert-only and a closed line must be zeroed. A null
-        or missing ``product_uom_qty`` or ``qty_delivered`` is
-        treated as ``0.0``. The product, warehouse and order lookups
-        are one ``search_read`` each over the ids actually seen (an
-        ``id in [...]`` domain), each omitted entirely when no id is
-        seen. The method only reads through :meth:`search_read`; it
-        writes nothing.
+        ``default_code``, or its warehouse has no ``code``; a line
+        that is unusable — its unit differs from the product's unit
+        while the product has no unit, or either unit's factor is
+        missing, zero, negative, or non-finite — is skipped only when
+        its order's state is ``sale``: a line of a closed order still
+        answers a row with 0 open units. A fully delivered line is
+        kept with ``open_units`` 0, because the read model is
+        upsert-only and a closed line must be zeroed. A null or
+        missing ``product_uom_qty`` or ``qty_delivered`` is treated as
+        ``0.0``. The product, warehouse and order lookups are one
+        ``search_read`` each over the ids actually seen (an ``id in
+        [...]`` domain), each omitted entirely when no id is seen, and
+        the product lookup asks ``default_code`` and ``uom_id``; when
+        at least one line's unit differs from its product's unit, one
+        more ``uom.uom`` lookup (``factor``, with the active clause)
+        is made after the other ones, over the sorted ids of those
+        lines' units and their products' units. The method only reads
+        through :meth:`search_read`; it writes nothing.
         """
         if not isinstance(as_of, str) or not as_of:
             as_of = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1486,6 +1659,7 @@ class OdooClient:
                 "product_uom_qty",
                 "qty_delivered",
                 "warehouse_id",
+                "product_uom_id",
             ],
         )
 
@@ -1503,17 +1677,7 @@ class OdooClient:
             if order_id is not None:
                 order_ids.add(order_id)
 
-        product_code: dict[int, str] = {}
-        if product_ids:
-            for record in self.search_read(
-                "product.product",
-                [["id", "in", sorted(product_ids)]],
-                ["default_code"],
-            ):
-                record_id = _ref_id(record.get("id"))
-                code = record.get("default_code")
-                if record_id is not None and isinstance(code, str) and code:
-                    product_code[record_id] = code
+        product_code, product_unit = self._read_product_code_and_unit(product_ids)
 
         warehouse_code: dict[int, str] = {}
         if warehouse_ids:
@@ -1544,12 +1708,15 @@ class OdooClient:
                 order_commitment[record_id] = _date_part(record.get("commitment_date"))
                 order_expected[record_id] = _date_part(record.get("expected_date"))
 
+        factors = self._read_line_unit_factors(lines, "product_uom_id", product_unit)
+
         rows: list[dict] = []
         for line in lines:
             line_id = _ref_id(line.get("id"))
             if line_id is None:
                 continue
-            item_code = product_code.get(_ref_id(line.get("product_id")))
+            product_id = _ref_id(line.get("product_id"))
+            item_code = product_code.get(product_id)
             if item_code is None:
                 continue
             site_code = warehouse_code.get(_ref_id(line.get("warehouse_id")))
@@ -1565,6 +1732,20 @@ class OdooClient:
                 qty_delivered = _finite_float(line.get("qty_delivered"))
                 if qty_delivered is None:
                     qty_delivered = 0.0
+                line_unit = _ref_id(line.get("product_uom_id"))
+                product_uom_qty = _to_base_unit(
+                    product_uom_qty,
+                    line_unit,
+                    product_unit.get(product_id),
+                    factors,
+                )
+                if product_uom_qty is None:
+                    continue
+                qty_delivered = _to_base_unit(
+                    qty_delivered, line_unit, product_unit.get(product_id), factors
+                )
+                if qty_delivered is None:
+                    continue
                 open_units = max(0.0, product_uom_qty - qty_delivered)
             else:
                 # "done" or "cancel" (or an unresolvable state): the

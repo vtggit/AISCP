@@ -64,6 +64,7 @@ LINE_FIELDS = [
     "product_uom_qty",
     "qty_delivered",
     "warehouse_id",
+    "product_uom_id",
 ]
 
 LINES = [
@@ -434,8 +435,10 @@ def test_issue757_freeform(monkeypatch):
     product_info = server.models["product.product"]
     assert product_info["calls"] == 1
     assert product_info["domains"] == [[["id", "in", [11, 12, 13]]]]
-    assert product_info["fields"] == [["default_code"]]
-    assert product_info["kwargs"] == [{"fields": ["default_code"], "offset": 0}]
+    assert product_info["fields"] == [["default_code", "uom_id"]]
+    assert product_info["kwargs"] == [
+        {"fields": ["default_code", "uom_id"], "offset": 0}
+    ]
 
     warehouse_info = server.models["stock.warehouse"]
     assert warehouse_info["calls"] == 1

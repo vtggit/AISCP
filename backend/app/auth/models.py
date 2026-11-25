@@ -32,8 +32,14 @@ class AuthUser(BaseModel):
 
     @property
     def is_admin(self) -> bool:
-        """Simple admin check — 'admin' appears in either roles or groups."""
-        return "admin" in self.roles or "admin" in self.groups
+        """The admin role is the only thing that makes an admin.
+
+        ``is_admin`` is true exactly when ``"admin"`` is in the
+        user's ``roles``.  The user's ``groups`` grant nothing:
+        ``"admin"`` appearing only in ``groups`` does not make the
+        user an admin.
+        """
+        return "admin" in self.roles
 
 
 class MeResponse(BaseModel):

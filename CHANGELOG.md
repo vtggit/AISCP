@@ -452,6 +452,9 @@ code is the authority for details.
   product is unchanged (#1470).
 - A designated DDMRP item-site with an ok zone no longer gets a reorder-point decision row in the Push
   to ERP preview or confirm, whether or not its buffer row is outstanding (#1586).
+- The Order plan screen now disables the horizon select and Refresh button, and the top-up checkboxes
+  in a supplier's block, while that block's release confirm is in flight, leaving top-up checkboxes in
+  other blocks enabled, so the confirm's outcome or error is shown when it answers (#1594).
 
 ### Security
 - `opentelemetry-api` is pinned to 1.45.2, which fixes CVE-2026-126360 (#1180).

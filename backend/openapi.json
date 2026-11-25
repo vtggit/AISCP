@@ -14743,7 +14743,7 @@
           "adjustment_factor"
         ],
         "title": "DdmrpPlanRowWithAdjustment",
-        "description": "A plan row that keeps the adjustment-factor fields of the\nshared zone row: ``adu_base`` (the unadjusted ADU) and\n``adjustment_factor`` (the active factor applied to it), so the\nplan route returns them without omission."
+        "description": "A plan row that keeps the fields the zones route added to\nthe shared zone row: ``adu_base`` (the unadjusted ADU) and\n``adjustment_factor`` (the active factor applied to it), so the\nplan route returns them without omission.  The zones route's own\nfields \u2014 its ``moq`` included \u2014 pass through with the shared\nzone rows the plan row is built from; the ``moq`` field carries\nno JSON schema of its own, so the plan route's documented answer\nshape stays the one of its declared fields."
       },
       "DdmrpPlanSummary": {
         "properties": {
@@ -15014,6 +15014,17 @@
             ],
             "title": "Top Of Green"
           },
+          "moq": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moq"
+          },
           "arithmetic": {
             "anyOf": [
               {
@@ -15052,10 +15063,11 @@
           "top_of_red",
           "top_of_yellow",
           "top_of_green",
+          "moq",
           "arithmetic"
         ],
         "title": "DdmrpZoneRow",
-        "description": "One designated item-site's DDMRP buffer zones.\n\nThe zone fields (those of ``app.ddmrp.zones.buffer_zones``) are\nnull for a row whose status is not \"ok\".  ``adu_base`` is the\nunadjusted ADU and ``adjustment_factor`` the active adjustment\nfactor on the as-of date (1.0 when no adjustment window covers\nit); ``adu`` is ``adu_base`` times that factor, and the zone\nfields are the ``buffer_zones`` of the adjusted ADU."
+        "description": "One designated item-site's DDMRP buffer zones.\n\nThe zone fields (those of ``app.ddmrp.zones.buffer_zones``) are\nnull for a row whose status is not \"ok\".  ``adu_base`` is the\nunadjusted ADU and ``adjustment_factor`` the active adjustment\nfactor on the as-of date (1.0 when no adjustment window covers\nit); ``adu`` is ``adu_base`` times that factor, and the zone\nfields are the ``buffer_zones`` of the adjusted ADU, with ``moq``\nthe value they took as their minimum order quantity (0.0 when\nnone applied, null with the other zone fields for a row whose\nzones are not computed)."
       },
       "DecisionAcceptance": {
         "properties": {

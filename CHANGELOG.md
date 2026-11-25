@@ -457,6 +457,8 @@ code is the authority for details.
 - The Order plan screen now disables the horizon select and Refresh button, and the top-up checkboxes
   in a supplier's block, while that block's release confirm is in flight, leaving top-up checkboxes in
   other blocks enabled, so the confirm's outcome or error is shown when it answers (#1594).
+- The SBA intermittent-demand forecast now starts its smoothed interval at the first non-zero
+  quantity's position, counted from 1, instead of at 1 (#1599).
 
 ### Security
 - `opentelemetry-api` is pinned to 1.45.2, which fixes CVE-2026-126360 (#1180).

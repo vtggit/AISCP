@@ -14,6 +14,12 @@ the final quantity is below ``ceil(raw_quantity)`` — the order then
 covers less than the raw need, only a maximum can cause that.  With
 null terms the quantity is just ``ceil(raw_quantity)``, with no
 adjustments and no shortfall.
+
+``pick_terms_row`` picks one item's supplier terms row for a source
+system: among the rows whose ``source_system`` equals the given one,
+the row whose ``is_default`` is true, else the row with the lowest
+``supplier_code``, and None when the item has no terms row for the
+source system.
 """
 
 from __future__ import annotations
@@ -85,3 +91,17 @@ def fit_to_terms(raw_quantity, terms) -> dict:
         "adjustments": adjustments,
         "short_of_need": quantity < need,
     }
+
+
+def pick_terms_row(rows: list[dict], source_system: str | None) -> dict | None:
+    """The item's supplier terms row for the source system: the row whose
+    ``is_default`` is true, else the row with the lowest
+    ``supplier_code``; None when the item has no terms row for the
+    source system."""
+    candidates = [row for row in rows if row.get("source_system") == source_system]
+    if not candidates:
+        return None
+    for row in candidates:
+        if row.get("is_default"):
+            return row
+    return min(candidates, key=lambda row: str(row.get("supplier_code") or ""))

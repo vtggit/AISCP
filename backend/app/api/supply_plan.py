@@ -315,7 +315,7 @@ from app.settings.registry import get_setting
 from app.stats.demand import default_as_of
 from app.supply.release import order_plan_release
 from app.supply.short_orders import record_short_orders
-from app.supply.terms import fit_to_terms
+from app.supply.terms import fit_to_terms, pick_terms_row
 from app.supply.transfer_release import (
     create_transfer_release,
     preview_transfer_release,
@@ -716,20 +716,6 @@ def _arithmetic(
     return " → ".join(parts) + f": {quantity}"
 
 
-def _pick_terms_row(rows: list[dict], source_system: str | None) -> dict | None:
-    """The item's supplier terms row for the source system: the row whose
-    ``is_default`` is true, else the row with the lowest
-    ``supplier_code``; None when the item has no terms row for the
-    source system."""
-    candidates = [row for row in rows if row.get("source_system") == source_system]
-    if not candidates:
-        return None
-    for row in candidates:
-        if row.get("is_default"):
-            return row
-    return min(candidates, key=lambda row: str(row.get("supplier_code") or ""))
-
-
 def _prefer_lower_risk_supplier_enabled(stored: dict) -> bool:
     """The ``supply_plan.prefer_lower_risk_supplier`` value of one
     call's stored settings: the stored value when it is a boolean,
@@ -956,7 +942,7 @@ def _buffer_plan_line(
     daily = _number(inputs.get("d"))
 
     source_system = source_system_by_pair.get((item_code, site_code))
-    terms_row = _pick_terms_row(terms_by_item.get(item_code, []), source_system)
+    terms_row = pick_terms_row(terms_by_item.get(item_code, []), source_system)
     supplier_reason = None
     if terms_row is not None and risk_by_code is not None:
         default_row = terms_row
@@ -1110,7 +1096,7 @@ def _plan_line(
     )
 
     source_system = source_system_by_pair.get((item_code, site_code))
-    terms_row = _pick_terms_row(terms_by_item.get(item_code, []), source_system)
+    terms_row = pick_terms_row(terms_by_item.get(item_code, []), source_system)
     supplier_reason = None
     if terms_row is not None and risk_by_code is not None:
         default_row = terms_row

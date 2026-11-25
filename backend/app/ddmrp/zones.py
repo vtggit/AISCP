@@ -17,23 +17,37 @@ coefficient of variation of 0.5, "medium" for 0.5 to 1.0 inclusive,
 "high" above, and "low" when the coefficient is null).  The yellow
 zone is the ADU times the lead time in days; the green zone is the
 largest of the ADU times the order cycle (left out when the order
-cycle is null), the red base and the minimum order quantity (0: the
-feed carries no minimum order quantity yet); and each zone top is
+cycle is null), the red base and the minimum order quantity — the
+caller's, the ``moq`` argument of ``buffer_zones``, 0 when none is
+given; and each zone top is
 the ceiling, in whole units, of the sum of the zones up to it.  A
 one-line ``arithmetic`` string shows the numbers behind each zone.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Any
 
 from app.settings.registry import get_setting
 from app.units import ceil_units
 
-# The feed carries no minimum order quantity yet: the green zone's
-# third candidate is the constant zero.
-MOQ: float = 0.0
+
+def minimum_order_qty(moq: float | None) -> float:
+    """The minimum order quantity one call's ``moq`` stands for: a
+    finite number above 0 is that number, and None, a bool, 0, a
+    negative number, a non-finite number or a value that is not a
+    number stands for 0 — the minimum is the caller's, 0 when none is
+    given, never an error."""
+    if isinstance(moq, bool) or not isinstance(moq, (int, float, Decimal)):
+        return 0.0
+    value = float(moq)
+    if not math.isfinite(value) or value <= 0:
+        return 0.0
+    return value
+
 
 ADU_WINDOW_KEY = "ddmrp.adu_window_days"
 
@@ -113,6 +127,7 @@ def buffer_zones(
     demand_class: str,
     cv: float | None,
     settings: Mapping[str, Any] | None = None,
+    moq: float | None = None,
 ) -> dict:
     """The DDMRP buffer zones of one item-site, from its inputs.
 
@@ -122,7 +137,11 @@ def buffer_zones(
     ``demand_class`` / ``cv`` its demand statistics' class and
     coefficient of variation (``cv`` None when it is null there).
     ``settings`` maps the ``ddmrp.*`` setting keys to their stored
-    values (an empty mapping uses every registry default).  Returns
+    values (an empty mapping uses every registry default) and
+    ``moq`` the caller's minimum order quantity — a finite number
+    above 0, else 0 (None, a bool, 0, a negative number or a value
+    that is not a finite number stands for 0, as when no ``moq`` is
+    given) — the green zone's third candidate.  Returns
     one dict holding, under exactly the keys of ``ZONE_FIELDS``, the
     lead-time and variability categories and their factors, the red
     base (adu x dlt x lead-time factor), the red safety stock (the
@@ -134,12 +153,13 @@ def buffer_zones(
     lead_factor = setting_value(settings, LEAD_TIME_FACTOR_KEYS[lead_category])
     variability = variability_category(demand_class, cv)
     variability_factor = setting_value(settings, VARIABILITY_FACTOR_KEYS[variability])
+    minimum = minimum_order_qty(moq)
 
     red_base = adu * dlt_days * lead_factor
     red_safety = red_base * variability_factor
     red = red_base + red_safety
     yellow = adu * dlt_days
-    green_candidates = [red_base, MOQ]
+    green_candidates = [red_base, minimum]
     if order_cycle_days is not None:
         green_candidates.append(adu * order_cycle_days)
     green = max(green_candidates)
@@ -151,10 +171,10 @@ def buffer_zones(
     if order_cycle_days is not None:
         green_expression = (
             "max(adu * order_cycle_days, red_base, moq) "
-            f"= max({adu:g} * {order_cycle_days:g}, {red_base:g}, {MOQ:g})"
+            f"= max({adu:g} * {order_cycle_days:g}, {red_base:g}, {minimum:g})"
         )
     else:
-        green_expression = f"max(red_base, moq) = max({red_base:g}, {MOQ:g})"
+        green_expression = f"max(red_base, moq) = max({red_base:g}, {minimum:g})"
     arithmetic = (
         "red_base = adu * dlt * lead_time_factor "
         f"= {adu:g} * {dlt_days:g} * {lead_factor:g} = {red_base:g}; "

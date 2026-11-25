@@ -92,7 +92,11 @@ coefficient of variation, its order cycle days, and the DDMRP buffer
 zones of ``app.ddmrp.zones.buffer_zones`` — null zone fields for a
 row whose status is not "ok" ("no_demand" when its ADU is 0 or it has
 no demand statistics, "no_lead_time" when neither lead time source
-exists); each row's ``adu`` is its unadjusted ``adu_base`` times its
+exists); each row's ``moq`` is the ``min_order_qty`` of the item's
+picked supplier terms row for the item-site's ``source_system`` (the
+value the zones used as their minimum order quantity, 0.0 when none
+applies, null with the other zone fields for a row whose zones are
+not computed); each row's ``adu`` is its unadjusted ``adu_base`` times its
 ``adjustment_factor`` (the pair's own item-site adjustment whose
 window contains the as-of date, else the all-buffer adjustment whose
 window contains it, else 1.0), the zones being the
@@ -159,7 +163,7 @@ site_code.  Nothing is written.
 import math
 from collections import Counter
 from datetime import date, datetime, timedelta
-from typing import Self
+from typing import Annotated, Self
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -168,6 +172,7 @@ from pydantic import (
     BaseModel,
     Field,
     ValidationError,
+    WithJsonSchema,
     field_validator,
     model_validator,
 )
@@ -181,6 +186,7 @@ from app.ddmrp.zones import (
     ADU_WINDOW_KEY,
     ZONE_FIELDS,
     buffer_zones,
+    minimum_order_qty,
     setting_value,
 )
 from app.forecast.listing import forecast_rows
@@ -196,8 +202,12 @@ from app.repositories.ddmrp_buffers_postgres_repository import (
 from app.repositories.item_sites_postgres_repository import (
     ItemSitePostgresRepository,
 )
+from app.repositories.supplier_terms_postgres_repository import (
+    SupplierTermsPostgresRepository,
+)
 from app.stats.demand import default_as_of, demand_stats_for_all
 from app.stats.lead_time import lead_time_stats_for_all
+from app.supply.terms import pick_terms_row
 
 router = APIRouter(prefix="/api/ddmrp", tags=["ddmrp"])
 
@@ -402,7 +412,10 @@ class DdmrpZoneRow(BaseModel):
     unadjusted ADU and ``adjustment_factor`` the active adjustment
     factor on the as-of date (1.0 when no adjustment window covers
     it); ``adu`` is ``adu_base`` times that factor, and the zone
-    fields are the ``buffer_zones`` of the adjusted ADU.
+    fields are the ``buffer_zones`` of the adjusted ADU, with ``moq``
+    the value they took as their minimum order quantity (0.0 when
+    none applied, null with the other zone fields for a row whose
+    zones are not computed).
     """
 
     item_code: str
@@ -429,6 +442,7 @@ class DdmrpZoneRow(BaseModel):
     top_of_red: int | None
     top_of_yellow: int | None
     top_of_green: int | None
+    moq: float | None
     arithmetic: str | None
 
 
@@ -460,8 +474,9 @@ def _ddmrp_stat_context(as_of: date | None = None, pairs: tuple | None = None) -
         is given), the windowed demand totals (the pair's
         ``demand_events.quantity`` sum in the window ending on that date),
         the demand statistics, the pooled
-        lead-time statistics, the reorder recommendations and the
-        item_sites rows.  ``pairs`` — a tuple of (item_code,
+        lead-time statistics, the reorder recommendations, the stored
+        supplier terms and the item_sites rows.  ``pairs`` — a tuple
+        of (item_code,
     site_code) pairs — is passed on to the demand statistics' read,
     restricting it to those pairs in SQL; ``None`` (the default) reads
     every pair, as before.
@@ -486,10 +501,15 @@ def _ddmrp_stat_context(as_of: date | None = None, pairs: tuple | None = None) -
             for row in cur.fetchall()
         }
 
+    terms_by_item: dict[str, list[dict]] = {}
+    for row in SupplierTermsPostgresRepository().list():
+        terms_by_item.setdefault(str(row.get("item_code") or ""), []).append(row)
+
     return {
         "stored": stored,
         "window_days": window_days,
         "as_of": as_of,
+        "terms_by_item": terms_by_item,
         "window_totals": window_totals,
         "demand_by_pair": {
             (row["item_code"], row["site_code"]): row
@@ -575,8 +595,17 @@ def ddmrp_zone_rows(as_of: date | None = None) -> tuple[date, list[dict]]:
     adjustment whose window contains it, else 1.0), and its ``adu``
     is ``adu_base`` times that factor — the zones are the
     ``buffer_zones`` of the adjusted ADU, so with no adjustment
-    stored every number is the unadjusted one.  The ADU, the DLT with its source and the demand
-    class are the shared ``_ddmrp_item_site_stats`` computation
+    stored every number is the unadjusted one.  Each row's ``moq`` —
+    passed to ``buffer_zones`` as its ``moq`` — is the ``min_order_qty``
+    of the item's picked supplier terms row (``app.supply.terms.
+    pick_terms_row`` over the context's ``terms_by_item`` rows of the
+    item and the ``source_system`` of the item-site's row of the
+    context's ``item_site_by_key``), None with no item-site row, no
+    terms row or a null ``min_order_qty``: the row answers the value
+    the zones used, as a float (0.0 when none applies) and rows
+    whose zones are not computed carry it null.  The ADU, the DLT
+    with its source and the demand class are the shared
+    ``_ddmrp_item_site_stats`` computation
     ``GET /api/ddmrp/candidates`` uses, and the plan rows
     ``app.ddmrp.snapshots.capture_ddmrp_snapshot`` stores.  Every
     statistic is read once per call, whatever the number of rows, and
@@ -633,6 +662,16 @@ def ddmrp_zone_rows(as_of: date | None = None) -> tuple[date, list[dict]]:
             recommendation.get("order_quantity") if recommendation else None
         )
 
+        moq = None
+        item_site = context["item_site_by_key"].get(key)
+        if item_site is not None:
+            terms_row = pick_terms_row(
+                context["terms_by_item"].get(item_code, []),
+                item_site.get("source_system"),
+            )
+            if terms_row is not None:
+                moq = terms_row.get("min_order_qty")
+
         row = {
             "item_code": item_code,
             "site_code": site_code,
@@ -650,6 +689,7 @@ def ddmrp_zone_rows(as_of: date | None = None) -> tuple[date, list[dict]]:
             ),
         }
         if status == "ok":
+            row["moq"] = minimum_order_qty(moq)
             row.update(
                 buffer_zones(
                     adu,
@@ -658,9 +698,11 @@ def ddmrp_zone_rows(as_of: date | None = None) -> tuple[date, list[dict]]:
                     stats["demand_class"],
                     row["cv"],
                     stored,
+                    moq=moq,
                 )
             )
         else:
+            row["moq"] = None
             for field in ZONE_FIELDS:
                 row[field] = None
         rows.append(row)
@@ -817,13 +859,18 @@ def list_ddmrp_zones() -> dict:
 
 
 class DdmrpPlanRowWithAdjustment(DdmrpPlanRow):
-    """A plan row that keeps the adjustment-factor fields of the
-    shared zone row: ``adu_base`` (the unadjusted ADU) and
+    """A plan row that keeps the fields the zones route added to
+    the shared zone row: ``adu_base`` (the unadjusted ADU) and
     ``adjustment_factor`` (the active factor applied to it), so the
-    plan route returns them without omission."""
+    plan route returns them without omission.  The zones route's own
+    fields — its ``moq`` included — pass through with the shared
+    zone rows the plan row is built from; the ``moq`` field carries
+    no JSON schema of its own, so the plan route's documented answer
+    shape stays the one of its declared fields."""
 
     adu_base: float
     adjustment_factor: float
+    moq: Annotated[float | None, WithJsonSchema(None)]
 
 
 class DdmrpPlanResponseWithAdjustment(DdmrpPlanResponse):

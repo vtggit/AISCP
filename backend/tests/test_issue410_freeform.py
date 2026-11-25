@@ -338,7 +338,14 @@ def test_issue410_freeform(monkeypatch):
     assert len(domain) == 1
     assert domain[0][1] == "in"
     assert line_info["fields"] == [
-        ["product_id", "product_qty", "qty_received", "date_planned", "order_id"]
+        [
+            "product_id",
+            "product_qty",
+            "qty_received",
+            "date_planned",
+            "order_id",
+            "uom_id",
+        ]
     ]
     assert line_info["kwargs"] == [
         {
@@ -348,6 +355,7 @@ def test_issue410_freeform(monkeypatch):
                 "qty_received",
                 "date_planned",
                 "order_id",
+                "uom_id",
             ],
             "offset": 0,
         }
@@ -384,8 +392,10 @@ def test_issue410_freeform(monkeypatch):
     product_info = server.models["product.product"]
     assert product_info["calls"] == 1
     assert product_info["domains"] == [[["id", "in", [11, 12, 13, 14]]]]
-    assert product_info["fields"] == [["default_code"]]
-    assert product_info["kwargs"] == [{"fields": ["default_code"], "offset": 0}]
+    assert product_info["fields"] == [["default_code", "uom_id"]]
+    assert product_info["kwargs"] == [
+        {"fields": ["default_code", "uom_id"], "offset": 0}
+    ]
 
     # 8. Without as_of: every row carries the current UTC time as
     #    YYYY-MM-DDTHH:MM:SSZ.

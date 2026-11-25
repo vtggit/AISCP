@@ -33,6 +33,17 @@
 // "Open the Work queue" link to #/queue. A failed load shows an
 // inline error with a Retry button that repeats the three requests.
 //
+// The list cut line (issue #1600): the server lists at most 1,000
+// decisions per list, so when one or more of the three answers is an
+// array of exactly 1,000 entries — counted on the answers as
+// received — the log card shows, directly before the table's
+// scrolling region, a status line reading "Showing the first 1,000
+// decisions of: <names>. There may be more.", <names> the full
+// answers' list names (Reorder point, Excess and dead stock, Stockout
+// risk) in that order, joined by ", ". Decided again on every load;
+// with no full answer, and in the loading, error and empty states, no
+// line at all.
+//
 // The view is read-only and is shown to any signed-in user. Every
 // string from the API is HTML-escaped before it reaches the page.
 (function (global) {
@@ -76,6 +87,7 @@
     loading: false,
     error: null,
     rows: [], // [{ meta, entry }] newest first
+    cutLists: [], // issue #1600: list names of the answers that arrived with exactly 1,000 entries, in endpoint order
   };
   var loadSeq = 0;
   var rootEl = null;
@@ -234,6 +246,21 @@
     );
   }
 
+  // The cut line of the log card (issue #1600): the server lists at
+  // most 1,000 decisions per list, so a full answer means the log
+  // may hold more than what loaded. It names the full answers' lists
+  // in the endpoint order and sits directly before the table's
+  // scrolling region; with no full answer it does not render at all.
+  function cutLineHtml() {
+    return (
+      '<p class="log-cut" data-testid="log-cut" role="status">' +
+      'Showing the first 1,000 decisions of: ' +
+      state.cutLists.join(', ') +
+      '. There may be more.' +
+      '</p>'
+    );
+  }
+
   function headRow() {
     return (
       '<tr>' +
@@ -300,6 +327,7 @@
     }
     rootEl.innerHTML =
       '<article class="card log-card" data-panel="log" aria-label="Decision log">' +
+        (state.cutLists.length ? cutLineHtml() : '') +
         '<div class="log-scroll">' +
           '<table class="log-table">' +
             '<thead>' + headRow() + '</thead>' +
@@ -328,6 +356,16 @@
         if (seq !== loadSeq) {
           return;
         }
+        // issue #1600: a list is cut when its answer as received is
+        // an array of exactly 1,000 entries — counted before
+        // mergeDecisions drops anything, re-decided on every load.
+        var cutLists = [];
+        for (var i = 0; i < ENDPOINTS.length; i++) {
+          if (Array.isArray(lists[i]) && lists[i].length === 1000) {
+            cutLists.push(ENDPOINTS[i].list);
+          }
+        }
+        state.cutLists = cutLists;
         state.rows = mergeDecisions(lists);
         state.loading = false;
         render();
@@ -365,6 +403,7 @@
     state.loading = false;
     state.error = null;
     state.rows = [];
+    state.cutLists = [];
     if (rootEl) {
       rootEl.innerHTML = '';
     }

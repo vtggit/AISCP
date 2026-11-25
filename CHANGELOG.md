@@ -131,6 +131,8 @@ code is the authority for details.
   the proposed factor, with how many were saved below or above it (#1481).
 - The Releases screen now shows a Buffer badge after the item code on release lines ordered on a DDMRP
   buffer's order signal (#1560).
+- The DDMRP green zone now uses the supplier minimum order quantity from the item's supplier terms, and
+  `GET /api/ddmrp/zones` answers the value used as `moq` (#1602).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,

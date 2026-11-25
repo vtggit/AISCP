@@ -375,6 +375,8 @@ code is the authority for details.
   up a stamp, and formatted statements (#1125, #1126, #1128, #1129, #1130, #1151).
 - The Work queue and Decision log now show a status line when a list is cut at 1,000 rows, naming the
   full lists in the log (#1600).
+- The Overview's to-decide labels and the Demand view's forecast list now say when their lists are cut
+  at 1,000 rows (#1601).
 
 **Documentation and CI**
 - A 20-minute demo walkthrough (`docs/DEMO.md`) (#915).

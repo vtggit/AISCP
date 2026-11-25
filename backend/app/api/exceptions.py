@@ -2234,7 +2234,10 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
     # registry default).
     try:
         stored_settings = _stored_system_settings()
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "exceptions: source %s failed: %s", "settings", type(exc).__name__
+        )
         stored_settings = None
 
     plan_as_of: date | None = None
@@ -2245,8 +2248,9 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
         # — a failure of the row mapping fails the source, so its
         # as-of must not count.
         reported_as_ofs.append(plan_as_of)
-    except Exception:
+    except Exception as exc:
         sources_failed.append("ddmrp")
+        logger.warning("exceptions: source %s failed: %s", "ddmrp", type(exc).__name__)
 
     try:
         # The stockout ranking shares the DDMRP plan's one
@@ -2270,16 +2274,22 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
             reported = _as_date(stockout_source_rows[0].get("as_of"))
             if reported is not None:
                 reported_as_ofs.append(reported)
-    except Exception:
+    except Exception as exc:
         sources_failed.append("stockout")
+        logger.warning(
+            "exceptions: source %s failed: %s", "stockout", type(exc).__name__
+        )
 
     try:
         expedite_as_of, expedite_rows = _expedite_rows(expedite_list())
         if expedite_as_of is not None:
             reported_as_ofs.append(expedite_as_of)
         rows.extend(expedite_rows)
-    except Exception:
+    except Exception as exc:
         sources_failed.append("expedite")
+        logger.warning(
+            "exceptions: source %s failed: %s", "expedite", type(exc).__name__
+        )
 
     try:
         # The releases' one read of plan_releases, shared by the
@@ -2305,8 +2315,11 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
                 approval_days,
             )
         )
-    except Exception:
+    except Exception as exc:
         sources_failed.append("releases")
+        logger.warning(
+            "exceptions: source %s failed: %s", "releases", type(exc).__name__
+        )
 
     try:
         # The one read of the transfer_releases audit per call:
@@ -2337,8 +2350,11 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
                 setting_value(stored_settings, RELEASE_APPROVAL_DAYS_KEY),
             )
         )
-    except Exception:
+    except Exception as exc:
         sources_failed.append("transfers")
+        logger.warning(
+            "exceptions: source %s failed: %s", "transfers", type(exc).__name__
+        )
 
     try:
         rows.extend(
@@ -2350,8 +2366,9 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
                 _push_detail,
             )
         )
-    except Exception:
+    except Exception as exc:
         sources_failed.append("pushes")
+        logger.warning("exceptions: source %s failed: %s", "pushes", type(exc).__name__)
 
     try:
         # The two reads of the sop_signoffs audit per call: the
@@ -2367,16 +2384,20 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
                 stored_settings,
             )
         )
-    except Exception:
+    except Exception as exc:
         sources_failed.append("sop")
+        logger.warning("exceptions: source %s failed: %s", "sop", type(exc).__name__)
 
     try:
         # The one read of the open erp_code_clashes rows per call:
         # the rows whose resolved_at is still null, the most
         # recently seen first, then by id.
         rows.extend(_erp_code_clash_rows(_erp_code_clashes_repo.list_open(limit=200)))
-    except Exception:
+    except Exception as exc:
         sources_failed.append("clashes")
+        logger.warning(
+            "exceptions: source %s failed: %s", "clashes", type(exc).__name__
+        )
 
     try:
         # The one read of the erp_source_currencies rows per call:
@@ -2391,8 +2412,11 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
                 _reporting_currency(stored_settings),
             )
         )
-    except Exception:
+    except Exception as exc:
         sources_failed.append("currencies")
+        logger.warning(
+            "exceptions: source %s failed: %s", "currencies", type(exc).__name__
+        )
 
     try:
         # The one read of the stored item mappings per call: the
@@ -2403,16 +2427,20 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
         stored_item_mappings = _erp_code_mappings_repo.list(kind="item")
         if stored_item_mappings:
             rows.extend(_cross_erp_opportunity_rows(cross_erp_items()))
-    except Exception:
+    except Exception as exc:
         sources_failed.append("across")
+        logger.warning("exceptions: source %s failed: %s", "across", type(exc).__name__)
 
     try:
         # The one call of the supplier risk rating per call: one row
         # per entry whose risk is "high".  The rating's as-of is the
         # rows' detected_on only, never the response's as_of.
         rows.extend(_supplier_risk_high_rows(supplier_risk()))
-    except Exception:
+    except Exception as exc:
         sources_failed.append("supplier_risk")
+        logger.warning(
+            "exceptions: source %s failed: %s", "supplier_risk", type(exc).__name__
+        )
 
     try:
         # The one call of the second-source candidates per call:
@@ -2421,8 +2449,11 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
         # stock.  The answer's as-of is the rows' detected_on only,
         # never the response's as_of.
         rows.extend(_sole_source_short_rows(second_sources()))
-    except Exception:
+    except Exception as exc:
         sources_failed.append("second_sources")
+        logger.warning(
+            "exceptions: source %s failed: %s", "second_sources", type(exc).__name__
+        )
 
     try:
         # The one read of the stored supplier order minimums per
@@ -2437,8 +2468,11 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
             rows.extend(
                 _order_below_minimum_rows(stored_settings, build_supply_plan(7))
             )
-    except Exception:
+    except Exception as exc:
         sources_failed.append("order_minimums")
+        logger.warning(
+            "exceptions: source %s failed: %s", "order_minimums", type(exc).__name__
+        )
 
     try:
         # The one read of the stored system settings failed: the
@@ -2460,8 +2494,11 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
                 _forecast_bias_accuracy(stored_settings), bias_threshold, min_periods
             )
         )
-    except Exception:
+    except Exception as exc:
         sources_failed.append("forecast")
+        logger.warning(
+            "exceptions: source %s failed: %s", "forecast", type(exc).__name__
+        )
 
     try:
         # The grants in force, once per call for each of the two
@@ -2472,8 +2509,11 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
         # time the idle window runs off is read once per call,
         # through the module's _utcnow().
         rows.extend(_standing_grant_run_rows(stored_settings, _utcnow()))
-    except Exception:
+    except Exception as exc:
         sources_failed.append("standing_grants")
+        logger.warning(
+            "exceptions: source %s failed: %s", "standing_grants", type(exc).__name__
+        )
 
     try:
         # The one call of the basis accuracy per call (the demand
@@ -2486,8 +2526,9 @@ def _gather_sources() -> tuple[date | None, list[ExceptionRow], list[str]]:
         # do; while the settings read itself failed the source runs
         # off the registry defaults rather than failing.
         rows.extend(_basis_switch_rows(basis_accuracy(bucket_index=1), stored_settings))
-    except Exception:
+    except Exception as exc:
         sources_failed.append("basis")
+        logger.warning("exceptions: source %s failed: %s", "basis", type(exc).__name__)
 
     rows.sort(key=_sort_key)
     as_of = max(reported_as_ofs) if reported_as_ofs else None

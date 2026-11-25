@@ -26,9 +26,9 @@ whose errors were computed by hand.
   three cycles (level = the pattern's mean 4.75, each index is the
   pattern value over 4.75) and refuses fewer than 24 buckets;
 * ``sba`` on ``[0, 0, 4, 0, 0, 0, 2, 0, 0, 0, 0, 6]`` with alpha 0.2
-  smooths size ``4 -> 3.6 -> 4.08`` and interval ``1 -> 1.6 -> 2.28``
+  smooths size ``4 -> 3.6 -> 4.08`` and interval ``3 -> 3.2 -> 3.56``
   at the three non-zero buckets, so the forecast is
-  ``(1 - 0.1) * 4.08 / 2.28 = 153/95``;
+  ``(1 - 0.1) * 4.08 / 3.56 = 459/445``;
 * ``choose_forecast`` returns ``None`` for ``no_demand``, ``mean``
   with no backtest under 12 buckets, ``seasonal`` for a strongly
   seasonal 36-bucket history (backtest MAE 0, baseline 13/6),
@@ -137,18 +137,20 @@ def test_issue308_freeform():
     assert forecast_seasonal([0.0] * 24, 2) == [0.0, 0.0]
 
     # sba: size 4 -> 0.2*2 + 0.8*4 = 3.6 -> 0.2*6 + 0.8*3.6 = 4.08,
-    # interval 1 -> 0.2*4 + 0.8*1 = 1.6 -> 0.2*5 + 0.8*1.6 = 2.28,
-    # forecast (1 - 0.1) * 4.08 / 2.28 = 153/95. A history with no
-    # non-zero quantity gives zeros.
-    assert forecast_sba(SBA_HIST, 2, 0.2) == approx([153 / 95, 153 / 95])
+    # interval 3 -> 0.2*4 + 0.8*3 = 3.2 -> 0.2*5 + 0.8*3.2 = 3.56
+    # (it starts at the first non-zero's position), forecast
+    # (1 - 0.1) * 4.08 / 3.56 = 459/445. A history with no non-zero
+    # quantity gives zeros.
+    assert forecast_sba(SBA_HIST, 2, 0.2) == approx([459 / 445, 459 / 445])
     assert forecast_sba([0.0] * 12, 3) == [
         0.0,
         0.0,
         0.0,
     ]
-    # A single non-zero: size = the quantity, interval = 1, so
-    # (1 - 0.05) * 7 / 1 with the default alpha 0.1.
-    assert forecast_sba([0, 0, 7], 1) == approx([0.95 * 7])
+    # A single non-zero: size = the quantity, and the interval is its
+    # position counted from 1 (3 here), so (1 - 0.05) * 7 / 3 with the
+    # default alpha 0.1.
+    assert forecast_sba([0, 0, 7], 1) == approx([0.95 * 7 / 3])
 
     # Empty history and h below 1 raise ValueError on every method.
     for fn, args in (
@@ -217,7 +219,7 @@ def test_issue308_freeform():
     assert set(rep) == set(ARITHMETIC_FIELDS)
     assert rep["intermediates"]["first_non_zero_index"] == 2
     assert rep["intermediates"]["final_size"] == approx(4.08)
-    assert rep["intermediates"]["final_interval"] == approx(2.28)
+    assert rep["intermediates"]["final_interval"] == approx(3.56)
     assert rep["result"] == forecast_sba(SBA_HIST, 2, 0.2)
 
     rep = explain_sba([0.0] * 12, 2)

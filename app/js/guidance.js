@@ -218,14 +218,7 @@
 
   /* ------------------------------ helpers ------------------------------ */
 
-  function esc(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
+  var esc = window.Shared.esc;
 
   // A value to set as text: null and undefined read as nothing, every
   // other value through String.

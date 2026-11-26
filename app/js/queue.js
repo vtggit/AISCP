@@ -301,14 +301,7 @@
 
   /* ------------------------------ helpers ------------------------------ */
 
-  function esc(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
+  var esc = window.Shared.esc;
 
   // The free-form item description the API may list alongside a row
   // (item_description): a non-empty string. Anything else — missing,

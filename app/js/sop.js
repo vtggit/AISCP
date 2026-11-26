@@ -435,14 +435,7 @@
 
   /* ------------------------------ helpers ------------------------------ */
 
-  function esc(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
+  var esc = window.Shared.esc;
 
   // A usable finite number, or NaN: a numeric string ("3", "0") counts
   // as its number; null, blank or non-numeric values never do.

@@ -48,12 +48,13 @@
 //     answer replaces it; a run started while an older one is still
 //     out supersedes it — the older response is ignored and only the
 //     newest run's answer is rendered;
-//   * the summary ([data-testid="scenario-summary"]) reads the dollar
-//     impact as currency, the total reorder-point-unit and
+//   * the summary ([data-testid="scenario-summary"]) reads the
+//     safety-stock-investment and the pipeline (on order) dollar
+//     figures as currency, the total reorder-point-unit and
 //     safety-stock-unit changes signed with thousands separators, and
 //     the item-site counts whose reorder point rises, falls or is
 //     unchanged; above zero, a note counts the item-sites without a
-//     unit cost, excluded from the dollar figure;
+//     unit cost, excluded from the dollar figures;
 //   * the table ([data-testid="scenario-table"]) lists one row per
 //     simulated item-site — item, site, baseline reorder-point units,
 //     scenario reorder-point units and the signed unit difference, in
@@ -733,9 +734,15 @@
       '<section class="card sc-summary" data-testid="scenario-summary" aria-label="Scenario summary">' +
       '<dl class="sc-summary-grid">' +
       '<div class="sc-stat">' +
-      '<dt class="sc-stat-label">Dollar impact</dt>' +
+      '<dt class="sc-stat-label">Safety-stock investment</dt>' +
       '<dd class="sc-stat-value" data-testid="scenario-dollar-impact">' +
       currency(summary.dollar_impact) +
+      '</dd>' +
+      '</div>' +
+      '<div class="sc-stat">' +
+      '<dt class="sc-stat-label">Pipeline (on order)</dt>' +
+      '<dd class="sc-stat-value" data-testid="scenario-pipeline-impact">' +
+      currency(summary.pipeline_dollar_impact) +
       '</dd>' +
       '</div>' +
       '<div class="sc-stat">' +

@@ -723,6 +723,26 @@ This document steers what AIERP becomes. The people who use and audit AIERP shou
 - **Every version is kept.** Publishing never deletes. An item whose words changed gets a new version, and the old one stays readable with the days it was current. An item that is no longer published stays readable too.
 - **Guidance is read in the product and changed in the register.** The screen has no editing. An item changes only through a reviewed change to the register, by someone who holds the authority its type asks for.
 
+## Known simplifications (recorded by Claude under delegation, 2026-11-26)
+
+A domain review of the planning methods (2026-11-24) judged the simplifications below defensible. They are listed here so that a planner, a reviewer or a later slice knows where the numbers stop being exact. Each one is a candidate for a later change, not a defect.
+
+- **Demand variability.** It is the standard deviation of 30-day buckets over 12 equally weighted months, divided by √30. Trend and seasonality count as variability, so on the history basis a trending or seasonal item gets more safety stock.
+- **Demand classification.** ADI and CV² are computed on monthly buckets, not on individual demands.
+- **Lead time.** It is pooled per item across suppliers and sites, with only the upper 3 × IQR fence applied. A main-supplier option exists.
+- **The reorder point.** It follows a continuous-review policy, so no review period is added. The position is on hand plus on order, with nothing deducted for backorders or allocations.
+- **Intermittent items.** The empirical reorder point is a quantile of overlapping sums of demand over one lead time. It ignores lead-time variance, and a long lead time leaves few independent spans.
+- **Seasonality.** Twelve 30-day buckets make a 360-day season, so the indices drift about 5 days a year.
+- **DDMRP inputs:**
+  - the decoupled lead time is the mean purchase lead time, since there is no bill of materials;
+  - the average daily usage covers the past 90 days only;
+  - the lead-time categories are fixed at 15 and 45 days;
+  - the variability category comes from the monthly CV.
+- **Currency.** Amounts are never converted. A currency mismatch raises a high-severity exception instead of being summed.
+- **S&OP and the projection.** Units are summed across unlike items per site, so one item's surplus can mask another's shortage. Intermittent items are left out.
+
+One known error is not fixed yet. On the forecast basis, demand variability is 1.2533 × the MAE ÷ √30, where the MAE is the lowest of 12 candidate methods on the same 6 backtest points. Picking the best of 12 on so few points makes the error look smaller than it is, so safety stock is understated. The forecast basis is off by default (`replenishment.demand_basis` is `history`).
+
 ## Comparative-research method (when no decision exists)
 
 Answer by researching what **publicly documented practices across multiple established

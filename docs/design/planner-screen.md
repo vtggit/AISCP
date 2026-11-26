@@ -140,7 +140,7 @@ The tokens are in `app/css/tokens.css`; use them, never raw values.
   - risk #8A3B05 on #FDE8D3.
 - **Contrast**: text meets 4.5:1.
 - **Radii**: 8 px for controls, 12 px for cards, 999 px for pills.
-- **Spacing**: 8 px steps; pages have 24–28 px padding.
+- **Spacing**: 4 px steps, the `--space-1` to `--space-7` tokens in `app/css/tokens.css`; pages have 24–28 px padding.
 - **Touch targets**: at least 44 px for buttons, tabs and options.
 
 ## Accessibility

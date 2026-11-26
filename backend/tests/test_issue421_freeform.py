@@ -21,7 +21,7 @@ the signed ``reorder_point_units_delta`` /
 (count simulated), the two delta totals, ``reorder_point_up`` /
 ``reorder_point_down`` / ``reorder_point_unchanged`` (counts by the sign
 of ``reorder_point_units_delta``), ``dollar_impact`` (sum of
-``reorder_point_units_delta`` times the item-site's ``unit_cost`` from
+``safety_stock_units_delta`` times the item-site's ``unit_cost`` from
 ``item_sites``, no ``unit_cost`` contributing 0) and
 ``item_sites_without_unit_cost`` (count), and the ``levers`` echoed
 back, each null when not given. A given ``service_level`` must be a
@@ -72,7 +72,7 @@ likewise (I1: 8 * z(0.95) + 40 = 53.158829 -> 54, +27 units). The
 summary totals equal the sums of the per-item-site unit deltas (5/5,
 22/5 and 47/12), the up/down/unchanged counts partition the item-sites
 (0/0/3, 3/0/0, 3/0/0, 3/0/0), and dollar_impact equals the sum of
-reorder_point_units_delta * unit_cost (17.0, 71.0 and 149.0), with
+safety_stock_units_delta * unit_cost (17.0, 17.0 and 39.0), with
 A421-2 (no unit cost) adding 0 and counted in
 item_sites_without_unit_cost. The API returns the same structure for a
 body with levers, 422 for a service_level of 1.5, a demand_multiplier
@@ -202,7 +202,7 @@ EXPECTED = {
         "up": 3,
         "down": 0,
         "unchanged": 0,
-        "dollar": 13 * COST_1 + 3 * COST_3,
+        "dollar": 3 * COST_1 + 1 * COST_3,
     },
     "l": {
         "deltas": {I1: (27, 7), I2: (13, 3), I3: (7, 2)},
@@ -211,7 +211,7 @@ EXPECTED = {
         "up": 3,
         "down": 0,
         "unchanged": 0,
-        "dollar": 27 * COST_1 + 7 * COST_3,
+        "dollar": 7 * COST_1 + 2 * COST_3,
     },
 }
 
@@ -465,7 +465,7 @@ def _check_scenario(
         + summary["reorder_point_unchanged"]
         == summary["item_sites"]
     )
-    # dollar_impact is the sum of reorder_point_units_delta * unit_cost;
+    # dollar_impact is the sum of safety_stock_units_delta * unit_cost;
     # A421-2 has no unit cost: it adds 0 and is counted separately.
     assert summary["dollar_impact"] == pytest.approx(expected["dollar"])
     assert summary["item_sites_without_unit_cost"] == 1

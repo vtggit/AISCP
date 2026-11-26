@@ -109,6 +109,7 @@ class SimulateSummary(BaseModel):
     reorder_point_down: int
     reorder_point_unchanged: int
     dollar_impact: float
+    pipeline_dollar_impact: float
     item_sites_without_unit_cost: int
     levers: SimulateLevers
     service_level_by_class: dict[str, float] | None = None

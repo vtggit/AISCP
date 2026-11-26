@@ -444,8 +444,13 @@ def test_issue676_freeform(client, monkeypatch):
     assert response.json() == result
     summary = result["summary"]
     assert summary["service_level_by_class"] is None
+    # A scenario that changes nothing also leaves the pipeline dollar
+    # impact at exactly 0.
+    assert summary["pipeline_dollar_impact"] == 0.0
     legacy_summary = {
-        key: value for key, value in summary.items() if key != "service_level_by_class"
+        key: value
+        for key, value in summary.items()
+        if key not in ("service_level_by_class", "pipeline_dollar_impact")
     }
     assert legacy_summary == {
         "item_sites": 4,

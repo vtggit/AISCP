@@ -28,7 +28,22 @@ rows) with ``open_units`` above 0 whose
 ``promised_on`` is null or no more than 90 days before the as-of date:
 future ``promised_on`` dates count, a promise exactly 90 days before
 the as-of date counts, and the excluded lines are counted in the
-stale note.  ``planning_zone`` is "red" at or below the top of red,
+stale note, plus the pair's in-flight release units —
+``app.recommend.reorder._in_flight_units_by_key`` over the reorder
+module's own full open-purchase read with the plan's own as-of date
+(a released order the feed picked up is counted from the feed only,
+never twice) — and its in-flight transfer units —
+``app.recommend.reorder._in_flight_transfer_units_by_key``, added at
+the receiving site and taken from the sending site — each helper
+once per call, skipped with the plan's other feed reads when there is
+no "ok" zone row, and outside the stale window.  A row whose
+in-flight release units are above 0 gains the note "<r> units
+released, not yet in the feed"; a row whose in-flight transfer units
+are above 0 gains "in-flight transfers add <t> units" (below 0,
+"in-flight transfers take <t> units", the absolute value), each
+number rounded to the nearest whole unit (halves up), and the notes
+come after the stale note and before the demand note.
+``planning_zone`` is "red" at or below the top of red,
 "yellow" at or below the top of yellow, "green" at or below the top
 of green and "over" above; ``order_signal`` is true at or below the
 top of yellow, and ``suggested_order_units`` is the ceiling of the top
@@ -269,7 +284,15 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
     to the sorted distinct ``(item_code, site_code)`` of the zone rows
     whose status is "ok" (neither feed read when there is no such
     row), the purchase rows with the stale note when any line is
-    excluded and the sales rows grouped by item-site: the lines with
+    excluded plus the pair's in-flight release units (
+    ``app.recommend.reorder._in_flight_units_by_key`` over the
+    reorder module's own full open-purchase read, with the plan's
+    own as-of date) and its in-flight transfer units (
+    ``app.recommend.reorder._in_flight_transfer_units_by_key``,
+    added at the receiving site and taken from the sending site) —
+    each helper once per call, neither read when there is no "ok"
+    zone row, the stale window not applying to them — and the sales
+    rows grouped by item-site: the lines with
     ``open_units`` above 0, ``qualified_due`` the ones due at or
     before the as-of date — a null ``ship_on`` counts as due — and
     ``qualified_spike`` the ones after the as-of date and within the
@@ -304,6 +327,8 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
     }
     lines_by_key: dict[tuple[str, str], list[dict]] = {}
     sales_lines: list[dict] = []
+    in_flight_release: dict[tuple[str, str], float] = {}
+    in_flight_transfer: dict[tuple[str, str], float] = {}
     if pairs:
         for line in _open_po_repo.list_latest(pairs=pairs):
             lines_by_key.setdefault((line["item_code"], line["site_code"]), []).append(
@@ -311,8 +336,21 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
             )
         sales_lines = _open_so_repo.list_latest(pairs=pairs)
         feed_has_lines = _open_so_repo.has_lines()
+        # The in-flight supply the plan's own feed reads never see:
+        # the reorder module's own helpers, each once per call — the
+        # release units over the reorder module's own full open-
+        # purchase read with the plan's own as-of date, the transfer
+        # units added at the receiving site and taken from the
+        # sending site.  Imported at call time: the reorder layer
+        # and the aggregate projection import each other.
+        from app.recommend import reorder
+
+        in_flight_release = reorder._in_flight_units_by_key(
+            reorder._open_po_repo.list_latest(), as_of
+        )
+        in_flight_transfer = reorder._in_flight_transfer_units_by_key()
     else:
-        # No "ok" zone row: neither feed is read.
+        # No "ok" zone row: neither feed nor in-flight helper is read.
         feed_has_lines = False
     sales_by_key: dict[tuple[str, str], list[dict]] = {}
     for line in sales_lines:
@@ -334,8 +372,25 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
             on_hand = float(on_hand_row["quantity_on_hand"])
 
         open_supply, stale = open_supply_for(lines_by_key.get(key, []), as_of)
+        release_units = in_flight_release.get(key, 0.0)
+        transfer_units = in_flight_transfer.get(key, 0.0)
+        # The in-flight supply joins the open purchase units: no
+        # stale window applies to it.
+        open_supply = open_supply + release_units + transfer_units
         if stale:
             notes.append(f"{stale} stale open purchase lines excluded")
+        if release_units > 0:
+            notes.append(
+                f"{_round_half_up(release_units)} units released, not yet in the feed"
+            )
+        if transfer_units > 0:
+            notes.append(
+                f"in-flight transfers add {_round_half_up(transfer_units)} units"
+            )
+        elif transfer_units < 0:
+            notes.append(
+                f"in-flight transfers take {_round_half_up(-transfer_units)} units"
+            )
 
         if feed_has_lines:
             qualified_due, qualified_spike = qualified_demand_for(

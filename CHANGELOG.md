@@ -494,6 +494,8 @@ code is the authority for details.
   the collector finalizes it before close, keeping the pool's open-connection count exact (#1612).
 - A pooled database connection that the database closed while it sat idle is no longer handed out, and
   the request that would have taken it gets a working connection instead (#1613).
+- Recommendations no longer count a release as on-order supply when its ERP status is completed,
+  closed, or canceled (#1637).
 
 ### Security
 - `opentelemetry-api` is pinned to 1.45.2, which fixes CVE-2026-126360 (#1180).

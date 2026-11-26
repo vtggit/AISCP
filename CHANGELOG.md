@@ -86,9 +86,6 @@ code is the authority for details.
   one fails before the order is created (#1593).
 - A confirm of an Odoo draft purchase order now reuses an existing draft only when its single line
   matches the confirmed item, supplier and quantity, and otherwise answers 409 naming the draft (#1632).
-- The what-if simulation summary now reports `dollar_impact` as the change in the stock held and
-  `pipeline_dollar_impact` as the change in demand over the lead time, which is 0 when only the service
-  level changes (#1634).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica
@@ -461,6 +458,9 @@ code is the authority for details.
 - The Odoo and Acumatica clients now read their environment switches with one shared parser, accepting
   `1`, `true`, `yes`, or `on` (case-insensitive, whitespace-trimmed) for the allow-insecure and
   allow-writes switches (#1641).
+- The what-if simulation summary's `dollar_impact` now counts only the change in the stock held:
+  the safety-stock change in units times the unit cost. The lead-time demand change is reported
+  apart as `pipeline_dollar_impact`, which is 0 when only the service level changes (#1634).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

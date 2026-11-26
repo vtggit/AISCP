@@ -383,7 +383,10 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   with a line for each kind that has pushed values; the block is absent while the read is out, after a
   failed or malformed read, or when no kind has a line (`app/js/writeback.js`).
 - Draft a single purchase order in Odoo from the Work queue: preview first, then an admin
-  confirms; every confirmed action is audited (`backend/app/api/replenishment_actions.py`).
+  confirms; a reused draft must hold what is confirmed — its single line must match the
+  confirm's item, supplier and quantity (within 0.005), otherwise the confirm answers 409
+  naming the draft and creates nothing; every confirmed action is audited
+  (`backend/app/api/replenishment_actions.py`).
 - ERP code mappings translate AISCP item, site and vendor codes to Odoo codes
   (`backend/app/api/erp_mappings.py`).
 - Standing grants: an admin creates or revokes a standing grant for `order_plan_release` or

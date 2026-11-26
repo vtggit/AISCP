@@ -583,7 +583,8 @@ Configuration comes from environment variables. Set values for your own environm
 are committed.
 
 - **Database:** `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`.
-- **Sign-in:** `AUTH_MODE` (`development` or `production`), `AUTH_DEV_TOKEN`,
+- **Sign-in:** `AUTH_MODE` (`development` or `production`; unset or empty accepts no
+  token), `AUTH_DEV_TOKEN`,
   `AUTH_DEV_ROLES`, `AUTH_ENABLED`, `AUTH_ISSUER`, `AUTH_CLIENT_ID`, `AUTH_AUDIENCE`,
   `AUTH_JWKS_URL`, `AUTH_ALGORITHMS`, `AUTH_JWKS_CACHE_TTL`, `AUTH_ROLE_CLAIMS`,
   `AUTH_GROUP_CLAIMS`.

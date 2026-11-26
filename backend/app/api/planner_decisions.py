@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+from app.api.validation import require_storable_subject
 from app.auth.authorization import require_role
 from app.auth.dependencies import require_authenticated_user
 from app.auth.display_name import display_name
@@ -35,7 +36,6 @@ _repo = PlannerDecisionPostgresRepository()
 _NUL = chr(0)
 _MAX_REASON_LENGTH = 1000
 _MAX_SNOOZE_DAYS = 90
-_MAX_DECIDED_BY_LENGTH = 255
 
 
 class PlannerDecision(BaseModel):
@@ -141,26 +141,6 @@ def require_any_authenticated_user(
     return current_user
 
 
-def _require_storable_decided_by(user: AuthUser) -> None:
-    """The token subject is stored in decided_by (String(255)); a
-    hostile token whose subject would not fit answers 422 instead of a
-    database error."""
-    try:
-        _DecidedBy(value=user.sub)
-    except ValidationError as exc:
-        raise RequestValidationError(exc.errors()) from exc
-
-
-class _DecidedBy(BaseModel):
-    value: str = Field(max_length=_MAX_DECIDED_BY_LENGTH)
-
-    @model_validator(mode="after")
-    def _no_nul(self) -> Self:
-        if _NUL in self.value:
-            raise ValueError("must not contain NUL bytes")
-        return self
-
-
 @router.post(
     "/decisions",
     status_code=201,
@@ -180,7 +160,7 @@ def create_planner_decision(
     on every accepted POST, earlier decisions are never changed or
     deleted, and duplicate POSTs are accepted as separate append-only duplicates without requiring an Idempotency-Key header.
     """
-    _require_storable_decided_by(user)
+    require_storable_subject(user)
     try:
         rows = drift_ranked()
     except ValueError as exc:

@@ -177,6 +177,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.api.validation import require_storable_subject
 from app.auth.authorization import require_role
 from app.auth.display_name import display_name
 from app.auth.models import AuthUser
@@ -216,7 +217,6 @@ _adjustments_repo = DdmrpAdjustmentPostgresRepository()
 _item_sites = ItemSitePostgresRepository()
 
 _NUL = chr(0)
-_MAX_DESIGNATED_BY_LENGTH = 255
 
 #: The factor field's OpenAPI shape: a decimal number with an
 #: explicit precision and scale (12 significant digits, 6 of them
@@ -304,26 +304,6 @@ def buffer_key(
     return item_code, site_code
 
 
-class _DesignatedBy(BaseModel):
-    value: str = Field(max_length=_MAX_DESIGNATED_BY_LENGTH)
-
-    @model_validator(mode="after")
-    def _no_nul(self) -> Self:
-        if _NUL in self.value:
-            raise ValueError("must not contain NUL bytes")
-        return self
-
-
-def _require_storable_designated_by(user: AuthUser) -> None:
-    """The token subject is stored in designated_by (String(255)); a
-    hostile token whose subject would not fit answers 422 instead of a
-    database error."""
-    try:
-        _DesignatedBy(value=user.sub)
-    except ValidationError as exc:
-        raise RequestValidationError(exc.errors()) from exc
-
-
 def _require_item_site(item_code: str, site_code: str) -> None:
     """The pair must be a row of item_sites.
 
@@ -367,7 +347,7 @@ def upsert_ddmrp_buffer(
     token subject and designated_by_name as its display name, exactly
     as planner decisions record decided_by and decided_by_name.
     """
-    _require_storable_designated_by(user)
+    require_storable_subject(user)
     _require_item_site(body.item_code, body.site_code)
     return _repo.upsert(
         item_code=body.item_code,
@@ -1490,7 +1470,7 @@ def create_ddmrp_adjustment(
     an overlapping window appends neither row.  Answers 201 with
     the stored row.
     """
-    _require_storable_designated_by(user)
+    require_storable_subject(user)
     if body.item_code is not None:
         _require_item_site(body.item_code, body.site_code)
     proposed_factor, threshold = _proposal_at_save(

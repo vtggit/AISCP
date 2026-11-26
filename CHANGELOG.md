@@ -262,6 +262,9 @@ code is the authority for details.
   saved at the proposal, with counts below and above it, or that none have been saved yet (#1442).
 - The S&OP status card now shows how many of the sign-offs compared with a proposal were signed
   while proposed, or that none have been compared yet (#1448).
+- The monthly plan's order-up-to level now includes the review month's extra safety stock for
+  service-level recommendations, so planned orders cover the review month as well as the lead time
+  (#1633).
 
 **Demand signals**
 - Demand signals (`/api/demand-signals`): known extra demand from a promotion, deal or event

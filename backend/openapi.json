@@ -23583,6 +23583,10 @@
             "type": "number",
             "title": "Dollar Impact"
           },
+          "pipeline_dollar_impact": {
+            "type": "number",
+            "title": "Pipeline Dollar Impact"
+          },
           "item_sites_without_unit_cost": {
             "type": "integer",
             "title": "Item Sites Without Unit Cost"
@@ -23614,6 +23618,7 @@
           "reorder_point_down",
           "reorder_point_unchanged",
           "dollar_impact",
+          "pipeline_dollar_impact",
           "item_sites_without_unit_cost",
           "levers"
         ],

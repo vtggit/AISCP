@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+from app.api.validation import require_storable_subject
 from app.auth.authorization import require_role
 from app.auth.display_name import display_name
 from app.auth.models import AuthUser
@@ -39,7 +40,6 @@ _repo = EmpiricalAdoptionPostgresRepository()
 _item_sites = ItemSitePostgresRepository()
 
 _NUL = chr(0)
-_MAX_ADOPTED_BY_LENGTH = 255
 
 
 class EmpiricalAdoption(BaseModel):
@@ -105,26 +105,6 @@ def adoption_key(
     return item_code, site_code
 
 
-class _AdoptedBy(BaseModel):
-    value: str = Field(max_length=_MAX_ADOPTED_BY_LENGTH)
-
-    @model_validator(mode="after")
-    def _no_nul(self) -> Self:
-        if _NUL in self.value:
-            raise ValueError("must not contain NUL bytes")
-        return self
-
-
-def _require_storable_adopted_by(user: AuthUser) -> None:
-    """The token subject is stored in adopted_by (String(255)); a
-    hostile token whose subject would not fit answers 422 instead of a
-    database error."""
-    try:
-        _AdoptedBy(value=user.sub)
-    except ValidationError as exc:
-        raise RequestValidationError(exc.errors()) from exc
-
-
 def _require_item_site(item_code: str, site_code: str) -> None:
     """The pair must be a row of item_sites.
 
@@ -166,7 +146,7 @@ def upsert_empirical_adoption(
     token subject and adopted_by_name as its display name, exactly as
     planner decisions record decided_by and decided_by_name.
     """
-    _require_storable_adopted_by(user)
+    require_storable_subject(user)
     _require_item_site(body.item_code, body.site_code)
     return _repo.upsert(
         item_code=body.item_code,

@@ -40,7 +40,8 @@ change by reading the same rule id back.
 Configuration is read from the environment at call time:
 
 - ``ODOO_BASE_URL``: http(s) origin, no path, query, or fragment; must be
-  ``https://`` unless ``ODOO_ALLOW_INSECURE`` is set to ``1`` or ``true``.
+  ``https://`` unless ``ODOO_ALLOW_INSECURE`` is set to one of ``1``,
+  ``true``, ``yes``, or ``on``.
 - ``ODOO_DB``: the Odoo database name.
 - ``ODOO_LOGIN``: the login sent to ``common.authenticate``.
 - ``ODOO_API_KEY``: the API key sent to ``common.authenticate``.
@@ -50,11 +51,12 @@ Configuration is read from the environment at call time:
   negative, or non-numeric values keep it.
 - ``ODOO_CA_BUNDLE``: optional CA bundle path for TLS verification; blank
   after trimming whitespace is treated as unset.
-- ``ODOO_ALLOW_INSECURE``: optional; only ``1`` or ``true`` accepts an
-  ``http://`` base URL.
-- ``ODOO_ALLOW_WRITES``: optional; only ``1``, ``true``, or ``yes``
-  (case-insensitive, whitespace-trimmed) enables the write paths;
-  anything else makes the write paths raise
+- ``ODOO_ALLOW_INSECURE``: optional; only ``1``, ``true``, ``yes``, or
+  ``on`` (case-insensitive, whitespace-trimmed) accepts an ``http://``
+  base URL.
+- ``ODOO_ALLOW_WRITES``: optional; only ``1``, ``true``, ``yes``, or
+  ``on`` (case-insensitive, whitespace-trimmed) enables the write
+  paths; anything else makes the write paths raise
   ``OdooWritesDisabledError`` before any request.
 
 The client fails closed: configuration and argument problems raise before
@@ -80,6 +82,8 @@ from typing import Any
 from urllib.parse import quote, urlsplit
 
 import httpx
+
+from app.feed.switches import env_switch
 
 __all__ = [
     "OdooAuthError",
@@ -186,23 +190,24 @@ def _require_env(name: str) -> str:
 
 
 def _allow_insecure() -> bool:
-    raw = os.environ.get(ALLOW_INSECURE_VAR)
-    if raw is None:
-        return False
-    return raw.strip().lower() in ("1", "true")
+    """Return True only when ``ODOO_ALLOW_INSECURE`` is set to a
+    truthy value.
+
+    Enabled only for ``1``, ``true``, ``yes``, or ``on``
+    (case-insensitive, whitespace-trimmed); unset, blank, or any other
+    value keeps ``http://`` base URLs rejected.
+    """
+    return env_switch(ALLOW_INSECURE_VAR)
 
 
 def _writes_enabled() -> bool:
     """Return True only when ``ODOO_ALLOW_WRITES`` enables writes.
 
-    Enabled only for ``1``, ``true``, or ``yes`` (case-insensitive,
-    whitespace-trimmed); unset, blank, or any other value keeps the
-    write path disabled.
+    Enabled only for ``1``, ``true``, ``yes``, or ``on``
+    (case-insensitive, whitespace-trimmed); unset, blank, or any other
+    value keeps the write path disabled.
     """
-    raw = os.environ.get(ALLOW_WRITES_VAR)
-    if raw is None:
-        return False
-    return raw.strip().lower() in ("1", "true", "yes")
+    return env_switch(ALLOW_WRITES_VAR)
 
 
 def _validate_base_url(base_url: str, allow_insecure: bool) -> str:
@@ -2015,8 +2020,9 @@ class OdooClient:
 
         Fails closed on writes: the first action, before any network
         call, is the explicit write switch — writes are enabled only
-        when ``ODOO_ALLOW_WRITES`` is ``1``, ``true``, or ``yes``
-        (case-insensitive, whitespace-trimmed); anything else raises
+        when ``ODOO_ALLOW_WRITES`` is ``1``, ``true``, ``yes``, or
+        ``on`` (case-insensitive, whitespace-trimmed); anything else
+        raises
         ``OdooWritesDisabledError`` (a fixed message with no
         environment values, credentials, or request payloads) and no
         request of any kind is made, before authentication or
@@ -2282,8 +2288,9 @@ class OdooClient:
 
         Fails closed on writes: the first action, before any network
         call, is the explicit write switch — writes are enabled only
-        when ``ODOO_ALLOW_WRITES`` is ``1``, ``true``, or ``yes``
-        (case-insensitive, whitespace-trimmed); anything else raises
+        when ``ODOO_ALLOW_WRITES`` is ``1``, ``true``, ``yes``, or
+        ``on`` (case-insensitive, whitespace-trimmed); anything else
+        raises
         ``OdooWritesDisabledError`` (a fixed message with no
         environment values, credentials, or request payloads) and no
         request of any kind is made, before authentication or

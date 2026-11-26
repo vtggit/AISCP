@@ -9,12 +9,29 @@ router` line and inserts its own at that indentation, so a module-level import b
 produces an indentation error when a new entity registers itself.
 """
 
-from fastapi import Depends, FastAPI, Security
+from fastapi import Depends, FastAPI, Request, Security
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
+
+from app.db.connection import PoolTimeoutError
 
 APP_NAME = "AIERP"
 APP_VERSION = "0.2.0"
+
+
+def _pool_timeout_response(request: Request, exc: PoolTimeoutError) -> JSONResponse:
+    """A request that waited out the pool's checkout deadline.
+
+    The pool, not the request, is the bottleneck: the answer is a
+    503 with a retry hint, so a caller that retries finds a free
+    connection instead of reading a server error.
+    """
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "The database is busy; try again shortly."},
+        headers={"Retry-After": "5"},
+    )
 
 
 def create_app() -> FastAPI:
@@ -95,6 +112,9 @@ def create_app() -> FastAPI:
     application.add_exception_handler(
         RequestValidationError, standing_grants_validation_guard
     )
+    # A request that waited out the pool's checkout deadline on a
+    # full pool: 503 with a retry hint, not a 500.
+    application.add_exception_handler(PoolTimeoutError, _pool_timeout_response)
     # One router-level dependency gates every route below; the health
     # probe stays open for liveness checks.
     auth_gate = [

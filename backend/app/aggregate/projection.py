@@ -24,7 +24,9 @@ The in-flight releases join the supply: one ``plan_releases`` read
 (through the module-level ``_in_flight_release_lines``, on its own
 connection) lists the
 stored release rows, and a row is in-flight when its ``outcome`` is
-"created" or "exists", its ``order_nbr`` is non-null and no row of
+"created" or "exists", its ``erp_status`` is null or none of
+``FINAL_ERP_STATUSES`` (a finished or canceled release is not in
+flight), its ``order_nbr`` is non-null and no row of
 the newest ``open_purchase_lines`` snapshot carries that order number
 (the ``business_key``'s second ``:``-separated part) — a released
 order the feed already picked up is counted from the feed only, never
@@ -277,6 +279,13 @@ def _bucket_months(as_of: date, months: int) -> list[tuple[int, int, str]]:
 # the origin when the batch ran).
 _IN_FLIGHT_OUTCOMES = ("created", "exists")
 
+# The erp statuses after which a release row is no longer in
+# flight: exactly the three
+# PlanReleasePostgresRepository.list_readback_order_nbrs stops
+# reading the order for, so a row carrying one contributes no
+# on-order supply.
+FINAL_ERP_STATUSES = ("Completed", "Closed", "Canceled")
+
 # A release row's month: the "YYYY-MM" of a real calendar month.
 _RELEASE_MONTH_RE = re.compile(r"([0-9]{4})-([0-9]{2})")
 
@@ -340,9 +349,11 @@ def _in_flight_supply_lines(
     """The on-order supply lines of the in-flight release rows.
 
     A row is in-flight when its ``outcome`` is "created" or "exists",
-    its ``order_nbr`` is non-null and ``feed_order_numbers`` does not
-    carry that order number — a released order the feed already
-    picked up is counted from the feed only, never twice.  Each line
+    its ``erp_status`` is null or none of ``FINAL_ERP_STATUSES`` (a
+    finished or canceled release is not in flight), its ``order_nbr``
+    is non-null and ``feed_order_numbers`` does not carry that order
+    number — a released order the feed already picked up is counted
+    from the feed only, never twice.  Each line
     of an in-flight row (``item_code``, ``quantity``, ``unit_cost``,
     at the row's ``site_code``) contributes one supply line arriving
     on the first day of the row's ``month`` — ``start``, the
@@ -359,6 +370,8 @@ def _in_flight_supply_lines(
         if not isinstance(row, dict):
             continue
         if row.get("outcome") not in _IN_FLIGHT_OUTCOMES:
+            continue
+        if row.get("erp_status") in FINAL_ERP_STATUSES:
             continue
         order_nbr = row.get("order_nbr")
         if order_nbr is None:
@@ -443,9 +456,16 @@ def _signal_day_shares(
     signal with a non-finite or non-positive quantity, or a window
     that ends before it starts, contributes nothing (a hostile row
     can never raise here — never a 500).
+    A resolved as-of at the last representable date has no day after
+    it, so it gives no shares at all.
     """
     day_share: dict[date, float] = {}
-    first_after_as_of = resolved_as_of + timedelta(days=1)
+    try:
+        first_after_as_of = resolved_as_of + timedelta(days=1)
+    except OverflowError:
+        # date.max + 1 overflows: there is no day after the last
+        # representable date, so no day share exists.
+        return []
     for _signal_id, start, end, quantity in signals:
         if not (math.isfinite(quantity) and quantity > 0):
             continue

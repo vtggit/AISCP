@@ -186,12 +186,14 @@ class _OdooStub:
         partners=(),
         warehouses=(),
         draft_orders=(),
+        order_lines=(),
         fail_models=(),
     ):
         self.products = list(products)
         self.partners = list(partners)
         self.warehouses = list(warehouses)
         self.draft_orders = list(draft_orders)
+        self.order_lines = list(order_lines)
         self.fail_models = set(fail_models)
         self.created = []
         self.calls = []
@@ -230,6 +232,15 @@ class _OdooStub:
                         **values,
                     }
                 )
+                for _op, _sequence, line_values in values.get("order_line", []):
+                    self.order_lines.append(
+                        {
+                            "order_id": self._next_id,
+                            "product_id": line_values["product_id"],
+                            "product_qty": line_values["product_qty"],
+                            "partner_id": values["partner_id"],
+                        }
+                    )
                 return self._result(envelope["id"], self._next_id)
         raise AssertionError(
             f"forbidden or unexpected call {service}.{method} {args[3:]}"
@@ -263,6 +274,11 @@ class _OdooStub:
                 record
                 for record in pool
                 if record.get("origin") == value and record.get("state") == "draft"
+            ]
+        elif model == "purchase.order.line":
+            assert key == "order_id"
+            return [
+                record for record in self.order_lines if record.get("order_id") == value
             ]
         else:
             raise AssertionError(f"unexpected model {model}")
@@ -588,6 +604,14 @@ def test_issue467_freeform(monkeypatch, client, caplog):
                 "name": "PO/2026/0042",
                 "state": "draft",
                 "origin": DEFAULT_ORIGIN,
+            }
+        ],
+        order_lines=[
+            {
+                "order_id": 42,
+                "product_id": PRODUCT_ID,
+                "product_qty": 12,
+                "partner_id": PARTNER_ID,
             }
         ],
     )

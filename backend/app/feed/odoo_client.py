@@ -23,7 +23,11 @@ answers the sorted distinct uppercase currency codes of
 ``res.company``, and
 ``create_draft_purchase_order()`` creates one DRAFT ``purchase.order``
 for an item/site/supplier
-triple, idempotent on an origin tag and gated by the
+triple, idempotent on an origin tag — a draft already carrying the
+tag is reused only when its single line matches the confirm's
+product, vendor and quantity (within 0.005), otherwise an
+``OdooDraftConflictError`` names the draft and nothing is created —
+and gated by the
 ``ODOO_ALLOW_WRITES`` write switch, and
 ``preview_draft_purchase_order()`` read-only previews that same
 resolution and existing-draft lookup: only ``search_read`` reads,
@@ -81,6 +85,7 @@ __all__ = [
     "OdooAuthError",
     "OdooClient",
     "OdooConfigError",
+    "OdooDraftConflictError",
     "OdooError",
     "OdooWriteVerificationError",
     "OdooWritesDisabledError",
@@ -98,6 +103,7 @@ ALLOW_WRITES_VAR = "ODOO_ALLOW_WRITES"
 _JSONRPC_PATH = "/jsonrpc"
 _REQUEST_TIMEOUT = 30.0
 _REORDER_TOLERANCE = 1e-6
+_DRAFT_LINE_QTY_TOLERANCE = 0.005
 _MODEL_RE = re.compile(r"[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*")
 _BASE_URL_ERROR = (
     f"{BASE_URL_VAR} must be an http(s) origin with no path, query, or fragment"
@@ -140,6 +146,21 @@ class OdooWritesDisabledError(OdooError):
     an enabling value; the message is fixed and never contains
     environment values, credentials, or request payloads. It is not an
     authentication failure.
+    """
+
+
+class OdooDraftConflictError(OdooError):
+    """An existing draft purchase order does not match the confirm.
+
+    Raised by ``create_draft_purchase_order`` when exactly one draft
+    ``purchase.order`` carries the origin tag but its lines do not
+    match the confirm — it must have exactly one line whose
+    ``product_id`` is the resolved product, whose ``partner_id`` is
+    the resolved vendor, and whose ``product_qty`` equals the
+    confirm's quantity within 0.005 — and nothing is created,
+    written, or cancelled. The message names the draft's ``name``
+    and tells the operator to change or cancel it in Odoo, then
+    confirm again.
     """
 
 
@@ -376,6 +397,28 @@ def _finite_float(value: object) -> float | None:
         return float(value)
     except OverflowError:
         return None
+
+
+def _draft_po_line_matches(
+    line: dict, product_id: int, partner_id: int, quantity: float
+) -> bool:
+    """Whether one draft-PO line matches the confirm's triple.
+
+    The line's ``product_id`` and ``partner_id`` must resolve to the
+    given ids, and its ``product_qty`` must be a finite number within
+    0.005 of the confirm's quantity; a missing or non-numeric
+    quantity, and any non-matching or unresolvable ref, do not match,
+    so the caller fails closed on a conflict instead.
+    """
+    line_product = _ref_id(line.get("product_id"))
+    line_partner = _ref_id(line.get("partner_id"))
+    line_quantity = _finite_float(line.get("product_qty"))
+    return (
+        line_product == product_id
+        and line_partner == partner_id
+        and line_quantity is not None
+        and abs(line_quantity - quantity) <= _DRAFT_LINE_QTY_TOLERANCE
+    )
 
 
 def _usable_unit_factor(factors: dict, unit_id: int | None) -> float | None:
@@ -2015,9 +2058,19 @@ class OdooClient:
         exact-match key and is never parsed back into fields. Before
         creating, one ``search_read`` looks for a ``purchase.order``
         whose ``origin`` equals the tag and whose ``state`` is
-        ``"draft"``; exactly one such order is returned as-is with
-        ``already_existed`` True and no create is issued (multiple
-        such orders fail closed). Otherwise one ``purchase.order``
+        ``"draft"`` (the fields ``id``, ``name`` and ``state``);
+        multiple such orders fail closed. When exactly one exists, its
+        lines are read with one ``search_read`` of
+        ``purchase.order.line`` (domain ``[["order_id", "=", <the
+        draft's id>]]``, the fields ``product_id``, ``product_qty``
+        and ``partner_id``) and the draft is returned as-is with
+        ``already_existed`` True and no create is issued only when it
+        has exactly one line whose ``product_id`` is the resolved
+        product, whose ``partner_id`` is the resolved vendor, and
+        whose ``product_qty`` equals the confirm's quantity within
+        0.005; any other existing draft raises
+        ``OdooDraftConflictError`` naming the draft's ``name`` and
+        creates nothing. Otherwise one ``purchase.order``
         ``create`` posts ``{partner_id, picking_type_id, origin,
         order_line: [(0, 0, {product_id, product_qty, price_unit,
         uom_id})]}`` — the ``uom_id`` is the product's base unit id
@@ -2076,7 +2129,22 @@ class OdooClient:
         if len(existing) > 1:
             raise OdooError(f"multiple draft purchase orders carry origin '{origin}'")
         if existing:
-            return self._draft_po_result(existing[0], already_existed=True)
+            result = self._draft_po_result(existing[0], already_existed=True)
+            lines = self.search_read(
+                "purchase.order.line",
+                [["order_id", "=", result["odoo_id"]]],
+                ["product_id", "product_qty", "partner_id"],
+            )
+            if len(lines) != 1 or not _draft_po_line_matches(
+                lines[0], product_id, partner_id, quantity_value
+            ):
+                raise OdooDraftConflictError(
+                    f"Draft purchase order {result['name']} already "
+                    "exists for this item-site with a different "
+                    "supplier, item or quantity. Change or cancel it "
+                    "in Odoo, then confirm again."
+                )
+            return result
 
         values = {
             "partner_id": partner_id,

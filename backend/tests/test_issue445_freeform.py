@@ -104,6 +104,7 @@ class _OdooStub:
         partners=(),
         warehouses=(),
         draft_orders=(),
+        order_lines=(),
         locations=(),
         quants=(),
         moves=(),
@@ -112,6 +113,7 @@ class _OdooStub:
         self.partners = list(partners)
         self.warehouses = list(warehouses)
         self.draft_orders = list(draft_orders)
+        self.order_lines = list(order_lines)
         self.locations = list(locations)
         self.quants = list(quants)
         self.moves = list(moves)
@@ -158,6 +160,15 @@ class _OdooStub:
                     **values,
                 }
             )
+            for _op, _sequence, line_values in values.get("order_line", []):
+                self.order_lines.append(
+                    {
+                        "order_id": self._next_id,
+                        "product_id": line_values["product_id"],
+                        "product_qty": line_values["product_qty"],
+                        "partner_id": values["partner_id"],
+                    }
+                )
             return self._next_id
         raise AssertionError(f"forbidden or unexpected method {kw_method!r} on {model}")
 
@@ -209,6 +220,11 @@ class _OdooStub:
                 record
                 for record in pool
                 if record.get("origin") == value and record.get("state") == "draft"
+            ]
+        elif model == "purchase.order.line":
+            assert key == "order_id"
+            return [
+                record for record in self.order_lines if record.get("order_id") == value
             ]
         else:
             raise AssertionError(f"unexpected model {model}")
@@ -532,6 +548,14 @@ def test_issue445_freeform(monkeypatch):
                 "state": "draft",
                 "origin": "SOME:OTHER:TAG",
             },
+        ],
+        order_lines=[
+            {
+                "order_id": 750,
+                "product_id": 11,
+                "product_qty": 12,
+                "partner_id": 501,
+            }
         ],
     )
     stubbed.append(idempotent_stub)

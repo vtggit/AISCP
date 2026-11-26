@@ -84,6 +84,8 @@ code is the authority for details.
   suggested decision, and how many were made by a standing grant (#1583).
 - Odoo draft purchase order lines now include the item's base unit of measure, and a product without
   one fails before the order is created (#1593).
+- A confirm of an Odoo draft purchase order now reuses an existing draft only when its single line
+  matches the confirmed item, supplier or quantity, and otherwise answers 409 naming the draft (#1632).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

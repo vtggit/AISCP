@@ -267,6 +267,8 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   lead time, with the buffer factors as settings; the plan gives each buffer's net flow, order
   signal and on-hand alert, counting qualified demand from open sales orders
   (`backend/app/ddmrp/`, `backend/app/api/ddmrp.py`).
+- The plan's open supply also counts in-flight release units not yet in the feed and in-flight
+  transfer units, with notes when either is present (`backend/app/ddmrp/plan.py`).
 - Suggested buffer candidates, planned adjustment factors for seasonal or promotional ramps,
   and each buffer's time in each zone from a daily status snapshot.
 - Proposed DDMRP adjustment factors for forecast periods whose forecast daily demand differs
@@ -369,12 +371,13 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
 - Release chosen transfer suggestions to Acumatica as transfer orders on hold, with the same
   preview, confirm and audit; their status is read back from Acumatica
   (`backend/app/supply/transfer_release.py`).
-- Push accepted reorder points and DDMRP buffer levels into the ERP that owns the item-site
+- Push accepted reorder points, DDMRP buffer levels and excess stops (reorder point and max
+  quantity 0) into the ERP that owns the item-site
   (Acumatica item-warehouse settings or Odoo reorder rules): preview first, then an admin
   confirms; every write is read back and audited (`backend/app/api/parameter_writeback.py`).
 - The writeback record, open to any signed-in user, measures what the confirm pushed and what
   the ERPs kept: for each item-site's latest counted push, how many were read back and unchanged,
-  by reorder-point and buffer kind (`GET /api/parameter-writeback/record`,
+  by reorder-point, buffer and excess kinds (`GET /api/parameter-writeback/record`,
   `backend/app/recommend/push_record.py`).
 - The Push to ERP screen shows the writeback record directly after the bar and before the outstanding pane,
   with a line for each kind that has pushed values; the block is absent while the read is out, after a
@@ -497,6 +500,8 @@ views are:
   each service level.
 - **Guidance**: the guidance AISCP is built under, by type and area, with each item's history
   and a find box that also looks up a stamp.
+
+The Work queue and Decision log say when a list is cut at 1,000 rows.
 
 The sidebar says when the feed last synced, and the header the date the data runs through
 (`app/js/feedstatus.js`).

@@ -82,6 +82,8 @@ code is the authority for details.
   and how many of those came back unchanged (#1563).
 - The Work scorecard now shows, for short orders, how many decisions were made, how many took the
   suggested decision, and how many were made by a standing grant (#1583).
+- Odoo draft purchase order lines now include the item's base unit of measure, and a product without
+  one fails before the order is created (#1593).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica
@@ -98,6 +100,15 @@ code is the authority for details.
 - The Overview's Reorder points card now shows, for pushed reorder points, how many the ERP still holds
   unchanged, as a count and a percentage of the values read back, or that none have been read back yet
   (#1534).
+- Parameter write-back pushes now store their basis, and the record counts them by it, with decision
+  pushes as reorder-point, DDMRP pushes as buffer, and excess pushes counted in neither kind (#1587).
+- Excess stops now appear in the Push to ERP preview and confirm, pushing their item-sites to a reorder
+  point and max quantity of 0, and the push record reports them as excess (#1588).
+- The Push to ERP screen now labels excess rows as stop replenishing, counts them in the summary, and
+  reports how many of their pushed values the ERP still holds unchanged, as a count and a percentage of
+  the values read back, or that none have been read back yet (#1589).
+- Parameter write-back pushes now store their audit row as pending before the ERP call and set the
+  row's outcome after the write, so a row still pending means the result is unknown (#1604).
 
 **DDMRP**
 - Buffer designations by an admin, buffer zones from average daily usage and lead time with the
@@ -122,6 +133,12 @@ code is the authority for details.
   the proposed factor, with how many were saved below or above it (#1481).
 - The Releases screen now shows a Buffer badge after the item code on release lines ordered on a DDMRP
   buffer's order signal (#1560).
+- The DDMRP green zone now uses the supplier minimum order quantity from the item's supplier terms, and
+  `GET /api/ddmrp/zones` answers the value used as `moq` (#1602).
+- DDMRP plan rows now count in-flight order releases and transfers in open supply and net flow, with
+  notes for released units not yet in the feed and for transfers added or taken (#1630).
+- DDMRP plan rows now qualify a demand spike on the day's total of open sales-order lines, not line by
+  line, with the day's whole total counted when it is at least 50% of the buffer's top of red (#1631).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,
@@ -157,6 +174,8 @@ code is the authority for details.
   periods (60 by default); an admin makes the switch in Settings (#1397).
 - The demand-basis switch proposal now shows under the Settings card's verdict, and the Exceptions
   screen labels its rows "Demand basis to review" (#1401).
+- The Exceptions inbox now logs a warning when a source fails, naming the source and the exception
+  class (#1596).
 
 **Supply planning and transfers**
 - Supplier ordering terms per item from Acumatica (`POVendorInventory`) and Odoo, shown on the
@@ -298,6 +317,8 @@ code is the authority for details.
 - The currency each ERP reports in, read from Odoo and Acumatica (`GET /api/erp-currencies`),
   a reporting-currency setting, and each side's currency on the Across ERPs screen (#1019,
   #1026, #1027, #1038).
+- Odoo open purchase, open sales and demand line quantities are converted to the item's base unit
+  before they are used (#1592).
 
 **Supplier risk**
 - A risk rating per supplier (`GET /api/supplier-risk`): Medium for late deliveries or variable
@@ -423,6 +444,12 @@ code is the authority for details.
   demand statistics only for the designated buffered item-sites (#1562).
 - The app now pools database connections while serving requests, bounded by `DB_POOL_SIZE` (default
   10), so repeated requests reuse connections and the process never holds more than the bound (#1570).
+- The planner views now use one shared HTML escaper instead of separate copies in each view (#1620).
+- API routes now share one NUL-byte check, with no change to the 422 responses they return (#1621).
+- The Work queue and Decision log now show a status line when a list is cut at 1,000 rows, naming the
+  full lists in the log (#1600).
+- The Overview's to-decide labels and the Demand view's forecast list now say when their lists are cut
+  at 1,000 rows (#1601).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now
@@ -441,9 +468,26 @@ code is the authority for details.
 - Spec 638, the Work queue's proving test, no longer fails now and then under load: its checks of
   the item/site cell and the detail pane retry until they read the row the list re-rendered; the
   product is unchanged (#1470).
+- A designated DDMRP item-site with an ok zone no longer gets a reorder-point decision row in the Push
+  to ERP preview or confirm, whether or not its buffer row is outstanding (#1586).
+- The Order plan screen now disables the horizon select and Refresh button, and the top-up checkboxes
+  in a supplier's block, while that block's release confirm is in flight, leaving top-up checkboxes in
+  other blocks enabled, so the confirm's outcome or error is shown when it answers (#1594).
+- The SBA intermittent-demand forecast now starts its smoothed interval at the first non-zero
+  quantity's position, counted from 1, instead of at 1 (#1599).
+- A returned pooled database connection is no longer reachable through its handle, and a cursor that
+  cannot be opened no longer masks the original error (#1610).
+- Fixed a database connection pool stall when the connection factory changed while idle connections
+  from an earlier factory were still open (#1611).
+- The database connection pool no longer blocks the garbage collector or loses a pooled connection when
+  the collector finalizes it before close, keeping the pool's open-connection count exact (#1612).
+- A pooled database connection that the database closed while it sat idle is no longer handed out, and
+  the request that would have taken it gets a working connection instead (#1613).
 
 ### Security
 - `opentelemetry-api` is pinned to 1.45.2, which fixes CVE-2026-126360 (#1180).
+- Admin access is now granted only by the admin role, and an admin group no longer grants admin rights
+  (#1595).
 
 ## [0.2.0] - 2026-10-25
 

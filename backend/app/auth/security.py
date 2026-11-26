@@ -84,6 +84,16 @@ def validate_token(raw_token: str) -> AuthUser | None:
         logger.warning("auth: missing or empty token%s", _req())
         return None
 
+    # Fail closed when no mode is configured at all: an unset or empty
+    # AUTH_MODE must never silently fall back to dev-token behavior.
+    if not AUTH_MODE:
+        logger.error(
+            "auth: AUTH_MODE is not set — failing closed; "
+            "set it to production or development%s",
+            _req(),
+        )
+        return None
+
     if AUTH_MODE == "production":
         return _validate_token_jwt(raw_token)
     if AUTH_MODE == "development":

@@ -87,13 +87,15 @@ AUTH_GROUP_CLAIMS: list[str] = [
 # ---------------------------------------------------------------------------
 # Development-mode token stub
 #
-# When AUTH_MODE=development the backend accepts a simple bearer token
-# whose value matches AUTH_DEV_TOKEN.  The token has no default value:
-# when AUTH_DEV_TOKEN is unset or empty, development mode fails closed
-# and every token is rejected.  This is ONLY for local development and
-# MUST be replaced with real JWT validation before any deployment.
+# AUTH_MODE has no default: when it is unset or empty, no token is
+# accepted and every request fails closed.  When AUTH_MODE=development
+# the backend accepts a simple bearer token whose value matches
+# AUTH_DEV_TOKEN.  The token has no default value: when AUTH_DEV_TOKEN
+# is unset or empty, development mode fails closed and every token is
+# rejected.  This is ONLY for local development and MUST be replaced
+# with real JWT validation before any deployment.
 # ---------------------------------------------------------------------------
-AUTH_MODE: str = os.getenv("AUTH_MODE", "development")  # "development" | "production"
+AUTH_MODE: str = os.getenv("AUTH_MODE", "")  # "" | "development" | "production"
 AUTH_DEV_TOKEN: str = os.getenv("AUTH_DEV_TOKEN", "")
 
 # Comma-separated roles assigned to the dev token (default: "user").

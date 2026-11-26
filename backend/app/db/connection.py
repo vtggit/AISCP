@@ -30,7 +30,12 @@ reset before the next user takes it: an open transaction is rolled
 back and the session state is discarded, so no connection carries an
 open transaction, or any other state, from one user to the next.
 A pooled connection is probed at the next checkout: one the database
-has closed is dropped, never handed out again.  When ``psycopg2.connect``
+has closed is dropped, never handed out again, whichever factory
+opened it: the request that would have taken it gets a working
+connection instead.  A connection the rebound factory made is probed
+without a statement — the socket it rides is watched, no query is
+run on it — so a wrapper counting the app's connections and
+statements sees none of the probe.  When ``psycopg2.connect``
 is rebound at call time — a test counting the connections and
 statements the app opens — the pool drops every connection an
 earlier factory made, so the rebound factory opens, and counts,
@@ -60,6 +65,8 @@ breaks and a checkout that waits on it is woken when it settles.
 import asyncio
 import contextvars
 import os
+import select
+import socket
 import threading
 import time
 from contextlib import contextmanager, suppress
@@ -72,8 +79,9 @@ from app.config import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
 # The connect factory as of import time.  A test (or tool) may rebind
 # ``psycopg2.connect`` at call time — to count the connections and
 # statements the app opens — and the pool must let it see every
-# connection it opens: the pool never probes or resets a connection
-# the rebound factory made, and drops it when the factory changes.
+# connection it opens: the pool probes a connection the rebound
+# factory made without a statement, never resets it, and drops it
+# when the factory changes.
 _REAL_CONNECT = psycopg2.connect
 
 # The bound of the pool, in connections: read at call time so an
@@ -163,18 +171,92 @@ def _in_transaction(conn) -> bool:
     )
 
 
+def _silent_probe_alive(data: bytes) -> bool:
+    """Whether the data peeked from a pooled connection's socket
+    keeps the connection usable.
+
+    The end of the stream closes it.  Otherwise the data is the
+    queue of server messages the connection has not read: an idle
+    pooled connection has answered every query of its, so the queue
+    holds only messages the database sent on its own — and an error
+    message among them is the database ending the connection, which
+    no live idle connection carries.  A message cut off mid-arrival
+    is not decided: the connection is still delivering.
+    """
+    if not data:
+        return False
+    offset = 0
+    while offset < len(data):
+        message_type = data[offset : offset + 1]
+        if message_type == b"Z":
+            # ReadyForQuery is the one message without a length.
+            offset += 1
+            continue
+        if len(data) < offset + 5:
+            return message_type != b"E"
+        end = offset + 1 + int.from_bytes(data[offset + 1 : offset + 5], "big")
+        if message_type == b"E":
+            return False
+        if end > len(data):
+            return True
+        offset = end
+    return True
+
+
+def _probe_silently(conn) -> bool:
+    """Whether a rebound factory's pooled connection still reaches
+    its database, with no statement on it.
+
+    The rebound factory — a test counting the connections and
+    statements the app opens — would count a probe run on the
+    connection as the app's, so the probe watches the connection's
+    socket instead: the database closed the connection, the socket
+    answers a peek with the end of the stream, or with the
+    database's last word; a socket with no data at all has not been
+    closed.  A handle that shows no socket to watch is handed out
+    as is, as before the probe learned to be silent.
+    """
+    try:
+        if conn.closed:
+            return False
+        fd = conn.fileno()
+    except (psycopg2.Error, OSError, ValueError):
+        return True
+    try:
+        readable, _, _ = select.select([fd], [], [], 0)
+    except (OSError, ValueError):
+        return True
+    if not readable:
+        return True
+    try:
+        sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+    except OSError:
+        return True
+    try:
+        try:
+            data = sock.recv(65536, socket.MSG_PEEK)
+        except BlockingIOError:
+            return True
+        except OSError:
+            return False
+        return _silent_probe_alive(data)
+    finally:
+        sock.close()
+
+
 def _probe(conn) -> bool:
     """Whether a pooled connection still reaches its database.
 
     Run at checkout, before a connection is handed out: one the
-    database has closed is dropped here, never handed out again.
-    Only for connections the original factory made: a rebound
-    factory's connections (a test's counting wrapper among them) are
-    handed out as is, so the wrapper sees only the app's own
-    statements — and they are dropped when the factory changes.
+    database has closed is dropped here, never handed out again,
+    whichever factory opened it.  A connection the original factory
+    made is probed with a statement on it; a connection a rebound
+    factory made is probed the way ``_probe_silently`` does — no
+    statement, so a wrapper counting the app's connections and
+    statements sees none of the probe.
     """
     if psycopg2.connect is not _REAL_CONNECT:
-        return True
+        return _probe_silently(conn)
     try:
         if _in_transaction(conn):
             conn.rollback()
@@ -199,8 +281,10 @@ def _reset(conn) -> bool:
     autocommit-off, and ``DISCARD ALL`` drops everything the user
     left — session settings, temporary tables, prepared statements —
     so the next user starts the way a new connection would.  Only for
-    connections the original factory made, for the reason ``_probe``
-    gives.
+    connections the original factory made: a reset on a rebound
+    factory's connection would ride its wrapper as a statement the
+    app did not run, so it is skipped, and the wrapper sees only the
+    app's own statements.
     """
     if psycopg2.connect is not _REAL_CONNECT:
         return True

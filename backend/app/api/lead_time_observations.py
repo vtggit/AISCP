@@ -4,6 +4,7 @@
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
+from app.api.validation import reject_nul_bytes
 from app.models.lead_time_observations import LeadTimeObservationResponse
 from app.repositories.lead_time_observations_postgres_repository import (
     LeadTimeObservationPostgresRepository,
@@ -14,17 +15,6 @@ router = APIRouter(
 )
 _repo = LeadTimeObservationPostgresRepository()
 
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=422,
-                detail="lead time observation filters must not contain NUL bytes",
-            )
-
 
 @router.get("", response_model=list[LeadTimeObservationResponse])
 def list_lead_time_observations(
@@ -34,7 +24,11 @@ def list_lead_time_observations(
     item_code: str | None = Query(default=None, max_length=64),
 ) -> list[dict]:
     """List lead time observations ordered by business_key."""
-    _reject_nul_bytes(supplier_code, item_code)
+    reject_nul_bytes(
+        supplier_code,
+        item_code,
+        detail="lead time observation filters must not contain NUL bytes",
+    )
     return _repo.list_rows(
         limit,
         offset,
@@ -49,7 +43,9 @@ def get_lead_time_observation(
 ) -> dict:
     """Fetch one lead time observation by its business key (source receipt
     line id)."""
-    _reject_nul_bytes(business_key)
+    reject_nul_bytes(
+        business_key, detail="lead time observation filters must not contain NUL bytes"
+    )
     row = _repo.get_by_business_key(business_key)
     if row is None:
         raise HTTPException(

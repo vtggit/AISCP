@@ -6,6 +6,7 @@ from datetime import date
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
+from app.api.validation import reject_nul_bytes
 from app.models.demand_events import DemandEventResponse
 from app.repositories.demand_events_postgres_repository import (
     DemandEventPostgresRepository,
@@ -13,17 +14,6 @@ from app.repositories.demand_events_postgres_repository import (
 
 router = APIRouter(prefix="/api/demand-events", tags=["demand-events"])
 _repo = DemandEventPostgresRepository()
-
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=422,
-                detail="demand event filters must not contain NUL bytes",
-            )
 
 
 @router.get("", response_model=list[DemandEventResponse])
@@ -36,7 +26,9 @@ def list_demand_events(
     occurred_to: date | None = Query(default=None),
 ) -> list[dict]:
     """List demand events ordered by business_key."""
-    _reject_nul_bytes(item_code, site_code)
+    reject_nul_bytes(
+        item_code, site_code, detail="demand event filters must not contain NUL bytes"
+    )
     return _repo.list_rows(
         limit,
         offset,
@@ -50,7 +42,9 @@ def list_demand_events(
 @router.get("/{business_key}", response_model=DemandEventResponse)
 def get_demand_event(business_key: str = Path(..., max_length=128)) -> dict:
     """Fetch one demand event by its business key (source line id)."""
-    _reject_nul_bytes(business_key)
+    reject_nul_bytes(
+        business_key, detail="demand event filters must not contain NUL bytes"
+    )
     row = _repo.get_by_business_key(business_key)
     if row is None:
         raise HTTPException(

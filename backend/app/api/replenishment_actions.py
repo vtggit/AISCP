@@ -109,6 +109,7 @@ from app.auth.display_name import display_name
 from app.auth.models import AuthUser
 from app.feed.odoo_client import (
     OdooClient,
+    OdooDraftConflictError,
     OdooError,
     OdooWritesDisabledError,
 )
@@ -456,7 +457,10 @@ def draft_po(
     cannot take the per-item-site advisory lock in time is a 409 with
     the fixed "Another draft order for this item-site is in progress"
     message; a disabled write switch on a confirm is a 409 with the
-    fixed "Odoo writes are disabled" message; a resolution failure or any other Odoo error is
+    fixed "Odoo writes are disabled" message; a confirm whose existing
+    draft does not match the confirm's item, supplier or quantity is a
+    409 with the client's conflict message naming the draft; a
+    resolution failure or any other Odoo error is
     a 502 naming which resolution failed — and, for a resolution
     failure, the code the client was called with and whether it was
     mapped — or a generic upstream message; a client ``ValueError`` is
@@ -527,6 +531,19 @@ def draft_po(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Odoo writes are disabled",
+                ) from None
+            except OdooDraftConflictError as exc:
+                _audit(body, error=exc)
+                _record_action(
+                    body,
+                    current_user,
+                    targets,
+                    outcome="error",
+                    error_class=type(exc).__name__,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=str(exc),
                 ) from None
             except OdooError as exc:
                 _audit(body, error=exc)

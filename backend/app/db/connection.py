@@ -25,7 +25,12 @@ instead of opening them: the pool is bounded — by ``DB_POOL_SIZE``
 connections, 10 when the instance has not set it — so the number of
 connections a process holds never exceeds the bound, and a request
 served a second time reuses the connections the first one gave
-back, opening no new ones.  A connection given back to the pool is
+back, opening no new ones.  A request served while the pool is
+full — every connection of the bound still open — waits for a
+connection to be given back, at most ``DB_POOL_TIMEOUT`` seconds,
+30 when the instance has not set it, and when the deadline passes
+first the checkout raises ``PoolTimeoutError`` instead of opening a
+connection past the bound.  A connection given back to the pool is
 reset before the next user takes it: an open transaction is rolled
 back and the session state is discarded, so no connection carries an
 open transaction, or any other state, from one user to the next.
@@ -64,6 +69,8 @@ breaks and a checkout that waits on it is woken when it settles.
 
 import asyncio
 import contextvars
+import logging
+import math
 import os
 import select
 import socket
@@ -89,6 +96,11 @@ _REAL_CONNECT = psycopg2.connect
 _DEFAULT_POOL_SIZE = 10
 _POOL_SIZE_ENV = "DB_POOL_SIZE"
 
+# The pool's checkout deadline, in seconds: read at call time so an
+# instance configures it by setting DB_POOL_TIMEOUT.  30 when unset.
+_DEFAULT_POOL_TIMEOUT = 30.0
+_POOL_TIMEOUT_ENV = "DB_POOL_TIMEOUT"
+
 # The name anyio gives every worker thread it spawns to run the app's
 # synchronous endpoints — under the test client and under a server
 # alike: a request's database work runs on one of those threads, or,
@@ -101,6 +113,10 @@ _ANYIO_WORKER_THREAD_NAME = "AnyIO worker thread"
 # that a process that finalizes nothing pays for the reaper with
 # one list check a hundred times a second.
 _FINALIZE_POLL_SECONDS = 0.01
+
+# The module's logger: a checkout that waits out its deadline on a
+# full pool logs one warning through it.
+_log = logging.getLogger(__name__)
 
 
 def get_connection_params() -> dict:
@@ -137,6 +153,30 @@ def _pool_size() -> int:
     except ValueError:
         return _DEFAULT_POOL_SIZE
     return size if size >= 1 else _DEFAULT_POOL_SIZE
+
+
+class PoolTimeoutError(Exception):
+    """A checkout waited out its deadline on a pool that stayed full."""
+
+
+def _pool_timeout() -> float:
+    """The pool's checkout deadline, in seconds: the instance's
+    DB_POOL_TIMEOUT, else 30.
+
+    Read at call time, like the pool size.  A value that is not a
+    finite number above 0 falls back to the default: a
+    misconfiguration must shrink nothing and break no request.
+    """
+    raw = os.getenv(_POOL_TIMEOUT_ENV)
+    if raw is None:
+        return _DEFAULT_POOL_TIMEOUT
+    try:
+        timeout = float(raw)
+    except ValueError:
+        return _DEFAULT_POOL_TIMEOUT
+    if not math.isfinite(timeout) or timeout <= 0:
+        return _DEFAULT_POOL_TIMEOUT
+    return timeout
 
 
 def _pool_active() -> bool:
@@ -356,15 +396,20 @@ class _Pool:
 
         Blocks only while every connection of the bound is still
         open — checked out, or in the middle of being closed — the
-        way a caller of the database waits for the database: a
-        request served while the pool is full waits for a
-        connection, never opens one past the bound.  A changed
+        way a caller of the database waits for the database, and only
+        until its deadline: a request served while the pool is full
+        waits at most ``DB_POOL_TIMEOUT`` seconds, 30 when the
+        instance has not set it, never opens a connection past the
+        bound, and raises ``PoolTimeoutError`` when the deadline
+        passes first and the pool is still full.  A changed
         factory never stalls it: an idle connection an earlier
         factory made is closed for good before any connection the
         current factory opens, so the checkout hands out one the
         current factory made instead of waiting on the old factory's
         idle connections.
         """
+        timeout = _pool_timeout()
+        deadline = time.monotonic() + timeout
         while True:
             stale = []
             entry = None
@@ -398,7 +443,17 @@ class _Pool:
                     make_new = True
                     self._live += 1
                 else:
-                    self._wake.wait()
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        in_use = self._live + self._closing
+                        bound = _pool_size()
+                        message = (
+                            "db pool: no connection became free within "
+                            f"{timeout:g}s; {in_use} of {bound} in use"
+                        )
+                        _log.warning(message)
+                        raise PoolTimeoutError(message)
+                    self._wake.wait(remaining)
             if make_new:
                 try:
                     conn = psycopg2.connect(**get_connection_params())

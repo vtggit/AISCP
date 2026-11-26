@@ -32,6 +32,16 @@ scaled inputs, so the exact formula
 ceiling rounding applies to baseline and scenario alike. A scenario is
 never stored: the function reads through ``recommendations_for_all``
 and ``item_sites`` and writes nothing.
+
+The summary's two dollar figures both run over the item-sites with a
+``unit_cost`` from ``item_sites`` (an item-site without one adds 0 to
+both and is counted in ``item_sites_without_unit_cost``):
+``dollar_impact`` is the change in the stock held, the sum of
+``safety_stock_units_delta`` times the unit cost;
+``pipeline_dollar_impact`` is the change in demand over the lead
+time, the sum of (d' * lt' - d * lt) times the unit cost with d and
+lt the baseline's ``inputs`` and d' and lt' the scaled ones,
+unrounded — exactly 0 when only the service level changes.
 """
 
 from __future__ import annotations
@@ -150,8 +160,14 @@ def simulate_reorder(
     ``reorder_point_up`` / ``reorder_point_down`` /
     ``reorder_point_unchanged`` (item-site counts by the sign of
     ``reorder_point_units_delta``), ``dollar_impact`` (the sum over
-    item-sites of ``reorder_point_units_delta`` times the item-site's
-    ``unit_cost`` from ``item_sites``, item-sites without a ``unit_cost``
+    item-sites of ``safety_stock_units_delta`` times the item-site's
+    ``unit_cost`` from ``item_sites`` — the change in the stock held,
+    item-sites without a ``unit_cost`` contributing 0),
+    ``pipeline_dollar_impact`` (the change in demand over the lead
+    time, unrounded: the sum over item-sites of ``(d' * lt' - d * lt)``
+    times the item-site's ``unit_cost``, d and lt the baseline's
+    ``inputs`` and d' and lt' the scaled ones; exactly 0 when only the
+    service level changes; item-sites without a ``unit_cost``
     contributing 0), the ``levers`` applied (each null when not given)
     and ``service_level_by_class`` (the given per-class mapping, null
     when not given).
@@ -183,6 +199,7 @@ def simulate_reorder(
     reorder_point_up = 0
     reorder_point_down = 0
     dollar_impact = 0.0
+    pipeline_dollar_impact = 0.0
     without_unit_cost = 0
     for baseline in baselines:
         if baseline["status"] != "ok":
@@ -207,6 +224,11 @@ def simulate_reorder(
         scaled_sd_d = float(inputs["sd_d"]) * demand_factor
         scaled_lt = float(inputs["lt"]) * lead_factor
         scaled_sd_lt = float(inputs["sd_lt"]) * lead_factor
+        # Demand over the lead time, scenario minus baseline,
+        # unrounded: 0 when only the service level changed.
+        pipeline_value_delta = scaled_d * scaled_lt - float(inputs["d"]) * float(
+            inputs["lt"]
+        )
         abc_class = (baseline.get("service_level_source") or {}).get("abc_class")
         if service_level_by_class is not None and abc_class in service_level_by_class:
             # A classed item-site takes its class's level from the
@@ -249,7 +271,8 @@ def simulate_reorder(
         if unit_cost is None:
             without_unit_cost += 1
         else:
-            dollar_impact += reorder_point_delta * float(unit_cost)
+            dollar_impact += safety_stock_delta * float(unit_cost)
+            pipeline_dollar_impact += pipeline_value_delta * float(unit_cost)
         rows.append(
             {
                 "item_code": item_code,
@@ -269,6 +292,7 @@ def simulate_reorder(
         "reorder_point_down": reorder_point_down,
         "reorder_point_unchanged": len(rows) - reorder_point_up - reorder_point_down,
         "dollar_impact": dollar_impact,
+        "pipeline_dollar_impact": pipeline_dollar_impact,
         "item_sites_without_unit_cost": without_unit_cost,
         "levers": {
             "service_level": service_level,

@@ -407,10 +407,14 @@ defaults below were decided under delegation.
   aggregate projection and the release lines.
 - **Planned orders keep the monthly order-up-to policy** (decided by Claude under delegation,
   2026-10-26). The aggregate plan reviews each item-site once a month and orders up to the reorder
-  point plus that month's demand: a periodic-review (R, S) policy. The order quantity is for the
-  ERP's continuous reorder-point settings, which trigger an order whenever stock falls to the
-  reorder point. Using it in the monthly plan would mix the two policies, and it would move the
-  projected spend without anyone deciding so.
+  point plus that month's demand: a periodic-review (R, S) policy. Since 2026-11-26 (#1633) S also
+  carries the extra safety stock a month between reviews needs: the safety stock for the lead time
+  plus the month, less the safety stock the reorder point already holds, z × (√((lt + days) × sd_d²
+  + d² × sd_lt²) − √(lt × sd_d² + d² × sd_lt²)). Without a scenario lever, an item-site on the
+  empirical method gets none. S also covers the demand signals counted in the month and in the lead
+  time after it. The order quantity is for the ERP's continuous reorder-point settings, which
+  trigger an order whenever stock falls to the reorder point. Using it in the monthly plan would
+  mix the two policies, and it would move the projected spend without anyone deciding so.
 - **Not in this stage:** supplier minimums, pack sizes and price breaks (the feed does not carry
   them yet), and quantity discounts.
 

@@ -444,6 +444,7 @@ code is the authority for details.
   demand statistics only for the designated buffered item-sites (#1562).
 - The app now pools database connections while serving requests, bounded by `DB_POOL_SIZE` (default
   10), so repeated requests reuse connections and the process never holds more than the bound (#1570).
+- The planner views now use one shared HTML escaper instead of separate copies in each view (#1620).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

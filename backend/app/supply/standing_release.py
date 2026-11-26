@@ -8,7 +8,7 @@ omitted) — and answers the run's audit row as a dict: ``id``,
 ``process`` and ``grant_id``, ``started_at`` (ISO-8601), ``outcome``
 and ``reason``, ``documents`` and ``value`` (the count and the summed
 value of the groups sent, as a decimal string) and ``left_out`` (the
-groups the limits left out).
+groups the limits left out and the release's failed groups).
 
 One run at a time: the run takes the runs' own PostgreSQL advisory
 lock — its own key, never the release confirm's — on its own
@@ -52,15 +52,26 @@ The send: the chosen groups
 go out through the very same confirm path a person's release uses —
 ``app.api.aggregate.confirm_release_groups`` with the plan's
 ``month`` and ``unreleasable``, the chosen groups and their summed
-``total_value``, the actor ``standing-grant:<id>`` — a success
-records ``released``; an ``HTTPException`` records ``failed`` with
-its ``detail`` as the reason; any other exception while sending
-records ``failed`` with the reason "<class name>: <message>" and is
-then raised again.  In every case that found a grant in force one
-``standing_grant_runs`` row is written — ``started_at`` equal to
-``now`` — and in every send case the groups' count and value are
-what the row's ``documents`` and ``value`` hold, and what count
-toward the day.  After the confirm answers, the run records the
+``total_value``, the actor ``standing-grant:<id>`` — an
+``HTTPException`` records ``failed`` with its ``detail`` as the
+reason; any other exception while sending records ``failed`` with
+the reason "<class name>: <message>" and is then raised again.
+After the confirm answers, the run records what went out: a chosen
+group counts as sent when the outcome the confirm leaves on it is
+``created`` or ``exists``, and every other group goes into
+``left_out`` with the reason ``release_error`` and its value a
+decimal string — when every chosen group failed the run records
+``failed`` with the reason "every release group failed: <the first
+failed group's error>" and the chosen groups' count and value, as a
+failed send's are, and otherwise it records ``released`` with the
+sent groups' count and value.  In every case that found a grant in
+force one ``standing_grant_runs`` row is written — ``started_at``
+equal to ``now`` — and in every send case the sent groups' count
+and value are what the row's ``documents`` and ``value`` hold, and
+what count toward the day.  The exceptions inbox raises its
+standing-grant item for a run whose ``left_out`` is not empty — a
+failed release group among them — with no change of its own.
+After the confirm answers, the run records the
 release's short suppliers through
 ``app.supply.short_orders.record_short_orders`` with the grant's
 horizon days, the confirm's answer and the actor
@@ -124,16 +135,26 @@ group in the plan's order, as the entries of
 ``app.api.supply_plan.confirm_transfer_release`` — the very same
 confirm path a person's release uses, the same suggestions read,
 the actor ``standing-grant:<id>``, no actor name, the route's cap
-of 50 entries not applying — a success records ``released``; an
-``HTTPException`` records ``failed`` with its ``detail`` as the
-reason (the 409 of the transfer release's lock among them); any
-other exception while sending records ``failed`` with the reason
-"<class name>: <message>" and is raised again.  In every case
-``documents`` and ``value`` are the count and the summed value of
-the chosen groups, and they count toward the day.  Every run that
-found a grant in force writes exactly one ``standing_grant_runs``
-row — the process ``transfer_release``, ``started_at`` ``now``,
-the grant's id — and the run answers that row.
+of 50 entries not applying — an ``HTTPException`` records
+``failed`` with its ``detail`` as the reason (the 409 of the
+transfer release's lock among them); any other exception while
+sending records ``failed`` with the reason "<class name>:
+<message>" and is raised again.  After the confirm answers, the
+run records what went out the way the order plan's run does: a
+chosen group counts as sent when the outcome of the answered
+plan's group with the same ``from_site`` and ``to_site`` is
+``created``, or ``exists`` carrying no error — an ``exists`` that
+carries the stale-lines error does not count — and every other
+group goes into ``left_out`` with the reason ``release_error`` and
+its value a decimal string; when every chosen group failed the run
+records ``failed`` with the reason "every release group failed:
+<the first failed group's error>" and the chosen groups' count and
+value, as a failed send's are, and otherwise it records
+``released`` with the sent groups' count and value, and they count
+toward the day.  Every run that found a grant in force writes
+exactly one ``standing_grant_runs`` row — the process
+``transfer_release``, ``started_at`` ``now``, the grant's id — and
+the run answers that row.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -295,10 +316,16 @@ def run_order_plan_grant(now: datetime | None = None) -> dict:
     group is, the reason gaining "or has no value" when one was left
     out for ``no_value``) and the send through
     ``confirm_release_groups`` as
-    ``standing-grant:<id>`` (``released``, or ``failed`` with the
-    refusal's reason — and the re-raise after the row is written when
-    the send raised something else).  After the confirm answers, the
-    run records the release's short suppliers through
+    ``standing-grant:<id>`` — a group the confirm leaves as
+    ``created`` or ``exists`` counts as sent, the rest left out
+    ``release_error``: ``released`` with the sent groups' count and
+    value, or ``failed`` "every release group failed: <the first
+    failed group's error>" with the chosen groups' count and value
+    when every chosen group failed — an ``HTTPException`` records
+    ``failed`` with the refusal's reason, and the re-raise after the
+    row is written when the send raised something else.  After the
+    confirm answers, the run records the release's short suppliers
+    through
     ``app.supply.short_orders.record_short_orders`` with the grant's
     horizon days, the answer and the actor ``standing-grant:<id>`` —
     a failure to record is logged inside it and changes nothing of
@@ -470,14 +497,47 @@ def run_order_plan_grant(now: datetime | None = None) -> dict:
                 left_out,
             )
             raise
+        # What went out: a chosen group counts as sent when the
+        # outcome the confirm leaves on it is "created" or
+        # "exists"; every other group is a failed group, left out
+        # with the reason "release_error".
+        sent: list[dict] = []
+        failed: list[dict] = []
+        for group in answer["groups"]:
+            if group["outcome"] in ("created", "exists"):
+                sent.append(group)
+            else:
+                failed.append(group)
+                left_out.append(
+                    {
+                        "site_code": group["site_code"],
+                        "supplier_code": group["supplier_code"],
+                        "value": str(group["value"]),
+                        "reason": "release_error",
+                    }
+                )
+        if not sent:
+            # Every release group failed: the failed send's own
+            # documents and value, the first failure's error the
+            # reason.
+            return _run_row(
+                _PROCESS,
+                now,
+                grant,
+                "failed",
+                f"every release group failed: {failed[0]['error']}",
+                len(chosen),
+                sent_value,
+                left_out,
+            )
         return _run_row(
             _PROCESS,
             now,
             grant,
             "released",
             None,
-            len(chosen),
-            sent_value,
+            len(sent),
+            sum((group["value"] for group in sent), Decimal(0)),
             left_out,
         )
     finally:
@@ -504,12 +564,19 @@ def run_transfer_grant(now: datetime | None = None) -> dict:
     "every suggested transfer order is over a limit or has no value"
     when every group is) and the send of the chosen groups' lines
     through ``confirm_transfer_release`` as
-    ``standing-grant:<id>`` (``released``, or ``failed`` with the
-    refusal's reason — and the re-raise after the row is written
-    when the send raised something else).  Every run that found a
-    grant in force writes exactly one ``standing_grant_runs`` row,
-    the process ``transfer_release``, ``started_at`` ``now``, the
-    grant's id.
+    ``standing-grant:<id>`` — the answered plan's group with the
+    same ``from_site`` and ``to_site``: ``created``, or ``exists``
+    carrying no error, counts as sent (an ``exists`` that carries
+    the stale-lines error does not), the rest left out
+    ``release_error``: ``released`` with the sent groups' count and
+    value, or ``failed`` "every release group failed: <the first
+    failed group's error>" with the chosen groups' count and value
+    when every chosen group failed — an ``HTTPException`` records
+    ``failed`` with the refusal's reason, and the re-raise after the
+    row is written when the send raised something else.  Every run
+    that found a grant in force writes exactly one
+    ``standing_grant_runs`` row, the process ``transfer_release``,
+    ``started_at`` ``now``, the grant's id.
     """
     if now is None:
         now = datetime.now(UTC)
@@ -674,7 +741,7 @@ def run_transfer_grant(now: datetime | None = None) -> dict:
         ]
         sent_value = sum(chosen_values, Decimal(0))
         try:
-            confirm_transfer_release(
+            answer = confirm_transfer_release(
                 send_entries, f"standing-grant:{grant['id']}", suggestions=suggestions
             )
         except HTTPException as exc:
@@ -700,14 +767,55 @@ def run_transfer_grant(now: datetime | None = None) -> dict:
                 left_out,
             )
             raise
+        # What went out: the answered plan's group with the same
+        # two sites — "created", or an "exists" that carries no
+        # error, counts as sent; an "exists" that carries the
+        # stale-lines error, like every other outcome, is a failed
+        # group, left out with the reason "release_error".
+        answered = {
+            (group["from_site"], group["to_site"]): group for group in answer["groups"]
+        }
+        sent_value_out = Decimal(0)
+        failed_errors: list[str | None] = []
+        for group, value in zip(chosen, chosen_values):
+            result = answered.get((group["from_site"], group["to_site"]))
+            outcome = result.get("outcome") if result is not None else None
+            error = result.get("error") if result is not None else None
+            if outcome == "created" or (outcome == "exists" and error is None):
+                sent_value_out += value
+            else:
+                left_out.append(
+                    {
+                        "from_site": group["from_site"],
+                        "to_site": group["to_site"],
+                        "value": str(value),
+                        "reason": "release_error",
+                    }
+                )
+                failed_errors.append(error)
+        sent_count = len(chosen) - len(failed_errors)
+        if sent_count == 0:
+            # Every release group failed: the failed send's own
+            # documents and value, the first failure's error the
+            # reason.
+            return _run_row(
+                _TRANSFER_PROCESS,
+                now,
+                grant,
+                "failed",
+                f"every release group failed: {failed_errors[0]}",
+                len(chosen),
+                sent_value,
+                left_out,
+            )
         return _run_row(
             _TRANSFER_PROCESS,
             now,
             grant,
             "released",
             None,
-            len(chosen),
-            sent_value,
+            sent_count,
+            sent_value_out,
             left_out,
         )
     finally:

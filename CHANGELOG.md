@@ -381,10 +381,6 @@ code is the authority for details.
 - The current guidance, an item's history and what a stamp names (`GET /api/guidance` and two
   read routes), and the Guidance screen with each item's history, a find box that also looks
   up a stamp, and formatted statements (#1125, #1126, #1128, #1129, #1130, #1151).
-- The Work queue and Decision log now show a status line when a list is cut at 1,000 rows, naming the
-  full lists in the log (#1600).
-- The Overview's to-decide labels and the Demand view's forecast list now say when their lists are cut
-  at 1,000 rows (#1601).
 
 **Documentation and CI**
 - Backend line coverage in CI, reported and not enforced: the total, each package and the
@@ -450,6 +446,10 @@ code is the authority for details.
   10), so repeated requests reuse connections and the process never holds more than the bound (#1570).
 - The planner views now use one shared HTML escaper instead of separate copies in each view (#1620).
 - API routes now share one NUL-byte check, with no change to the 422 responses they return (#1621).
+- The Work queue and Decision log now show a status line when a list is cut at 1,000 rows, naming the
+  full lists in the log (#1600).
+- The Overview's to-decide labels and the Demand view's forecast list now say when their lists are cut
+  at 1,000 rows (#1601).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

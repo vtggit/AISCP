@@ -194,6 +194,8 @@ from urllib.parse import quote, urlsplit
 
 import httpx
 
+from app.feed.switches import TRUE_VALUES, env_switch
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -227,7 +229,7 @@ _MAX_BODY_SNIPPET = 300
 _MAX_PO_READ_CHUNK = 25
 _MAX_TRANSFER_READ_CHUNK = 20
 _MAX_TRANSFER_STATUS_READ = 100
-_TRUTHY_VALUES = ("1", "true", "yes", "on")
+_TRUTHY_VALUES = TRUE_VALUES
 _ID_RE = re.compile(r"[0-9]{1,19}")
 _VERSION_RE = re.compile(r"[0-9A-Za-z._-]{1,64}")
 _INSTANCE_PATH_RE = re.compile(r"[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*")
@@ -319,17 +321,18 @@ def _is_truthy_env(name: str) -> bool:
     Truthy means ``1``, ``true``, ``yes``, or ``on`` (case-insensitive,
     whitespace-trimmed); unset, blank, or any other value is falsy.
     """
-    raw = os.environ.get(name)
-    if raw is None:
-        return False
-    return raw.strip().lower() in _TRUTHY_VALUES
+    return env_switch(name)
 
 
 def _allow_insecure() -> bool:
+    """Return True when ``ACUMATICA_ALLOW_INSECURE`` is set to a
+    truthy value (``1``, ``true``, ``yes``, or ``on``)."""
     return _is_truthy_env(ALLOW_INSECURE_VAR)
 
 
 def _writes_enabled() -> bool:
+    """Return True when ``ACUMATICA_ALLOW_WRITES`` is set to a
+    truthy value (``1``, ``true``, ``yes``, or ``on``)."""
     return _is_truthy_env(ALLOW_WRITES_VAR)
 
 
@@ -802,15 +805,24 @@ def _po_bool(row: dict[str, Any], name: str, subject: str) -> bool:
 def _po_number(
     row: dict[str, Any], name: str, subject: str, *, default: float | None
 ) -> float | None:
-    """One numeric field: finite int or float as float, missing default."""
+    """One numeric field: int or float that fits in a finite float,
+    missing default.
+
+    An int too large to convert to float is malformed like the other
+    hostile shapes; the overflow must not escape the client.
+    """
     value = _entity_value(row, name)
     if value is None:
         return default
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise AcumaticaError(f"{subject} returned a malformed field {name}")
-    if not math.isfinite(value):
+    try:
+        number = float(value)
+    except OverflowError:
         raise AcumaticaError(f"{subject} returned a malformed field {name}")
-    return float(value)
+    if not math.isfinite(number):
+        raise AcumaticaError(f"{subject} returned a malformed field {name}")
+    return number
 
 
 def _erp_date(value: object, subject: str) -> str | None:

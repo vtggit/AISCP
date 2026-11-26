@@ -137,6 +137,8 @@ code is the authority for details.
   `GET /api/ddmrp/zones` answers the value used as `moq` (#1602).
 - DDMRP plan rows now count in-flight order releases and transfers in open supply and net flow, with
   notes for released units not yet in the feed and for transfers added or taken (#1630).
+- DDMRP plan rows now qualify a demand spike on the day's total of open sales-order lines, not line by
+  line, with the day's whole total counted when it is at least 50% of the buffer's top of red (#1631).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,

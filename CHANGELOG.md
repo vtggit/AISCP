@@ -135,6 +135,8 @@ code is the authority for details.
   buffer's order signal (#1560).
 - The DDMRP green zone now uses the supplier minimum order quantity from the item's supplier terms, and
   `GET /api/ddmrp/zones` answers the value used as `moq` (#1602).
+- DDMRP plan rows now count in-flight order releases and transfers in open supply and net flow, with
+  notes for released units not yet in the feed and for transfers added or taken (#1630).
 
 **Exceptions inbox**
 - One triage list of what needs attention (`GET /api/exceptions`), from DDMRP buffers,

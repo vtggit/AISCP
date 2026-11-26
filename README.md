@@ -267,6 +267,8 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   lead time, with the buffer factors as settings; the plan gives each buffer's net flow, order
   signal and on-hand alert, counting qualified demand from open sales orders
   (`backend/app/ddmrp/`, `backend/app/api/ddmrp.py`).
+- The plan's open supply also counts in-flight release units not yet in the feed and in-flight
+  transfer units, with notes when either is present (`backend/app/ddmrp/plan.py`).
 - Suggested buffer candidates, planned adjustment factors for seasonal or promotional ramps,
   and each buffer's time in each zone from a daily status snapshot.
 - Proposed DDMRP adjustment factors for forecast periods whose forecast daily demand differs

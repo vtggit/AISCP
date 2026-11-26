@@ -12,6 +12,7 @@ mount-time gate like the other routers.
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from app.api.validation import reject_nul_bytes
 from app.models.scenarios import (
     ScenarioCreate,
     ScenarioResponse,
@@ -25,17 +26,6 @@ from app.scenario.simulate import _validate_levers, simulate_reorder
 router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
 
 _repo = ScenarioPostgresRepository()
-
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="scenarios must not contain NUL bytes",
-            )
 
 
 def _validate_given_levers(body: BaseModel) -> None:
@@ -160,7 +150,7 @@ def create_scenario(body: ScenarioCreate) -> dict:
     in ``POST /api/scenarios/simulate``.  422 when a lever is out of
     range or the name is blank.
     """
-    _reject_nul_bytes(body.name)
+    reject_nul_bytes(body.name, detail="scenarios must not contain NUL bytes")
     _validate_given_levers(body)
     return _repo.create(body.model_dump())
 
@@ -178,7 +168,7 @@ def list_scenarios() -> list[dict]:
 )
 def get_scenario(scenario_id: str) -> dict:
     """Fetch one scenario by id; 404 for an unknown id."""
-    _reject_nul_bytes(scenario_id)
+    reject_nul_bytes(scenario_id, detail="scenarios must not contain NUL bytes")
     row = _repo.get_by_id(scenario_id)
     if row is None:
         raise HTTPException(
@@ -200,7 +190,9 @@ def update_scenario(scenario_id: str, body: ScenarioUpdate) -> dict:
     change bumps ``updated_at``.  422 when a given lever is out of
     range or the given name is blank or null.
     """
-    _reject_nul_bytes(scenario_id, body.name)
+    reject_nul_bytes(
+        scenario_id, body.name, detail="scenarios must not contain NUL bytes"
+    )
     _validate_given_levers(body)
     row = _repo.update(scenario_id, body.model_dump(exclude_unset=True))
     if row is None:
@@ -217,7 +209,7 @@ def update_scenario(scenario_id: str, body: ScenarioUpdate) -> dict:
 )
 def delete_scenario(scenario_id: str) -> None:
     """Delete one scenario by id; 404 for an unknown id."""
-    _reject_nul_bytes(scenario_id)
+    reject_nul_bytes(scenario_id, detail="scenarios must not contain NUL bytes")
     if not _repo.delete(scenario_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="scenario not found"

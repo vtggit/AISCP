@@ -141,6 +141,7 @@ from app.api.exceptions import (
     _forecast_rows,
     _stored_system_settings,
 )
+from app.api.validation import reject_nul_bytes
 from app.auth.authorization import require_role
 from app.auth.models import AuthUser
 from app.db.connection import get_cursor
@@ -172,17 +173,6 @@ router = APIRouter(prefix="/api/forecast", tags=["forecast"])
 # override route below (issue #1365), the way the excess decision
 # proposals ride on their module-level repository.
 _override_proposal_repo = ForecastOverrideProposalPostgresRepository()
-
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=422,
-                detail="forecast filters must not contain NUL bytes",
-            )
 
 
 class ForecastBucket(BaseModel):
@@ -529,7 +519,7 @@ def list_forecasts(
     no acknowledgement or snooze of the exception, and nothing is
     written.
     """
-    _reject_nul_bytes(demand_class)
+    reject_nul_bytes(demand_class, detail="forecast filters must not contain NUL bytes")
     # The list on a fixed query budget, whatever the number of
     # item-sites: the effective forecast beside the statistical one
     # [rule: OVR-3] [rule: OVR-4].
@@ -577,7 +567,9 @@ def get_forecast_by_key(
     the route still answers 200 with the row, ``correction`` null.
     Nothing is written.
     """
-    _reject_nul_bytes(item_code, site_code)
+    reject_nul_bytes(
+        item_code, site_code, detail="forecast filters must not contain NUL bytes"
+    )
     stats = demand_stats_for_pair(item_code, site_code, as_of)
     if stats is None:
         raise _not_found()

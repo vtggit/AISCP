@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.api.planner_decisions import PlannerDecision
 from app.api.recommendations import OrderQuantity, ServiceLevelSource
+from app.api.validation import reject_nul_bytes
 from app.db.connection import get_cursor
 from app.recommend.drift import drift_ranked
 from app.recommend.export import drift_csv
@@ -22,17 +23,6 @@ from app.stats.demand import default_as_of
 router = APIRouter(prefix="/api/drift", tags=["drift"])
 
 _repo = PlannerDecisionPostgresRepository()
-
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=422,
-                detail="drift filters must not contain NUL bytes",
-            )
 
 
 class DriftRow(BaseModel):
@@ -284,7 +274,9 @@ def get_drift_by_key(
     a dismissal or a snooze; 404 when the item-site has no "ok"
     recommendation.
     """
-    _reject_nul_bytes(item_code, site_code)
+    reject_nul_bytes(
+        item_code, site_code, detail="drift filters must not contain NUL bytes"
+    )
     try:
         rows = drift_ranked()
     except ValueError as exc:

@@ -9,6 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field, field_validator
 from starlette.responses import JSONResponse
 
+from app.api.validation import reject_nul_bytes
 from app.db.connection import get_cursor
 from app.recommend.export import planning_parameters_csv
 from app.recommend.reorder import (
@@ -28,17 +29,6 @@ from app.stats.demand import default_as_of
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 _repo = ItemSitePostgresRepository()
 _settings_repo = SettingsPostgresRepository()
-
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=422,
-                detail="recommendation filters must not contain NUL bytes",
-            )
 
 
 class CurrentSettings(BaseModel):
@@ -325,7 +315,13 @@ def list_recommendations(
     as_of: date | None = Query(default=None),
 ) -> list[dict]:
     """List reorder recommendations per (item_code, site_code), ordered by item_code then site_code."""
-    _reject_nul_bytes(item_code, site_code, status, source_system)
+    reject_nul_bytes(
+        item_code,
+        site_code,
+        status,
+        source_system,
+        detail="recommendation filters must not contain NUL bytes",
+    )
     try:
         rows = recommendations_for_all(as_of)
     except ValueError as exc:
@@ -371,7 +367,9 @@ def get_recommendation_by_key(
     as_of: date | None = Query(default=None),
 ) -> dict:
     """Fetch one item-site's recommendation; 404 when the item-site is not in item_sites."""
-    _reject_nul_bytes(item_code, site_code)
+    reject_nul_bytes(
+        item_code, site_code, detail="recommendation filters must not contain NUL bytes"
+    )
     row = _repo.get_by_key(item_code, site_code)
     if row is None:
         raise HTTPException(status_code=404, detail="item site not found")

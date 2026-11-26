@@ -4,6 +4,7 @@
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from app.api.validation import reject_nul_bytes
 from app.models.item_sites import ItemSiteResponse
 from app.repositories.item_sites_postgres_repository import (
     ItemSitePostgresRepository,
@@ -11,17 +12,6 @@ from app.repositories.item_sites_postgres_repository import (
 
 router = APIRouter(prefix="/api/item-sites", tags=["item-sites"])
 _repo = ItemSitePostgresRepository()
-
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="item_code and site_code must not contain NUL bytes",
-            )
 
 
 @router.get("", response_model=list[ItemSiteResponse])
@@ -32,7 +22,11 @@ def list_item_sites(
     site_code: str | None = Query(default=None),
 ) -> list[dict]:
     """List item/site rows ordered by (item_code, site_code)."""
-    _reject_nul_bytes(item_code, site_code)
+    reject_nul_bytes(
+        item_code,
+        site_code,
+        detail="item_code and site_code must not contain NUL bytes",
+    )
     return _repo.list_rows(limit, offset, item_code=item_code, site_code=site_code)
 
 
@@ -42,7 +36,11 @@ def get_item_site_by_key(
     site_code: str = Query(...),
 ) -> dict:
     """Fetch the single row for one (item_code, site_code) pair."""
-    _reject_nul_bytes(item_code, site_code)
+    reject_nul_bytes(
+        item_code,
+        site_code,
+        detail="item_code and site_code must not contain NUL bytes",
+    )
     row = _repo.get_by_key(item_code, site_code)
     if row is None:
         raise HTTPException(

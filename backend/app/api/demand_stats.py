@@ -7,20 +7,10 @@ from datetime import date
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
+from app.api.validation import reject_nul_bytes
 from app.stats.demand import demand_stats_for_all, demand_stats_for_pair
 
 router = APIRouter(prefix="/api/demand-stats", tags=["demand-stats"])
-
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=422,
-                detail="demand stats filters must not contain NUL bytes",
-            )
 
 
 class DemandStatsResponse(BaseModel):
@@ -54,7 +44,9 @@ def list_demand_stats(
     as_of: date | None = Query(default=None),
 ) -> list[dict]:
     """List demand stats per (item_code, site_code), ordered by item_code then site_code."""
-    _reject_nul_bytes(item_code, site_code)
+    reject_nul_bytes(
+        item_code, site_code, detail="demand stats filters must not contain NUL bytes"
+    )
     rows = demand_stats_for_all(as_of)
     if item_code is not None:
         rows = [row for row in rows if row["item_code"] == item_code]
@@ -70,7 +62,9 @@ def get_demand_stats_by_key(
     as_of: date | None = Query(default=None),
 ) -> dict:
     """Fetch one pair's demand stats; 404 when the pair has no demand."""
-    _reject_nul_bytes(item_code, site_code)
+    reject_nul_bytes(
+        item_code, site_code, detail="demand stats filters must not contain NUL bytes"
+    )
     row = demand_stats_for_pair(item_code, site_code, as_of)
     if row is None:
         raise HTTPException(

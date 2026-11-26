@@ -7,20 +7,10 @@ from datetime import date
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
+from app.api.validation import reject_nul_bytes
 from app.stats.lead_time import lead_time_stats_for_all, lead_time_stats_for_item
 
 router = APIRouter(prefix="/api/lead-time-stats", tags=["lead-time-stats"])
-
-_NUL = chr(0)
-
-
-def _reject_nul_bytes(*values: str | None) -> None:
-    for value in values:
-        if value is not None and _NUL in value:
-            raise HTTPException(
-                status_code=422,
-                detail="lead time stats filters must not contain NUL bytes",
-            )
 
 
 class LeadTimeStats(BaseModel):
@@ -60,7 +50,9 @@ def list_lead_time_stats(
     as_of: date | None = Query(default=None),
 ) -> list[dict]:
     """List lead time stats per item (all suppliers pooled), ordered by item_code."""
-    _reject_nul_bytes(item_code)
+    reject_nul_bytes(
+        item_code, detail="lead time stats filters must not contain NUL bytes"
+    )
     rows = lead_time_stats_for_all(as_of)
     if item_code is not None:
         rows = [row for row in rows if row["item_code"] == item_code]
@@ -74,7 +66,9 @@ def get_lead_time_stats_by_item(
 ) -> dict:
     """Fetch one item's pooled lead time stats with its per-supplier breakdown;
     404 when the item has no observation in the window."""
-    _reject_nul_bytes(item_code)
+    reject_nul_bytes(
+        item_code, detail="lead time stats filters must not contain NUL bytes"
+    )
     row = lead_time_stats_for_item(item_code, as_of)
     if row is None:
         raise HTTPException(

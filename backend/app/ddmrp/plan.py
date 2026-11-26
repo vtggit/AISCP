@@ -10,10 +10,13 @@ is answered by ``has_lines``), limited to the lines with
 ``open_units`` above 0: ``qualified_due`` is the sum of the pair's
 lines with ``ship_on`` at or before the as-of date (a null
 ``ship_on`` counts as due on the as-of date), and
-``qualified_spike`` is the sum of the pair's lines with ``ship_on``
-after the as-of date and no later than the as-of date plus the row's
-``dlt_days`` rounded up to whole days, counting only the lines whose
-own ``open_units`` is at least 50% of the row's ``top of red``;
+``qualified_spike`` is the sum of the day's total of the pair's lines
+with ``ship_on`` after the as-of date and no later than the as-of
+date plus the row's ``dlt_days`` rounded up to whole days, summed per
+``ship_on`` date: a day whose total is at least 50% of the row's
+``top of red`` counts its whole total, and the lines of a day that
+does not qualify count for nothing, a line with ``open_units`` of 0
+or below skipped before the sums so it never lowers a day's total;
 ``qualified_demand`` is the sum of the two and ``net_flow`` is the
 on hand plus the open supply minus it.  When the feed carries no open
 sales-order lines at all, every row keeps the note "no open
@@ -221,16 +224,20 @@ def qualified_demand_for(
     Sums the ``open_units`` of the lines above 0: ``qualified_due``
     the lines with ``ship_on`` at or before the as-of date (a null
     ``ship_on`` counts as due on the as-of date), ``qualified_spike``
-    the lines with ``ship_on`` after the as-of date and no later than
-    the as-of date plus the row's ``dlt_days`` rounded up to whole
-    days, counting only the lines whose own ``open_units`` is at
-    least 50% of the row's ``top of red``.  Returns the two sums.
+    the day's total of the lines with ``ship_on`` after the as-of
+    date and no later than the as-of date plus the row's ``dlt_days``
+    rounded up to whole days, summed per ``ship_on`` date: a day
+    whose total is at least 50% of the row's ``top of red`` counts
+    its whole total, and the lines of a day that does not qualify
+    count for nothing; a line with ``open_units`` of 0 or below is
+    skipped before the sums, so it never lowers a day's total.
+    Returns the two sums.
     """
     horizon = (
         as_of + timedelta(days=math.ceil(dlt_days)) if dlt_days is not None else as_of
     )
     due = 0.0
-    spike = 0.0
+    day_totals: dict[date, float] = {}
     for line in lines:
         open_units = float(line["open_units"])
         if open_units <= 0:
@@ -238,8 +245,13 @@ def qualified_demand_for(
         ship_on = line["ship_on"]
         if ship_on is None or ship_on <= as_of:
             due += open_units
-        elif ship_on <= horizon and open_units >= 0.5 * top_of_red:
-            spike += open_units
+        elif ship_on <= horizon:
+            day_totals[ship_on] = day_totals.get(ship_on, 0.0) + open_units
+    # Double the day's total rather than halving the top of red:
+    # 0.5 * top_of_red converts a large odd top of red to float,
+    # rounding the threshold down a half unit and qualifying a day a
+    # half unit below the true half.
+    spike = sum(total for total in day_totals.values() if total * 2 >= top_of_red)
     return due, spike
 
 
@@ -295,10 +307,11 @@ def plan_ddmrp(as_of: date, zone_rows: list[dict]) -> dict:
     rows grouped by item-site: the lines with
     ``open_units`` above 0, ``qualified_due`` the ones due at or
     before the as-of date — a null ``ship_on`` counts as due — and
-    ``qualified_spike`` the ones after the as-of date and within the
-    row's ``dlt_days`` rounded up to whole days whose own
-    ``open_units`` is at least 50% of the row's top of red — whether
-    the feed carries any open sales-order lines at all is answered by
+    ``qualified_spike`` the day's total of the ones after the as-of
+    date and within the row's ``dlt_days`` rounded up to whole days,
+    summed per ``ship_on`` date, counting only the days whose total
+    is at least 50% of the row's top of red — whether the feed
+    carries any open sales-order lines at all is answered by
     ``OpenSalesLinePostgresRepository.has_lines``, never by the
     filtered read — the net flow, the planning zone, the order
     signal, the suggested order units, the planning priority

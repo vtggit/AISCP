@@ -86,6 +86,9 @@ code is the authority for details.
   one fails before the order is created (#1593).
 - A confirm of an Odoo draft purchase order now reuses an existing draft only when its single line
   matches the confirmed item, supplier and quantity, and otherwise answers 409 naming the draft (#1632).
+- The what-if simulation summary now reports `dollar_impact` as the change in the stock held and
+  `pipeline_dollar_impact` as the change in demand over the lead time, which is 0 when only the service
+  level changes (#1634).
 
 **Parameter write-back**
 - Accepted reorder points pushed into the ERP that owns the item-site (Acumatica

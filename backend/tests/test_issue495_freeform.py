@@ -52,10 +52,12 @@ with baseline inputs ``d`` 10, ``sd_d`` 0, ``lt`` 20, ``sd_lt`` 0,
     (receipts 280, planned on-hand 90); the as-is demand and on-hand
     equal the no-lever values;
   * ``service_level`` with ``sd_d`` 2 instead (``reorder_point_units``
-    215): 0.5 gives a scenario reorder point of 200 (z = 0) and 0.95
-    given explicitly 215 (``ceil(200 + 1.6448536 x sqrt(80))``), each
-    shown through the January planned order (S = rop + 310, position
-    250): 260 and 275 units;
+    215): 0.5 gives a scenario reorder point of 200 (z = 0, no extra
+    safety stock) and 0.95 given explicitly 215
+    (``ceil(200 + 1.6448536 x sqrt(80))``) plus the January extra
+    safety stock ``1.6448536 x (sqrt(51 x 4) - sqrt(20 x 4))`` ~
+    8.78, each shown through the January planned order (S = rop +
+    310 + extra, position 250): 260 and 284 units;
   * equivalence: for representative lever combinations the scenario
     reorder point the projection applies equals the one
     ``app.scenario.simulate.simulate_reorder`` reports for the same
@@ -221,9 +223,9 @@ SL_0_5 = _group(
     _bucket("2026-03", 310, -650.0, 620.0, 310, 200.0),
 )
 SL_0_95 = _group(
-    _bucket("2026-01", 310, -60.0, 620.0, 275, 215.0),
-    _bucket("2026-02", 280, -340.0, 560.0, 280, 215.0),
-    _bucket("2026-03", 310, -650.0, 620.0, 310, 215.0),
+    _bucket("2026-01", 310, -60.0, 620.0, 284, 224.0),
+    _bucket("2026-02", 280, -340.0, 560.0, 280, 224.0),
+    _bucket("2026-03", 310, -650.0, 620.0, 310, 224.0),
 )
 
 
@@ -282,10 +284,13 @@ def test_issue495_freeform(monkeypatch, client):
         assert scaled["projected_on_hand_units"] == as_is["projected_on_hand_units"]
 
     # --- service_level with sd_d 2 instead (baseline rop 215) --------------
-    # 0.5: z = 0, so the scenario reorder point is ceil(200 + 0) = 200 and
-    # the January planned order is S - position = 200 + 310 - 250 = 260
-    # units.  0.95 given explicitly: ceil(200 + 1.6448536 x sqrt(80)) =
-    # 215, so the January planned order is 215 + 310 - 250 = 275 units.
+    # 0.5: z = 0, so the scenario reorder point is ceil(200 + 0) = 200,
+    # the extra safety stock is 0 and the January planned order is
+    # S - position = 200 + 310 - 250 = 260 units.  0.95 given
+    # explicitly: ceil(200 + 1.6448536 x sqrt(80)) = 215 and the
+    # January extra safety stock 1.6448536 x (sqrt(51 x 4) - sqrt(20
+    # x 4)) ~ 8.78, so the January planned order is ceil(215 + 310 +
+    # 8.78... - 250) = 284 units.
     sd2 = [_rec("I1", "S1", 215, 10, 2.0, 20, 2.0)]
     calls = _install(monkeypatch, sd2, on_hand, [])
     half = aggregate_projection(as_of=AS_OF, months=3, service_level=0.5)
@@ -296,7 +301,7 @@ def test_issue495_freeform(monkeypatch, client):
     ninety_five = aggregate_projection(as_of=AS_OF, months=3, service_level=0.95)
     assert calls == ONCE
     assert ninety_five == [SL_0_95]
-    assert ninety_five[0]["buckets"][0]["planned_receipts_units"] == 275
+    assert ninety_five[0]["buckets"][0]["planned_receipts_units"] == 284
     for as_is, scaled in zip(NO_LEVER["buckets"], half[0]["buckets"]):
         assert scaled["projected_demand_units"] == as_is["projected_demand_units"]
         assert scaled["projected_on_hand_units"] == as_is["projected_on_hand_units"]

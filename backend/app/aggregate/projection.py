@@ -78,12 +78,22 @@ rule; lines with no
 last, stay on order throughout) plus its planned orders placed in
 earlier buckets that have not yet arrived.  When the position is
 strictly below the order-up-to level, ``S = rop + d x
-days-in-month + cover`` with ``rop`` the recommendation's
+days-in-month + extra + cover`` with ``rop`` the recommendation's
 ``reorder_point_units`` — its
 ``reorder_point_before_signals_units`` when the recommendation
 carries it, because the projection counts the demand signals by
 month itself and must not take them through the reorder point as
-well — and ``cover`` the sum of the item-site's signal day shares
+well — ``extra`` the review month's extra safety stock
+``z x (sqrt((lt + days) x sd_d^2 + d^2 x sd_lt^2) - sqrt(lt x
+sd_d^2 + d^2 x sd_lt^2))`` (``days`` the bucket month's days and
+``d``, ``sd_d``, ``lt``, ``sd_lt`` and ``z`` the recommendation's
+``inputs``, each non-finite or missing value taken as 0, as ``d``
+and ``lt`` are, the scaled inputs and the scenario's ``z'`` for
+every item-site when a lever is given, and 0 when no lever is given
+and the recommendation's ``method`` is not
+``app.recommend.reorder.METHOD`` — 0 when ``sd_d`` is 0, both roots
+then holding the ``d^2 x sd_lt^2`` term alone) — and ``cover`` the
+sum of the item-site's signal day shares
 from the first day of that month through the last day of that month
 plus ``ceil(lt)`` further days — the demand this order has to carry
 until the next review's order can arrive; because the position
@@ -101,7 +111,8 @@ receipts plus that bucket's planned arrivals minus ``d x
 days-in-month`` minus the item-site's ``signal_units(month)``.  The
 method: a periodic-review order-up-to (R, S) policy — monthly
 review, order-up-to the reorder point plus one month's demand plus
-the signal cover, arriving after the lead time.  Per site
+the review month's extra safety stock plus the signal cover,
+arriving after the lead time.  Per site
 group and bucket the new fields are ``planned_receipts_units`` (the
 sum of the group's planned orders arriving in that bucket),
 ``planned_receipts_value`` (the same units at each item-site's
@@ -126,7 +137,9 @@ service level is the given one or else the baseline's
 ``inputs.service_level`` with ``z' =
 NormalDist().inv_cdf(service_level')``, and the scenario reorder point
 ``_basis_result(d', sd_d', lt', sd_lt', z', service_level')["reorder_point_units"]``
-replaces the recommendation's ``reorder_point_units``; the projection
+replaces the recommendation's ``reorder_point_units`` (and the
+review month's extra safety stock takes ``d'``, ``sd_d'``, ``lt'``,
+``sd_lt'`` and ``z'`` for every item-site); the projection
 then uses ``d'`` in place of ``d`` everywhere it uses ``d`` (the as-is
 projected demand and its dollar value, the planned review's demand and
 order-up-to level) and ``lt'`` in place of ``lt`` for planned
@@ -190,7 +203,11 @@ from psycopg2 import connect as _psycopg2_connect
 from app.db.connection import get_connection_params
 from app.forecast.overrides import counted_overrides
 from app.forecast.signals import counted_signals
-from app.recommend.reorder import _basis_result, recommendations_for_all
+from app.recommend.reorder import (
+    METHOD,
+    _basis_result,
+    recommendations_for_all,
+)
 from app.repositories.on_hand_postgres_repository import OnHandPostgresRepository
 from app.repositories.open_purchase_lines_postgres_repository import (
     OpenPurchaseLinePostgresRepository,
@@ -509,6 +526,41 @@ def _signal_bucket_shares(
     return signal_units, cover
 
 
+def _extra_safety_stock_by_bucket(
+    d: float,
+    sd_d: float,
+    lt: float,
+    sd_lt: float,
+    z: float,
+    buckets: list[tuple[int, int, str]],
+) -> list[float]:
+    """The review month's extra safety stock of one item-site, one
+    value per bucket: ``z x (sqrt((lt + days) x sd_d^2 + d^2 x
+    sd_lt^2) - sqrt(lt x sd_d^2 + d^2 x sd_lt^2))`` with ``days``
+    the bucket month's days — the safety stock the order-up-to level
+    gains covering the review month on top of the lead time, the
+    ``d^2 x sd_lt^2`` term inside both roots, never added twice.
+    0.0 for every bucket when ``z`` is 0 (no service-level safety
+    stock) or ``sd_d`` is 0 (both roots then hold the ``d^2 x
+    sd_lt^2`` term alone).  Raises ``OverflowError`` or
+    ``ValueError`` when a radicand overflows the float range or is
+    negative — the caller reports the hostile inputs (never a 500).
+    """
+    if z == 0.0 or sd_d == 0.0:
+        return [0.0] * len(buckets)
+    lead_term = d * d * sd_lt * sd_lt
+    base = lt * sd_d * sd_d + lead_term
+    extras: list[float] = []
+    for year, month, _label in buckets:
+        days = calendar.monthrange(year, month)[1]
+        extended = (lt + days) * sd_d * sd_d + lead_term
+        extra = z * (math.sqrt(extended) - math.sqrt(base))
+        if not math.isfinite(extra):
+            raise OverflowError("the extra safety stock overflowed")
+        extras.append(extra)
+    return extras
+
+
 def _projection_setup(
     as_of: date | None,
     months: int,
@@ -545,7 +597,11 @@ def _projection_setup(
     its item-sites in recommendation order — each review carrying its
     ``item_code`` / ``site_code``, its ``rop`` / ``d`` / ``lt`` (each
     non-finite or missing value taken as 0, the inputs lever-scaled
-    when a lever is given), its ``unit_cost`` (0.0 when the item-site
+    when a lever is given), its per-bucket ``extra_by_bucket``
+    review-month extra safety stock (0.0 for an item-site that gets
+    none — no lever and a ``method`` other than
+    ``app.recommend.reorder.METHOD`` — or ``sd_d`` 0), its
+    ``unit_cost`` (0.0 when the item-site
     has none) and its raw ``unit_cost_raw`` (None when it has none),
     its own start-of-month ``on_hand`` (its current on-hand, 0 when
     absent), its supply lines (the open lines plus the in-flight
@@ -658,6 +714,9 @@ def _projection_setup(
                     rop = _basis_result(d, sd_d, lt, sd_lt, z, scenario_level)[
                         "reorder_point_units"
                     ]
+                    extra_by_bucket = _extra_safety_stock_by_bucket(
+                        d, sd_d, lt, sd_lt, z, buckets
+                    )
                 except (OverflowError, ValueError) as exc:
                     # A hostile lever (e.g. a huge multiplier) overflows
                     # the formula: report it as an out-of-range lever,
@@ -679,6 +738,25 @@ def _projection_setup(
                 )
                 d = _finite(inputs.get("d"))
                 lt = _finite(inputs.get("lt"))
+                # The review month's extra safety stock takes the
+                # recommendation's own inputs, and only when the
+                # recommendation's ``method`` is the service-level
+                # method — an empirical recommendation gets none.
+                extra_by_bucket = [0.0] * len(buckets)
+                if rec.get("method") == METHOD:
+                    try:
+                        extra_by_bucket = _extra_safety_stock_by_bucket(
+                            d,
+                            _finite(inputs.get("sd_d")),
+                            lt,
+                            _finite(inputs.get("sd_lt")),
+                            _finite(inputs.get("z")),
+                            buckets,
+                        )
+                    except (OverflowError, ValueError):
+                        # Hostile stored inputs can never 500: keep
+                        # the order-up-to level without the extra.
+                        extra_by_bucket = [0.0] * len(buckets)
             shares = _signal_day_shares(
                 resolved_as_of,
                 signals_by_key.get(key, []),
@@ -695,6 +773,7 @@ def _projection_setup(
                     "rop": rop,
                     "d": d,
                     "lt": lt,
+                    "extra_by_bucket": extra_by_bucket,
                     "signal_units_by_bucket": signal_units_by_bucket,
                     "signal_cover_by_bucket": signal_cover_by_bucket,
                     "unit_cost": _finite(unit_cost_by_key[key]),
@@ -741,10 +820,12 @@ def _monthly_review(
     order throughout) plus its planned orders placed in earlier buckets
     that have not yet arrived, and one planned order of ``ceil(S -
     position)`` units is placed when the position is strictly below
-    the order-up-to level ``rop + d x days-in-month + cover``, with
-    ``cover`` the sum of the review's signal day shares from the
-    first day of the bucket month through its last day plus ``ceil(lt)``
-    further days — the demand the order has to carry until the next
+    the order-up-to level ``rop + d x days-in-month + extra +
+    cover``, with ``extra`` the review month's extra safety stock
+    the setup computed per bucket and ``cover`` the sum of the
+    review's signal day shares from the first day of the bucket month
+    through its last day plus ``ceil(lt)`` further days — the demand
+    the order has to carry until the next
     review's order can arrive; a day share an earlier month's order
     already carries stays in the position and does not raise a later
     order again — the order arriving on the first day of the bucket
@@ -793,15 +874,17 @@ def _monthly_review(
             for arrival_index, units in review["orders"]:
                 if arrival_index is None or arrival_index >= bucket_index:
                     position += units
-            # The order-up-to level carries the review's signal day
-            # shares of that month plus the ceil(lt) days after it:
-            # the demand this order has to carry until the next
-            # review's order can arrive (a day share an earlier
-            # month's order already carries stays in the position and
-            # does not raise a later order again).
+            # The order-up-to level carries the review month's extra
+            # safety stock and the review's signal day shares of that
+            # month plus the ceil(lt) days after it: the demand this
+            # order has to carry until the next review's order can
+            # arrive (a day share an earlier month's order already
+            # carries stays in the position and does not raise a
+            # later order again).
             up_to = (
                 review["rop"]
                 + review["d"] * days
+                + review["extra_by_bucket"][bucket_index]
                 + review["signal_cover_by_bucket"][bucket_index]
             )
             if position < up_to:
@@ -1090,12 +1173,16 @@ def aggregate_projection(
     planned order for ``ceil(S - position)`` units whenever its
     inventory position is strictly below the order-up-to level (the
     reorder point before the signals, plus that month's demand, plus
-    ``cover`` — the sum of the item-site's signal day shares from the
-    first day of the month through its last day plus ``ceil(lt)``
-    further days, the demand the order carries until the next
-    review's order can arrive), ``S = rop + d x days-in-month +
-    cover``, and the order arrives on the first of the month plus
-    ``ceil(lt)`` days.
+    the review month's extra safety stock —
+    ``z x (sqrt((lt + days) x sd_d^2 + d^2 x sd_lt^2) - sqrt(lt x
+    sd_d^2 + d^2 x sd_lt^2))``, ``days`` the bucket month's days and
+    the inputs as the module docstring gives them — plus ``cover``,
+    the sum of the item-site's signal day shares from the first day
+    of the month through its last day plus ``ceil(lt)`` further days,
+    the demand the order carries until the next review's order can
+    arrive), ``S = rop + d x days-in-month + extra + cover``, and
+    the order arrives on the first of the month plus ``ceil(lt)``
+    days.
 
     Raises ``ValueError`` when ``months`` is outside 1 to 12
     inclusive, when ``as_of`` is after the current server date (the

@@ -398,7 +398,12 @@ The full product intent is in [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md).
   standing-grant run of transfers sends the transfer suggestions to Acumatica on hold under
   the grant, within its limits, and each run is recorded in `standing_grant_runs`
   (`backend/app/api/erp_standing_grants.py`, `backend/app/supply/standing_release.py`,
-  `backend/app/settings/registry.py`). Any signed-in user can read the stored runs, newest
+  `backend/app/settings/registry.py`). After the confirm answers, a run records what went out:
+  a chosen group counts as sent when the outcome the confirm leaves on it is `created` or
+  `exists` (for transfers, an `exists` carrying the stale-lines error does not), every other
+  group goes into `left_out` with the reason `release_error`, a run whose chosen groups all
+  failed records `failed` with the first failure's error, and otherwise it records `released`
+  with the sent groups' count and value. Any signed-in user can read the stored runs, newest
   first, with an optional process filter and limit (`GET /api/standing-grants/runs`), and the
   record of the runs per process (`GET /api/standing-grants/record`): how many runs there
   were, how many sent everything that was due, the counts by outcome, the documents and value

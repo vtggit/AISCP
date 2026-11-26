@@ -461,6 +461,9 @@ code is the authority for details.
 - The what-if simulation summary's `dollar_impact` now counts only the change in the stock held:
   the safety-stock change in units times the unit cost. The lead-time demand change is reported
   apart as `pipeline_dollar_impact`, which is 0 when only the service level changes (#1634).
+- Standing grant runs now record only the release groups that went out in `documents` and `value`,
+  leaving failed release groups in `left_out` as `release_error` so the Exceptions inbox lists the
+  standing grant run (#1640).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now

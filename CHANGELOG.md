@@ -455,6 +455,12 @@ code is the authority for details.
   full lists in the log (#1600).
 - The Overview's to-decide labels and the Demand view's forecast list now say when their lists are cut
   at 1,000 rows (#1601).
+- The Odoo and Acumatica clients now read their environment switches with one shared parser, accepting
+  `1`, `true`, `yes`, or `on` (case-insensitive, whitespace-trimmed) for the allow-insecure and
+  allow-writes switches (#1641).
+- The what-if simulation summary's `dollar_impact` now counts only the change in the stock held:
+  the safety-stock change in units times the unit cost. The lead-time demand change is reported
+  apart as `pipeline_dollar_impact`, which is 0 when only the service level changes (#1634).
 
 ### Fixed
 - Release tracking counted a promised date that was only the ERP's default as lateness; it now
